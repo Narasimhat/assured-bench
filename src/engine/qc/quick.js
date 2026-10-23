@@ -96,9 +96,9 @@ export function inferWorkflow(spec) {
   return spec.guides.length > 1 ? "deletion" : "knockout";
 }
 
-/** The donors of a design report that are used together: all the ones recommended to order (ssODNs matched to each guide), else all parsed donors; one donor stays a plain sequence. */
+/** The donors of a design report that are used together: all the ones recommended to order (ssODNs matched to each guide), else the first; one donor stays a plain sequence. */
 export function reportDonors(donors) {
-  const chosen = donors.filter((d) => d.recommended); const list = chosen.length ? chosen : donors;
+  const chosen = donors.filter((d) => d.recommended); const list = chosen.length ? chosen : donors.slice(0, 1);
   if (list.length <= 1) return list[0] ? list[0].sequence : "";
   return list.map((d) => ({ name: d.name, sequence: d.sequence }));
 }
