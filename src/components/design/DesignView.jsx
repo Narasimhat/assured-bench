@@ -26,7 +26,6 @@ import {
   downloadSchemeSvg
 } from "../../services/designExport.js";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
-import { GelSimulator } from "./GelSimulator.jsx";
 import {
   Search,
   Play,
@@ -1250,16 +1249,6 @@ export function DesignView({
               </div>
             </details>
           )}
-
-          {/* In-Silico PCR Agarose Gel Simulator */}
-          <details className="card" style={{ marginTop: "1rem" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-              Advanced: In-Silico PCR &amp; Agarose Gel Simulator
-            </summary>
-            <div style={{ marginTop: "1rem" }}>
-              <GelSimulator designResult={designResult} currentProject={currentProject} />
-            </div>
-          </details>
 
           {/* Full Interactive ASSURED Design Report Preview (100% Parity with Assured_CRISPR_Design) */}
           <details className="card" style={{ marginTop: "1rem" }}>

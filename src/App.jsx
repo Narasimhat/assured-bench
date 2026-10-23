@@ -4,7 +4,6 @@ import { DesignView } from "./components/design/DesignView.jsx";
 import { OrderView } from "./components/order/OrderView.jsx";
 import { QcView } from "./components/qc/QcView.jsx";
 import { DecisionView } from "./components/qc/DecisionView.jsx";
-import { QuickStart } from "./components/common/QuickStart.jsx";
 import { saveProject, listProjects, deleteProject, exportProjectBundle } from "./services/storage.js";
 import { ProtocolModal } from "./components/common/ProtocolModal.jsx";
 import { createProject, updateProject, parseProject } from "./services/projectState.js";
@@ -229,12 +228,6 @@ export function App() {
       )}
 
       <main className="app-container">
-        <QuickStart
-          onNavigate={setActiveStep}
-          onDesignExample={handleDesignExample}
-          isLoadingExample={isLoadingExample}
-        />
-
         {activeStep === "design" && (
           <DesignView
             key={currentProject.id}

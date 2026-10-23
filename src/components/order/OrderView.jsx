@@ -6,7 +6,6 @@ import {
   formatBulkPasteTsv,
   formatOligosFasta
 } from "../../services/vendorExport.js";
-import { GelSimulator } from "../design/GelSimulator.jsx";
 import { ShoppingCart, Copy, Download, Check, ArrowRight, FlaskConical, ClipboardList } from "lucide-react";
 
 export function OrderView({ currentProject, onProceedToQc, onOpenProtocol }) {
@@ -216,16 +215,6 @@ export function OrderView({ currentProject, onProceedToQc, onOpenProtocol }) {
           </table>
         </div>
       </div>
-
-      {/* In-Silico PCR Agarose Gel Simulator */}
-      <details className="card" style={{ marginTop: "1rem" }}>
-        <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-          Optional: In-Silico PCR &amp; Agarose Gel Simulator
-        </summary>
-        <div style={{ marginTop: "1rem" }}>
-          <GelSimulator designResult={currentProject?.designResult} currentProject={currentProject} />
-        </div>
-      </details>
     </div>
   );
 }
