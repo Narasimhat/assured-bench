@@ -554,26 +554,11 @@ export function DesignView({
 
         {/* Project Type Selector (All 6 ASSURED CRISPR Design Project Types) */}
         <div style={{ marginBottom: "1.25rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.55rem" }}>
-            <label style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-main)" }}>
-              A. Select Edit Strategy (6 ASSURED Project Types)
-            </label>
-            <select
-              aria-label="Edit Type"
-              value={editType}
-              onChange={(e) => setEditType(e.target.value)}
-              style={{ width: "auto", minWidth: "280px", fontWeight: 600, fontSize: "0.82rem", padding: "0.35rem 0.65rem" }}
-            >
-              <option value="ko">Knockout (Dual-guide exon deletion / frameshift)</option>
-              <option value="pm">Point Mutation (Single amino-acid substitution, e.g. R175H)</option>
-              <option value="genomic-snv">Genomic SNP (Exact 1-based nucleotide substitution)</option>
-              <option value="ct">C-Terminal Knock-in (Fusion tags, degrons, reporters)</option>
-              <option value="nt">N-Terminal Knock-in (Fusion tags, reporters, degrons)</option>
-              <option value="it">Internal Tag Knock-in (In-frame SPOT or alphaBtx tag)</option>
-            </select>
-          </div>
+          <label style={{ display: "block", fontWeight: 700, fontSize: "0.9rem", color: "var(--text-main)", marginBottom: "0.55rem" }}>
+            What do you want to design?
+          </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))", gap: "0.55rem" }}>
+          <div role="radiogroup" aria-label="Edit Type" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))", gap: "0.55rem" }}>
             {[
               { id: "ko", badge: "KO", title: "Knockout", desc: "Dual-guide deletion & frameshift" },
               { id: "pm", badge: "AA", title: "Point Mutation", desc: "Codon substitution + PAM block" },
