@@ -45,9 +45,9 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
     <div className="card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h3>3. Trace Analysis</h3>
+          <h3>3. Trace Analysis &amp; Clone Screening Report</h3>
           <p style={{ color: "var(--text-muted)", margin: "0.5rem 0" }}>
-            Sanger chromatogram deconvolution &amp; clone screening. Review sample/control pairings, then run analysis to generate clone rankings and publication figures.
+            Sanger chromatogram deconvolution, clone ranking, final take-home conclusion, and publication report export in one unified workspace.
           </p>
         </div>
         <div className="project-controls" style={{ margin: 0 }}>
@@ -55,37 +55,8 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
             <button className="btn btn-secondary" onClick={() => downloadReportHtml(currentProject, currentProject.designResult)}>Download design HTML</button>
             <button className="btn btn-secondary" onClick={() => downloadDesignJson(currentProject, currentProject.designResult)}>Download Design JSON</button>
           </>}
-          {qcResults.length > 0 && onProceedToDecision && (
-            <button className="btn btn-primary" onClick={onProceedToDecision}>
-              <Award size={16} />
-              <span>View Step 4 Reports ({qcResults.length} Clones)</span>
-              <ArrowRight size={16} />
-            </button>
-          )}
         </div>
       </div>
-
-      {qcResults.length > 0 && (
-        <div style={{ marginTop: "1rem", padding: "0.75rem 1.15rem", borderRadius: "8px", background: "var(--success-bg)", border: "1px solid var(--success-border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", fontSize: "0.9rem" }}>
-            <CheckCircle size={18} style={{ color: "var(--success)", flexShrink: 0 }} />
-            <span>
-              <strong>Trace Deconvolution Complete:</strong> {qcResults.length} sample{qcResults.length === 1 ? "" : "s"} analyzed ({acceptedCount} accepted candidate{acceptedCount === 1 ? "" : "s"}).
-            </span>
-          </div>
-          {onProceedToDecision && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={onProceedToDecision}
-              style={{ padding: "0.35rem 0.85rem", fontSize: "0.82rem" }}
-            >
-              <span>Open Publication Report &amp; Clone Summary</span>
-              <ArrowRight size={14} />
-            </button>
-          )}
-        </div>
-      )}
 
       {design ? (
         <div style={{ marginTop: "1rem", padding: "0.85rem 1.25rem", borderRadius: "8px", background: "linear-gradient(90deg, #eef5fc 0%, #f4f8fd 100%)", border: "1px solid #c8dcf4", borderLeft: "4px solid #0055aa", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>

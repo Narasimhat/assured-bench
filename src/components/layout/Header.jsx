@@ -21,8 +21,7 @@ export function Header({
   const steps = [
     { id: "design", label: "Design", done: hasDesign },
     { id: "order", label: "Order", done: hasDesign },
-    { id: "qc", label: "Trace Analysis", done: qcCount > 0, badge: qcCount > 0 ? qcCount : null },
-    { id: "decision", label: "Reports", done: qcCount > 0, badge: acceptedCount > 0 ? `${acceptedCount}✓` : null }
+    { id: "qc", label: "Trace Analysis & Report", done: qcCount > 0, badge: qcCount > 0 ? (acceptedCount > 0 ? `${acceptedCount}/${qcCount}✓` : qcCount) : null }
   ];
 
   return (

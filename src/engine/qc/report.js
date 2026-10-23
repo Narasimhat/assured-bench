@@ -156,6 +156,9 @@ export function buildQcReportHtml({ title = "Publication Clone Screening Report"
   const boxBg = takeHome.status === "pass" ? "#ecfdf5" : takeHome.status === "warn" ? "#fffbeb" : "#fef2f2";
   const boxTitleColor = takeHome.status === "pass" ? "#065f46" : takeHome.status === "warn" ? "#92400e" : "#991b1b";
   const rows = results.map((r) => `<tr><td>${r.recommendation?.rank ? `#${r.recommendation.rank}` : "—"}</td><td><b>${esc(r.name)}</b></td><td>${r.decision ? esc(DECISION_LABEL[r.decision.decision]) : ""}</td><td class="${statusClass(r)}">${esc(headline(workflow, r))}</td><td>${esc(r.genotype?.summary || "—")}</td><td>${r.ok ? (r.warnings?.length ? `${r.warnings.length} note${r.warnings.length === 1 ? "" : "s"}` : "none") : "not analysed"}</td></tr>`).join("");
+  const summarySvg = runSummaryFigure(results, { title: "Run summary" });
+  const selSec = selectionSection(results, workflow);
+  const alnSec = alignedSection(results);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body>
 <h1>${esc(title)}</h1>
 <p class="muted">${esc(flow)}${design ? ` &middot; ${esc(design)}` : ""} &middot; ${results.length} sample${results.length === 1 ? "" : "s"} &middot; generated ${esc(generatedAt.toISOString().slice(0, 10))} by Assured QC ${QC_VERSION}</p>
@@ -166,10 +169,9 @@ export function buildQcReportHtml({ title = "Publication Clone Screening Report"
   <div style="font-size:12px;color:#475467;font-weight:600;">${esc(takeHome.nextStep)} <span class="muted">(Review required: computed estimates from Sanger traces.)</span></div>
 </div>
 ${notes.map((n) => `<p>${esc(n)}</p>`).join("")}
-<h2>Summary</h2>${(() => { const fig = runSummaryFigure(results, { title: "Run summary" }); return fig ? `<div style="overflow-x:auto">${fig}</div>` : ""; })()}<table><tr><th>Rank</th><th>Sample / Clone</th><th>Decision</th><th>Result</th><th>Genotype Call</th><th>Notes</th></tr>${rows}</table>
-${selectionSection(results, workflow)}
-${alignedSection(results)}
-<details style="margin-top:24px"><summary style="cursor:pointer;font-weight:700;color:#475467">Appendix: Per-Sample Chromatogram Details &amp; Method Limits</summary>
+<h2>Summary</h2>${summarySvg ? `<div style="overflow-x:auto">${summarySvg}</div>` : `<table><tr><th>Rank</th><th>Sample / Clone</th><th>Decision</th><th>Result</th><th>Genotype Call</th><th>Notes</th></tr>${rows}</table>`}
+${selSec || alnSec ? `<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;color:#475467">Multi-Clone Chromatogram Figures &amp; Cohort Alignments</summary>${selSec}${alnSec}</details>` : ""}
+<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:#475467">Appendix: Per-Sample Chromatogram Details &amp; Method Limits</summary>
 <h2>Samples</h2>${results.map((r) => sampleSection(workflow, r, { chromatogram: results.length <= 48 || !r.decision || r.decision.decision !== "reject" })).join("")}
 <h2>Method and limits</h2><ul>${METHOD.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
 </details>

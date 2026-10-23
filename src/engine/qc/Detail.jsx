@@ -5,13 +5,14 @@ import { saveSvg, savePng, savePdf } from "./saveFigure.js";
 
 const pct = (value) => (value === null || value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`);
 
-export default function Detail({ workflow, result }) {
+export default function Detail({ workflow, result, headerExtra = null }) {
   if (!result) return null;
-  if (!result.ok) return <div className="card"><h2>{result.name}</h2><p className="error">{result.error}</p></div>;
+  if (!result.ok) return <div className="card"><h2>{result.name}</h2>{headerExtra}<p className="error">{result.error}</p></div>;
   if (result.kind === "junction") {
     return (
       <div className="card">
         <h2>{result.name}</h2>
+        {headerExtra}
         <p className={result.verdict.status}>{result.verdict.summary}</p>
         <ul>{result.verdict.details.map((d) => <li key={d}>{d}</li>)}</ul>
         <p className="muted">Orientation {result.orientation}; {result.alignedBases} aligned bases at {(result.identity * 100).toFixed(1)}% identity. 5′ junction spanned: {String(result.spans.fivePrimeJunction)}; 3′ junction spanned: {String(result.spans.threePrimeJunction)}; genomic flank bases: {result.spans.genomicFlankBases}.</p>
@@ -35,6 +36,7 @@ export default function Detail({ workflow, result }) {
   return (
     <div className="card">
       <h2>{result.name}</h2>
+      {headerExtra}
       <p>{headline(workflow, result)}</p>
       {result.genotype && <ul>{result.genotype.flags.map((f) => <li key={f} className="muted">{f}</li>)}</ul>}
       <table>
