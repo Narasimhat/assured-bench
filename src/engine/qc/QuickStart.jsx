@@ -24,22 +24,26 @@ const arrayBufferOf = (file) => file.arrayBuffer();
 const interval = (iv) => (iv ? `${iv[0]}-${iv[1]}%` : "");
 
 export default function QuickStart({ initialDesign = null, onResults } = {}) {
-  const filePicker = useRef(null); const folderPicker = useRef(null); const designPicker = useRef(null);
+  const controlPicker = useRef(null); const filePicker = useRef(null); const folderPicker = useRef(null); const designPicker = useRef(null);
   const files = useRef(new Map()); const buffers = useRef(new Map());
-  const [traceNames, setTraceNames] = useState([]); const [sheetText, setSheetText] = useState(""); const [designText, setDesignText] = useState(""); const [designName, setDesignName] = useState(""); const [geneText, setGeneText] = useState(""); const [geneName, setGeneName] = useState(""); const [regionsText, setRegionsText] = useState(""); const [epitopeText, setEpitopeText] = useState("");
+  const [traceNames, setTraceNames] = useState([]); const [explicitControls, setExplicitControls] = useState([]); const [sheetText, setSheetText] = useState(""); const [designText, setDesignText] = useState(""); const [designName, setDesignName] = useState(""); const [geneText, setGeneText] = useState(""); const [geneName, setGeneName] = useState(""); const [regionsText, setRegionsText] = useState(""); const [epitopeText, setEpitopeText] = useState("");
   const [guidesText, setGuidesText] = useState(""); const [donorText, setDonorText] = useState(""); const [nuclease, setNuclease] = useState("SpCas9"); const [typeOverride, setTypeOverride] = useState(""); const [goal, setGoal] = useState("homozygous");
   const [customSequenceMode, setCustomSequenceMode] = useState(false);
   const [pairsEdit, setPairsEdit] = useState({}); const [running, setRunning] = useState(false); const [progress, setProgress] = useState(null);
   const [outcome, setOutcome] = useState(null); const [picked, setPicked] = useState(0); const [panel, setPanel] = useState(0); const [figureBusy, setFigureBusy] = useState(false); const [error, setError] = useState("");
   const [importStatus, setImportStatus] = useState("");
-  const [dragging, setDragging] = useState(false);
+  const [draggingControl, setDraggingControl] = useState(false);
+  const [draggingEdited, setDraggingEdited] = useState(false);
+  const [traceUrl, setTraceUrl] = useState("");
+  const [urlRole, setUrlRole] = useState("edited");
+  const [loadingUrl, setLoadingUrl] = useState(false);
   const [designIndex, setDesignIndex] = useState(0);
 
   useEffect(() => {
     if ((initialDesign?.text || "") === designText) return;
     setDesignText(initialDesign?.text || ""); setDesignName(initialDesign ? initialDesign.name || "Bench design" : ""); setDesignIndex(0);
     files.current.clear(); buffers.current.clear();
-    setTraceNames([]); setPairsEdit({}); setOutcome(null); setError("");
+    setTraceNames([]); setExplicitControls([]); setPairsEdit({}); setOutcome(null); setError("");
   }, [initialDesign]);
   const previousOutcome = useRef(null);
   useEffect(() => {
@@ -48,7 +52,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
     if (outcome && onResults) onResults({ results: withRecommendations(outcome.results, panel ? { panel } : {}), designText, designName });
   }, [outcome, panel, onResults]);
 
-  const addFiles = async (list) => {
+  const addFiles = async (list, role = "auto") => {
     if (running) return;
     try {
       setError("");
@@ -62,18 +66,25 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
         seen.add(f.name); return true;
       });
       const kinds = classifyFiles(incoming.map((f) => f.name));
+      if (role === "control" && duplicates.length) {
+        setExplicitControls((prev) => Array.from(new Set([...prev, ...duplicates])));
+      }
       setImportStatus(`${kinds.traces.length} new traces; ${duplicates.length} traces already loaded; ${kinds.designs.length} design files; ${kinds.sheets.length} sample-sheet files; ${expanded.skipped.length} unsupported files skipped.`);
       if (!incoming.length) {
-        if (duplicates.length) setImportStatus(`All ${duplicates.length} selected traces are already loaded. Your existing analysis is unchanged. See Loaded traces below.`);
-        else setImportStatus(selected.length ? "No supported files found. Select the folder containing AB1 files, or use Add files to select AB1 files or a sequencing ZIP." : "The browser returned no files. Use Add files to select the AB1 files inside the folder; for a network drive, try a local copy.");
+        if (duplicates.length) setImportStatus(`All ${duplicates.length} selected traces are already loaded.${role === "control" ? " Assigned as Parental Control." : " Your existing analysis is unchanged."}`);
+        else setImportStatus(selected.length ? "No supported files found. Select .ab1 files or a sequencing .zip archive." : "The browser returned no files. Select .ab1 files inside the folder.");
         return;
       }
       incoming.forEach((f) => { files.current.set(f.name, f); buffers.current.delete(f.name); });
-      setTraceNames((previous) => Array.from(new Set([...previous, ...kinds.traces]))); setPairsEdit({}); setOutcome(null);
+      setTraceNames((previous) => Array.from(new Set([...previous, ...kinds.traces])));
+      if (role === "control" && kinds.traces.length) {
+        setExplicitControls((previous) => Array.from(new Set([...previous, ...kinds.traces])));
+      }
+      setPairsEdit({}); setOutcome(null);
       const sheet = incoming.find((f) => kinds.sheets.includes(f.name)); if (sheet) setSheetText(await sheet.text());
       const design = incoming.find((f) => kinds.designs.includes(f.name)); if (design) { setDesignName(design.name); setDesignText(""); setDesignIndex(0); setDesignText(await design.text()); }
       const gene = incoming.find((f) => kinds.genes.includes(f.name)); if (gene) { setGeneText(await gene.text()); setGeneName(gene.name); }
-      if (duplicates.length) setError(`Already loaded: ${duplicates.join(", ")}. Kept the existing traces. For different reads with the same filename, rename them before adding; to replace a trace, remove it first.`);
+      if (duplicates.length && role !== "control") setError(`Already loaded: ${duplicates.join(", ")}. Kept the existing traces. For different reads with the same filename, rename them before adding; to replace a trace, remove it first.`);
       if (kinds.designs.length > 1) setError("More than one design file was selected. Loaded the first; use Replace design to choose a different report.");
     } catch (e) { setImportStatus(""); setError(`Could not read the selected file. Try copying it from the network drive to a local folder and selecting it again. ${e.message || ""}`); }
   };
@@ -95,16 +106,50 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       files.current.clear();
       buffers.current.clear();
       setTraceNames([]);
+      setExplicitControls([]);
       setPairsEdit({});
       setOutcome(null);
-      await addFiles([file]);
+      await addFiles([file], "auto");
     } catch (e) {
       setImportStatus("");
       setError(`Could not load sample trace bundle: ${e.message || e}`);
     }
   };
 
-  const built = useMemo(() => (traceNames.length ? buildPairs({ traceNames, sheetText }) : { pairs: [], problems: [] }), [traceNames, sheetText]);
+  const loadFromUrl = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const raw = traceUrl.trim();
+    if (!raw || running || loadingUrl) return;
+    setError("");
+    setLoadingUrl(true);
+    setImportStatus("Fetching trace / archive from URL…");
+    try {
+      const urls = raw.split(/[\s,]+/).filter(Boolean);
+      const fetchedFiles = [];
+      for (const u of urls) {
+        const parsedUrl = new URL(u, window.location.href);
+        const response = await fetch(parsedUrl.href);
+        if (!response.ok) throw new Error(`HTTP ${response.status} when fetching ${parsedUrl.pathname}`);
+        const buf = await response.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const isZip = bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+        const isAb1 = bytes.length >= 4 && bytes[0] === 0x41 && bytes[1] === 0x42 && bytes[2] === 0x49 && bytes[3] === 0x46;
+        let baseName = decodeURIComponent(parsedUrl.pathname.split("/").filter(Boolean).pop() || "remote_sample");
+        if (isZip && !/\.zip$/i.test(baseName)) baseName += ".zip";
+        else if (isAb1 && !/\.(ab1|abi)$/i.test(baseName)) baseName += ".ab1";
+        fetchedFiles.push(new File([buf], baseName));
+      }
+      await addFiles(fetchedFiles, urlRole);
+      setTraceUrl("");
+    } catch (err) {
+      setImportStatus("");
+      setError(`Could not fetch URL (${err.message || err}). Ensure the link is a direct .ab1 or .zip file with CORS access enabled, or download it locally and drop it above.`);
+    } finally {
+      setLoadingUrl(false);
+    }
+  };
+
+  const built = useMemo(() => (traceNames.length ? buildPairs({ traceNames, sheetText, explicitControls }) : { pairs: [], problems: [] }), [traceNames, sheetText, explicitControls]);
   const design = useMemo(() => { try { return { ...readDesign(designText, { designIndex }), error: "" }; } catch (e) { return { kind: "none", error: e.message }; } }, [designText, designIndex]);
   const pairs = built.pairs.map((p, i) => ({ ...p, ...(pairsEdit[i] || {}) }));
   const guides = guidesText.split(/[,;\s]+/).map(cleanDna).filter(Boolean);
@@ -174,31 +219,187 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
     setFigureBusy(false);
   };
 
+  const autoDetectedControls = useMemo(() => {
+    if (explicitControls.length > 0) return [];
+    return Array.from(new Set(pairs.flatMap((p) => p.control || [])));
+  }, [explicitControls, pairs]);
+
   return (
     <div className="card quick">
-      <h2>Quick start: add files or a folder</h2>
-      <div className={`drop${dragging ? " over" : ""}`} onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "8px" }}>
+      <h2>Upload Sanger Traces (.ab1 / .zip)</h2>
+
+      {/* Option 1: Separated Parental Control vs. Edited Clones Dropzones */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "10px" }}>
+        {/* Box 1: Parental / WT Control */}
+        <div
+          className={`drop${draggingControl ? " over" : ""}`}
+          style={{ margin: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", borderColor: explicitControls.length ? "var(--success)" : undefined }}
+          onDragOver={(e) => { e.preventDefault(); setDraggingControl(true); }}
+          onDragLeave={() => setDraggingControl(false)}
+          onDrop={(e) => { e.preventDefault(); setDraggingControl(false); addFiles(e.dataTransfer.files, "control"); }}
+        >
           <div>
-            <div style={{ fontWeight: 700, fontSize: "14px", color: "var(--text-main)" }}>
-              {designName ? "Provide parental control and sample .ab1 files" : "Drop AB1 chromatogram files, sequencing ZIPs, or design reports"}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "13.5px", color: "var(--text-main)" }}>
+                  1. Parental / WT Control (.ab1)
+                </div>
+                <div className="muted" style={{ fontSize: "11.5px", marginTop: "2px" }}>
+                  Drop unedited reference chromatogram (forward &amp; reverse reads supported).
+                </div>
+              </div>
+              <input
+                ref={controlPicker}
+                hidden
+                style={{ display: "none" }}
+                type="file"
+                multiple
+                accept=".ab1,.abi"
+                disabled={running}
+                onChange={(e) => { addFiles(e.target.files, "control"); e.target.value = ""; }}
+                aria-label="Choose parental control AB1 files"
+              />
+              <button type="button" disabled={running} onClick={() => controlPicker.current.click()} style={{ whiteSpace: "nowrap", fontSize: "12px" }}>
+                Select Control .ab1
+              </button>
             </div>
-            <div className="muted" style={{ fontSize: "12px", marginTop: "2px" }}>
-              {designName ? "Upload control & sample traces together (forward and reverse reads supported)." : "Accepts .ab1 traces, sequencing ZIPs, design reports (.html/.json), sample sheets (.csv), and GenBank files."}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <input ref={filePicker} hidden style={{ display: "none" }} type="file" multiple accept=".zip,.ab1,.abi,.csv,.tsv,.json,.html,.htm,.gb,.gbk,.gbff,.genbank,text/html,application/json" disabled={running} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} aria-label="Choose files" />
-            <button type="button" disabled={running} onClick={() => filePicker.current.click()}>
-              {designName ? "Add AB1 Traces or ZIP" : "Add files (AB1, ZIP, HTML, JSON)"}
-            </button>
-            <input ref={folderPicker} hidden style={{ display: "none" }} type="file" multiple webkitdirectory="" directory="" disabled={running} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} aria-label="Choose a folder" />
-            <button type="button" disabled={running} onClick={() => folderPicker.current.click()}>
-              {designName ? "Add trace folder" : "Add folder"}
-            </button>
+
+            {explicitControls.length > 0 ? (
+              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                {explicitControls.map((ctrl) => (
+                  <span
+                    key={ctrl}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "11.5px",
+                      fontFamily: "monospace",
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      background: "var(--success-bg)",
+                      color: "var(--success)",
+                      border: "1px solid var(--success-border)",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ✓ {ctrl}
+                    <button
+                      type="button"
+                      disabled={running}
+                      onClick={() => setExplicitControls((prev) => prev.filter((c) => c !== ctrl))}
+                      style={{ border: "none", background: "transparent", color: "inherit", padding: "0 2px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
+                      title="Unassign as explicit control"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : autoDetectedControls.length > 0 ? (
+              <div style={{ marginTop: "8px", fontSize: "11.5px", color: "var(--text-muted)" }}>
+                Auto-detected control: <code>{autoDetectedControls.join(", ")}</code> (drop a file here to override)
+              </div>
+            ) : (
+              <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-dim)" }}>
+                Optional if uploading a full sequencing <code>.zip</code> or folder that already contains a control file (e.g. <code>WT</code> / <code>Ctrl</code>).
+              </div>
+            )}
           </div>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "8px", marginTop: "6px" }}>
+
+        {/* Box 2: Edited Clone Samples / Sequencing ZIP / Folder */}
+        <div
+          className={`drop${draggingEdited ? " over" : ""}`}
+          style={{ margin: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+          onDragOver={(e) => { e.preventDefault(); setDraggingEdited(true); }}
+          onDragLeave={() => setDraggingEdited(false)}
+          onDrop={(e) => { e.preventDefault(); setDraggingEdited(false); addFiles(e.dataTransfer.files, "edited"); }}
+        >
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "13.5px", color: "var(--text-main)" }}>
+                  2. Edited Clones (.ab1, .zip, or Folder)
+                </div>
+                <div className="muted" style={{ fontSize: "11.5px", marginTop: "2px" }}>
+                  Drop edited clone <code>.ab1</code> traces, a plate <code>.zip</code> archive, or a folder.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                <input
+                  ref={filePicker}
+                  hidden
+                  style={{ display: "none" }}
+                  type="file"
+                  multiple
+                  accept=".zip,.ab1,.abi,.csv,.tsv,.json,.html,.htm,.gb,.gbk,.gbff,.genbank,text/html,application/json"
+                  disabled={running}
+                  onChange={(e) => { addFiles(e.target.files, "edited"); e.target.value = ""; }}
+                  aria-label="Choose files"
+                />
+                <button type="button" disabled={running} onClick={() => filePicker.current.click()} style={{ fontSize: "12px" }}>
+                  Add Clones / ZIP
+                </button>
+                <input
+                  ref={folderPicker}
+                  hidden
+                  style={{ display: "none" }}
+                  type="file"
+                  multiple
+                  webkitdirectory=""
+                  directory=""
+                  disabled={running}
+                  onChange={(e) => { addFiles(e.target.files, "edited"); e.target.value = ""; }}
+                  aria-label="Choose a folder"
+                />
+                <button type="button" disabled={running} onClick={() => folderPicker.current.click()} style={{ fontSize: "12px" }}>
+                  Add Folder
+                </button>
+              </div>
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-dim)" }}>
+              Also accepts design reports (<code>.html</code> / <code>.json</code>), sample sheets (<code>.csv</code>), and GenBank files.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Option 3: Load Directly from Sequencing URL / Cloud Link */}
+      <div style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-surface)", marginBottom: "8px" }}>
+        <form onSubmit={loadFromUrl} style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <label htmlFor="q-trace-url" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)", whiteSpace: "nowrap" }}>
+            🔗 Load from URL:
+          </label>
+          <input
+            id="q-trace-url"
+            type="text"
+            value={traceUrl}
+            disabled={running || loadingUrl}
+            onChange={(e) => setTraceUrl(e.target.value)}
+            placeholder="Paste direct link to sequencing .zip archive or .ab1 file (Core facility / LIMS / Cloud URL)…"
+            style={{ flex: "1 1 260px", fontSize: "12px", padding: "5px 9px", margin: 0 }}
+          />
+          <select
+            aria-label="Role for fetched URL"
+            value={urlRole}
+            disabled={running || loadingUrl}
+            onChange={(e) => setUrlRole(e.target.value)}
+            style={{ fontSize: "12px", padding: "5px 8px", width: "auto", margin: 0 }}
+          >
+            <option value="edited">Clones / Sequencing ZIP</option>
+            <option value="control">Parental Control (.ab1)</option>
+          </select>
+          <button
+            type="submit"
+            disabled={running || loadingUrl || !traceUrl.trim()}
+            style={{ fontSize: "12px", padding: "5px 12px", margin: 0, whiteSpace: "nowrap" }}
+          >
+            {loadingUrl ? "Fetching…" : "Fetch URL"}
+          </button>
+        </form>
+
+        <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "6px", marginTop: "6px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <strong style={{ color: "var(--text-muted)" }}>Try 1-click benchmark trace sets:</strong>
             <button
@@ -206,7 +407,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               className="link"
               disabled={running}
               onClick={() => loadSampleBundle("apoe")}
-              style={{ fontSize: "11px", padding: "3px 8px", margin: 0, fontWeight: 600 }}
+              style={{ fontSize: "11px", padding: "2px 8px", margin: 0, fontWeight: 600 }}
             >
               Load APOE R176C SNP Practice (4 traces)
             </button>
@@ -215,12 +416,12 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               className="link"
               disabled={running}
               onClick={() => loadSampleBundle("myd88")}
-              style={{ fontSize: "11px", padding: "3px 8px", margin: 0, fontWeight: 600 }}
+              style={{ fontSize: "11px", padding: "2px 8px", margin: 0, fontWeight: 600 }}
             >
               Load MYD88 KO hiPSC Cohort (11 traces)
             </button>
           </div>
-          <span>🔒 Files are processed 100% locally in your browser; never uploaded.</span>
+          <span>🔒 Processed 100% locally in your browser.</span>
         </div>
       </div>
       {importStatus && <p role="status" className="note">{importStatus}</p>}
@@ -427,13 +628,34 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
 
       {traceNames.length > 0 && <details open>
         <summary>Loaded traces ({traceNames.length})</summary>
-        <ul>{traceNames.map((name) => <li key={name}><span>{name}</span> <button type="button" disabled={running} aria-label={`Remove trace ${name}`} onClick={() => {
-          files.current.delete(name); buffers.current.delete(name); setTraceNames((previous) => previous.filter((n) => n !== name)); setPairsEdit({}); setOutcome(null); setError("");
-        }}>Remove</button></li>)}</ul>
+        <ul>{traceNames.map((name) => {
+          const isExplicitCtrl = explicitControls.includes(name);
+          return (
+            <li key={name} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <span>{name}</span>
+              {isExplicitCtrl && <span style={{ fontSize: "11px", color: "var(--success)", fontWeight: 600 }}>(Parental Control)</span>}
+              <button
+                type="button"
+                disabled={running}
+                onClick={() => {
+                  setExplicitControls((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
+                  setPairsEdit({});
+                  setOutcome(null);
+                }}
+                style={{ fontSize: "11px", padding: "2px 6px" }}
+              >
+                {isExplicitCtrl ? "Unset Control" : "Set as Control"}
+              </button>
+              <button type="button" disabled={running} aria-label={`Remove trace ${name}`} onClick={() => {
+                files.current.delete(name); buffers.current.delete(name); setTraceNames((previous) => previous.filter((n) => n !== name)); setExplicitControls((previous) => previous.filter((n) => n !== name)); setPairsEdit({}); setOutcome(null); setError("");
+              }} style={{ fontSize: "11px", padding: "2px 6px" }}>Remove</button>
+            </li>
+          );
+        })}</ul>
       </details>}
       {traceNames.length > 0 && (
         <>
-          <p>{traceNames.length} trace{traceNames.length === 1 ? "" : "s"}; {pairs.length} sample{pairs.length === 1 ? "" : "s"} paired by {built.source === "sheet" ? "the sample sheet" : "file names"}. Guides from {guideSource}.</p>
+          <p>{traceNames.length} trace{traceNames.length === 1 ? "" : "s"}; {pairs.length} sample{pairs.length === 1 ? "" : "s"} paired by {built.source === "explicit" ? "uploaded Parental Control" : built.source === "sheet" ? "the sample sheet" : "file names"}. Guides from {guideSource}.</p>
           {built.problems.map((p) => <p key={p} className="note">{p}</p>)}
           {lowCount > 0 && <p className="note">{lowCount} pairing{lowCount === 1 ? " is" : "s are"} a guess (marked low): check the control column before running.</p>}
           <div className="scroll">

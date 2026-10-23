@@ -5,6 +5,7 @@ import { parseQcDesign } from '../src/services/qcDesignImport.js';
 import { runDesign } from '../src/engine/design/designEngine.js';
 import { buildQcDesignSpec } from '../src/engine/design/qcExport.js';
 import { createProject, updateProject } from '../src/services/projectState.js';
+import { buildPairs } from '../src/engine/qc/quick.js';
 const sample = JSON.parse(fs.readFileSync(new URL('../public/demo_traces/apoe_r176c_snp.design.json', import.meta.url)));
 
 test('QC imports the design tool JSON handoff with its actual gene and edit type', () => {
@@ -36,4 +37,15 @@ test('changing design inputs drops an imported QC reference; switching QC design
   const switched = updateProject(project, { qcDesignSpec: null });
   assert.equal(switched.designResult, project.designResult);
   assert.deepEqual(switched.qcResults, []);
+});
+
+test('buildPairs pairs edited clones explicitly with uploaded Parental Control traces without relying on filename heuristics', () => {
+  const traceNames = ['Arbitrary_Ref_A01.ab1', 'Sample_1_F.ab1', 'Sample_1_R.ab1', 'Sample_2.ab1'];
+  const built = buildPairs({ traceNames, explicitControls: ['Arbitrary_Ref_A01.ab1'] });
+  assert.equal(built.source, 'explicit');
+  assert.equal(built.pairs.length, 2);
+  assert.deepEqual(built.pairs[0].control, ['Arbitrary_Ref_A01.ab1']);
+  assert.deepEqual(built.pairs[0].edited, ['Sample_1_F.ab1', 'Sample_1_R.ab1']);
+  assert.equal(built.pairs[0].confidence, 'explicit');
+  assert.deepEqual(built.pairs[1].edited, ['Sample_2.ab1']);
 });

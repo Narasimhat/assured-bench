@@ -1,6 +1,6 @@
 // Zero-configuration flow, as plain functions so that it is tested without a browser: files in, pairs and a design inferred, a pool of workers
 // run the samples, decisions come out. The React component only draws what these return.
-import { autoPair, parseSampleSheet, resolveSheet } from "./sheet.js";
+import { autoPair, parseSampleSheet, resolveSheet, directionOf, looksLikePool } from "./sheet.js";
 import { parseDesignReport } from "./designReport.js";
 import { planDesign } from "./batch.js";
 import { wellOf } from "./decision.js";
@@ -12,8 +12,50 @@ export function classifyFiles(names) {
   return out;
 }
 
-/** Pairs from a sheet (if there is one) or from the file names; every pair carries its confidence and the reason. */
-export function buildPairs({ traceNames, sheetText = "" }) {
+/** Pairs from an explicit control upload, a sheet (if there is one), or from the file names; every pair carries its confidence and the reason. */
+export function buildPairs({ traceNames, sheetText = "", explicitControls = [] }) {
+  const validControls = (explicitControls || []).filter((c) => traceNames.includes(c));
+  if (validControls.length > 0) {
+    const ctrlSet = new Set(validControls);
+    const editedTraces = traceNames.filter((n) => !ctrlSet.has(n));
+    if (!editedTraces.length) {
+      return {
+        pairs: [],
+        problems: ["Parental control trace loaded. Now add one or more edited clone .ab1 traces in Box 2 to pair and analyse."],
+        source: "explicit",
+      };
+    }
+    const stems = new Map();
+    editedTraces.forEach((name) => {
+      const { stem, direction } = directionOf(name);
+      const pool = looksLikePool(name);
+      const slotKey = direction ? stem : name.replace(/^.*[\\/]/, "").replace(/\.(ab1|abi|abif|scf)$/i, "");
+      if (!stems.has(slotKey)) stems.set(slotKey, { pool, files: [] });
+      const slot = stems.get(slotKey);
+      slot.pool = slot.pool || pool;
+      slot.files.push({ name, direction: direction || "F" });
+    });
+    const orderedControls = [...validControls].sort((a, b) => {
+      const da = directionOf(a).direction || "F";
+      const db = directionOf(b).direction || "F";
+      return da === db ? 0 : da === "F" ? -1 : 1;
+    });
+    const pairs = [];
+    for (const [sample, slot] of stems) {
+      const sortedEdited = slot.files
+        .sort((a, b) => (a.direction === b.direction ? 0 : a.direction === "F" ? -1 : 1))
+        .map((x) => x.name);
+      pairs.push({
+        sample,
+        edited: sortedEdited,
+        control: orderedControls.slice(0, 2),
+        type: slot.pool ? "pool" : "clone",
+        confidence: "explicit",
+        reason: "paired with uploaded Parental Control trace",
+      });
+    }
+    return { pairs, problems: [], source: "explicit" };
+  }
   if (sheetText.trim()) {
     const sheet = parseSampleSheet(sheetText); const resolved = resolveSheet(sheet.rows, traceNames);
     return { pairs: resolved.jobs.filter((j) => j.ok).map((j) => ({ sample: j.sample, edited: j.edited, control: j.control, type: j.type, confidence: "sheet", reason: "from the sample sheet", guides: j.guides, donor: j.donor, workflow: j.workflow })), problems: [...sheet.errors, ...resolved.problems], source: "sheet" };
