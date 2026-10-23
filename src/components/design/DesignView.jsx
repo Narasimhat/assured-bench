@@ -37,10 +37,7 @@ import {
   Download,
   FileText,
   FlaskConical,
-  Copy,
-  Check,
-  Sparkles,
-  Shield
+  Sparkles
 } from "lucide-react";
 
 export const CONSTRUCT_BUILDER_OPTIONS = {
@@ -236,7 +233,6 @@ export function DesignView({
   const maxBlockingChanges = currentProject.options?.maxBlockingChanges ?? 3;
   const coDelivery = currentProject.options?.coDeliveryBlocking ?? currentProject.options?.coDelivery ?? false;
   const donorFormat = currentProject.options?.donorFormat ?? "auto";
-  const customGuidesText = currentProject.options?.customGuidesText ?? "";
   const geneMeta = currentProject.geneMeta ?? null;
   const genbankRaw = currentProject.genbankRaw ?? "";
 
@@ -247,7 +243,6 @@ export function DesignView({
   const [isLoadingGene, setIsLoadingGene] = useState(false);
   const [isDesigning, setIsDesigning] = useState(false);
   const [error, setError] = useState(null);
-  const [copiedKey, setCopiedKey] = useState(null);
 
   const setGeneInput = (gene) => onUpdateProject({ gene, geneMeta: null, genbankRaw: "" });
   const setEditType = (nextType) => {
@@ -264,13 +259,6 @@ export function DesignView({
   const setTag = (tagVal) => onUpdateProject({ tag: tagVal });
   const setHomologyArmLength = (len) => onUpdateProject({ homologyArmLength: len });
   const setOption = (fields) => onUpdateProject({ options: { ...currentProject.options, ...fields } });
-
-  const handleCopy = (text, key) => {
-    if (!text) return;
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1800);
-  };
 
   // Active design result
   const designResult = currentProject?.designResult || null;
@@ -445,15 +433,6 @@ export function DesignView({
     setIsDesigning(true);
     setError(null);
     try {
-      const parsedCustomGuides = customGuidesOverride || (
-        customGuidesText.trim()
-          ? customGuidesText
-              .split(/[\r\n,;]+/)
-              .map((s) => s.trim().toUpperCase())
-              .filter((s) => /^[ACGT]{17,24}$/.test(s))
-          : null
-      );
-
       const resolvedTag = editType === "it"
         ? (INTERNAL_TAGS[tag] ? tag : "SPOT")
         : (editType === "ct" || editType === "nt")
@@ -468,7 +447,7 @@ export function DesignView({
         expectedGene: geneMeta?.geneSymbol || geneInput.trim(),
         ensureGuidePair: true,
         allowNonCodingBlockers: true,
-        ...(parsedCustomGuides?.length ? { customGuides: parsedCustomGuides } : {})
+        ...(customGuidesOverride?.length ? { customGuides: customGuidesOverride } : {})
       };
 
       const result = runDesign(
@@ -914,23 +893,6 @@ export function DesignView({
               </button>
             </div>
 
-            {/* Optional Custom Guides Input */}
-            <details style={{ marginTop: "0.75rem", fontSize: "0.85rem" }}>
-              <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontWeight: 500 }}>
-                Optional: Use your own custom gRNA spacers (20 nt)
-              </summary>
-              <div style={{ marginTop: "0.5rem" }}>
-                <input
-                  type="text"
-                  value={customGuidesText}
-                  onChange={(e) => setOption({ customGuidesText: e.target.value })}
-                  placeholder="Paste one or two 20-nt spacers separated by comma or space (e.g. GGACTGTTGCTGTTCTGCCC)"
-                  className="mono"
-                  style={{ width: "100%", fontSize: "0.82rem" }}
-                />
-              </div>
-            </details>
-
             {!genbankRaw && (
               <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
                 Fetch a gene from Ensembl/NCBI, upload a GenBank reference, or click one of the Instant Presets above to enable design.
@@ -945,32 +907,36 @@ export function DesignView({
         )}
       </div>
 
-      {/* Results Display */}
+      {/* Results Display: Single Unified ASSURED Design Report (Zero Duplication) */}
       {designResult && (
         <>
-          {/* Release State Banner */}
+          {/* Compact Action Bar */}
           <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--warning)" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.3rem" }}>
-                <span style={{ fontSize: "1.1rem", fontWeight: 700 }}>Design Status:</span>
-                {getStatusBadge(designResult.procurement?.status || "review")}
-              </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                {designResult.procurement?.status === "ready"
-                  ? "Configured design gates passed. Complete the checks below before ordering."
-                  : "External verification or review notes apply. Review candidate metrics below."}
-              </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "1.05rem", fontWeight: 700 }}>Design Report:</span>
+              {getStatusBadge(designResult.procurement?.status || "review")}
             </div>
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button
                 className="btn btn-secondary"
                 onClick={() => downloadReportHtml(currentProject, designResult)}
-                title="Download full standalone interactive HTML report"
+                title="Download standalone HTML report"
               >
                 <FileText size={16} />
-                <span>HTML Report</span>
+                <span>Download HTML Report</span>
               </button>
+
+              {currentProject?.svgScheme && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)}
+                  title="Download standalone SVG vector schematic"
+                >
+                  <Download size={16} />
+                  <span>Download SVG</span>
+                </button>
+              )}
 
               <button
                 className="btn btn-secondary"
@@ -998,248 +964,27 @@ export function DesignView({
             </div>
           </div>
 
-          {(designResult.procurement?.blockers?.length > 0 || designResult.procurement?.warnings?.length > 0 || designResult.procurement?.standingRequirements?.length > 0) && (
-            <div className="card">
-              <h3>Before ordering</h3>
-              <ul style={{ paddingLeft: "1.25rem", marginTop: "0.5rem", fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                {[...(designResult.procurement.blockers || []), ...(designResult.procurement.warnings || []), ...(designResult.procurement.standingRequirements || [])].map((note, i) => <li key={i} style={{ marginBottom: "0.25rem" }}>{note}</li>)}
-              </ul>
-            </div>
-          )}
-
-          {/* Target Region SVG Schematic */}
-          {currentProject?.svgScheme && (
-            <div className="card">
-              <div className="card-title">
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                  <span>Target Locus Schematic</span>
-                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal" }}>
-                    Publication-ready vector layout
-                  </span>
-                </div>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)}
-                  style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem" }}
-                  title="Download standalone SVG vector graphic for publications or slides"
-                >
-                  <Download size={14} />
-                  <span>Download SVG</span>
-                </button>
-              </div>
-              <div
-                style={{ overflowX: "auto", background: "#fff", padding: "1.5rem", borderRadius: "8px" }}
-                dangerouslySetInnerHTML={{ __html: currentProject.svgScheme }}
-              />
-              {currentProject?.caption && (
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.75rem", fontStyle: "italic" }}>
-                  {currentProject.caption}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Guides and Donors Cards */}
-          <div className="grid-2">
-            {/* Guide RNA Card */}
-            <div className="card">
-              <div className="card-title">
-                <span>Selected Guide RNAs (20 nt Protospacer)</span>
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Guide Name</th>
-                      <th>Spacer (5&prime; &rarr; 3&prime;)</th>
-                      <th>PAM</th>
-                      <th>GC %</th>
-                      <th>Cut distance</th>
-                      <th>Protection</th>
-                      <th>Copy</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(designResult.guides || designResult.gs || []).map((g, idx) => {
-                      const seq = g.spacer || g.sp || g.sequence || g.seq;
-                      return (
-                        <tr key={idx}>
-                          <td><strong>{g.n || `${idx === 0 ? "Primary" : "Selected alternative"} gRNA ${idx + 1}`}</strong></td>
-                          <td className="mono" style={{ color: "var(--primary)", fontWeight: 600 }}>{seq}</td>
-                          <td className="mono" style={{ color: "var(--warning)" }}>{g.pam || g.pm || "NGG"}</td>
-                          <td>{g.gc ?? "\u2014"}%</td>
-                          <td>{Number.isFinite(g.d) ? `${Math.abs(g.d)} bp ${g.d < 0 ? "upstream" : g.d > 0 ? "downstream" : "at insertion"}` : "Exonic cut"}</td>
-                          <td>
-                            <span title={designResult.guideProtection?.[idx]?.reason || g.protection?.tier || ""}>
-                              {designResult.guideProtection?.[idx]?.tier || g.protection?.tier || (Number.isFinite(g.cfdResidual) ? `CFD ${g.cfdResidual.toFixed(4)}` : "Assessed")}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              onClick={() => handleCopy(seq, `g-${idx}`)}
-                              style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
-                            >
-                              {copiedKey === `g-${idx}` ? <Check size={13} style={{ color: "var(--success)" }} /> : <Copy size={13} />}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Silent PAM/Protospacer Blocking Substitutions Summary */}
-              {designResult.ss && designResult.ss.length > 0 && (
-                <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: "var(--success-bg)", border: "1px solid var(--success-border)", fontSize: "0.82rem" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 700, color: "var(--success)", marginBottom: "0.35rem" }}>
-                    <Shield size={15} />
-                    <span>Silent Re-Cut Blocking Substitutions ({designResult.ss.length})</span>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                    {designResult.ss.map((s, si) => (
-                      <span
-                        key={si}
-                        className="mono"
-                        style={{ background: "#ffffff", padding: "0.2rem 0.55rem", borderRadius: "5px", border: "1px solid var(--success-border)", color: "var(--text-main)", fontSize: "0.78rem" }}
-                        title={s.blockingReason || "Synonymous blocking substitution prevents Cas9 re-cleavage after HDR"}
-                      >
-                        {s.ob || ""}&rarr;{s.nb || ""} {s.oc && s.nc ? `(${s.oc}\u2192${s.nc}, ${s.aa || "synonymous"})` : `pos ${s.gp ?? si + 1}`}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Donor Repair Template Card */}
-            <div className="card">
-              <div className="card-title">
-                <span>Donor Repair Template</span>
-                {(() => {
-                  const donor = designResult.donors?.[0] || designResult.os?.[0] || designResult.donor || designResult.ssodn;
-                  const seq = typeof donor === "string" ? donor : (donor?.od || donor?.sequence || donor?.genomicDonor || donor?.donorSense);
-                  if (!seq) return null;
-                  return (
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => handleCopy(seq, "donor")}
-                      style={{ padding: "0.3rem 0.65rem", fontSize: "0.8rem" }}
-                    >
-                      {copiedKey === "donor" ? <Check size={14} style={{ color: "var(--success)" }} /> : <Copy size={14} />}
-                      <span>{copiedKey === "donor" ? "Copied Donor" : "Copy Donor"}</span>
-                    </button>
-                  );
-                })()}
-              </div>
-              {(() => {
-                const donor = designResult.donors?.[0] || designResult.os?.[0] || designResult.donor || designResult.ssodn;
-                const seq = typeof donor === "string" ? donor : (donor?.od || donor?.sequence || donor?.genomicDonor || donor?.donorSense);
-                if (seq) {
-                  return (
-                    <div>
-                      <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                        Strand matches guide PAM-bearing strand to prevent re-cleavage:
-                      </p>
-                      <div
-                        className="mono"
-                        style={{
-                          background: "var(--bg-app)",
-                          padding: "0.85rem",
-                          borderRadius: "8px",
-                          wordBreak: "break-all",
-                          fontSize: "0.82rem",
-                          lineHeight: "1.6",
-                          border: "1px solid var(--border-color)",
-                          maxHeight: "160px",
-                          overflowY: "auto"
-                        }}
-                      >
-                        {seq}
-                      </div>
-                      <div style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "1.25rem", fontSize: "0.85rem" }}>
-                        <span>Length: <strong>{seq.length} nt</strong></span>
-                        {designResult.h5l && designResult.h3l && (
-                          <span>Homology Arms: <strong>5&prime; {designResult.h5l} nt / 3&prime; {designResult.h3l} nt</strong></span>
-                        )}
-                        <span>Format: <strong>{designResult.donorFormat?.label || (seq.length <= 200 ? "Single-Stranded Oligo (ssODN)" : "dsDNA Block / Megamer")}</strong></span>
-                      </div>
-                    </div>
-                  );
-                }
-                return <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>No donor required for pure dual-guide knockout.</p>;
-              })()}
-            </div>
+          {/* Single Authoritative ASSURED Design Report */}
+          <div className="card" style={{ padding: "0.5rem", overflow: "hidden" }}>
+            <iframe
+              title="ASSURED design report"
+              srcDoc={generateReportHtml(currentProject, designResult)}
+              sandbox="allow-same-origin"
+              style={{
+                width: "100%",
+                height: "82vh",
+                minHeight: "740px",
+                border: "none",
+                borderRadius: "8px",
+                background: "#ffffff"
+              }}
+            />
           </div>
 
-          {/* Flanking PCR & Sanger Sequencing Verification Primers Card */}
-          {designResult.ps && designResult.ps.length > 0 && (
-            <div className="card">
-              <div className="card-title" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
-                <div>
-                  <span>Flanking PCR &amp; Sanger Sequencing Primers</span>
-                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal", marginLeft: "0.75rem" }}>
-                    {designResult.amp ? `Expected Amplicon: ${designResult.amp}` : "Outside homology arms to prevent episomal donor amplification"}
-                  </span>
-                </div>
-                {designResult.primerStrategy && (
-                  <span className="badge badge-ready" style={{ fontSize: "0.75rem" }}>
-                    {designResult.primerStrategy}
-                  </span>
-                )}
-              </div>
-
-              <div style={{ overflowX: "auto" }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Primer Name</th>
-                      <th>Sequence (5&prime; &rarr; 3&prime;)</th>
-                      <th>Length</th>
-                      <th>Tm (&deg;C)</th>
-                      <th>GC %</th>
-                      <th>Copy</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {designResult.ps.map((p, idx) => (
-                      <tr key={idx}>
-                        <td><strong>{p.n || `Primer ${idx + 1}`}</strong></td>
-                        <td className="mono" style={{ color: "var(--primary)", fontWeight: 600 }}>{p.s}</td>
-                        <td>{p.s ? `${p.s.length} nt` : "\u2014"}</td>
-                        <td>{p.tm ? `${p.tm}\u00B0C` : "\u2014"}</td>
-                        <td>{p.gc ? `${p.gc}%` : "\u2014"}</td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => handleCopy(p.s, `p-${idx}`)}
-                            style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
-                          >
-                            {copiedKey === `p-${idx}` ? <Check size={13} style={{ color: "var(--success)" }} /> : <Copy size={13} />}
-                            <span>{copiedKey === `p-${idx}` ? "Copied" : "Copy"}</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {designResult.primerWarning && (
-                <p style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--warning)" }}>
-                  Note: {designResult.primerWarning}
-                </p>
-              )}
-            </div>
-          )}
-
-          {designResult.guideAlternatives && (
+          {designResult.guideAlternatives?.candidates?.length > 0 && (
             <details className="card" style={{ marginTop: "1rem" }}>
               <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-                Advanced: Guide Alternatives &amp; Off-Target Rankings ({designResult.guideAlternatives.candidates?.length || 0} nearby candidates)
+                Switch Guide RNA ({designResult.guideAlternatives.candidates.length} nearby candidates)
               </summary>
               <div style={{ marginTop: "1rem" }}>
                 <GuideAlternatives
@@ -1249,27 +994,6 @@ export function DesignView({
               </div>
             </details>
           )}
-
-          {/* Full Interactive ASSURED Design Report Preview (100% Parity with Assured_CRISPR_Design) */}
-          <details className="card" style={{ marginTop: "1rem" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-              Full ASSURED Design Report Preview (Donor Strand Comparison, Readiness Gates &amp; Protein Verification)
-            </summary>
-            <div style={{ marginTop: "1rem" }}>
-              <iframe
-                title="ASSURED full design report preview"
-                srcDoc={generateReportHtml(currentProject, designResult)}
-                sandbox="allow-same-origin"
-                style={{
-                  width: "100%",
-                  height: "680px",
-                  border: "1px solid var(--border-color)",
-                  borderRadius: "8px",
-                  background: "#ffffff"
-                }}
-              />
-            </div>
-          </details>
         </>
       )}
     </div>
