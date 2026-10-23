@@ -1,5 +1,5 @@
 import React from "react";
-import { Dna, Save, FolderOpen, Download, Upload, Plus, Check } from "lucide-react";
+import { Dna, Save, FolderOpen, Plus, Check } from "lucide-react";
 
 export function Header({
   activeStep,
@@ -8,9 +8,7 @@ export function Header({
   onUpdateProject,
   onNewProject,
   onSaveProject,
-  onOpenProjects,
-  onExportBundle,
-  onImportBundle
+  onOpenProjects
 }) {
   const hasDesign = Boolean(currentProject?.designResult);
   const qcCount = currentProject?.qcResults?.length || 0;
@@ -113,31 +111,6 @@ export function Header({
           <Save size={16} />
           <span>Save</span>
         </button>
-
-        <button
-          className="btn btn-secondary"
-          onClick={onExportBundle}
-          title="Export .assured experiment bundle"
-          style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem" }}
-        >
-          <Download size={16} />
-          <span>Export</span>
-        </button>
-
-        <label
-          className="btn btn-secondary"
-          title="Import .assured experiment bundle"
-          style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem", cursor: "pointer", margin: 0 }}
-        >
-          <Upload size={16} />
-          <span>Import</span>
-          <input
-            type="file"
-            accept=".assured,.json"
-            onChange={onImportBundle}
-            style={{ display: "none" }}
-          />
-        </label>
       </div>
     </header>
   );
