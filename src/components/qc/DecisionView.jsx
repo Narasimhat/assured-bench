@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { Download, Award, Search, CheckCircle, AlertTriangle, XCircle, RefreshCw } from "lucide-react";
+import { Download, Award, Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, FileText } from "lucide-react";
 import { cloneSelectionFigure } from "../../engine/qc/selectionFigure.js";
+import { buildQcReportHtml, buildTakeHomeMessage } from "../../engine/qc/report.js";
 import { saveSvg, savePng, savePdf } from "../../engine/qc/saveFigure.js";
-import { PlateView } from "./PlateView.jsx";
 
 export function DecisionView({ currentProject, onBackToQc }) {
   const qcResults = currentProject?.qcResults || [];
@@ -11,8 +11,32 @@ export function DecisionView({ currentProject, onBackToQc }) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const selectionSvg = useMemo(() => cloneSelectionFigure(qcResults), [qcResults]);
+  const workflow = useMemo(() => {
+    const first = qcResults[0]?.workflow;
+    if (first) return first;
+    const editType = currentProject?.editType || currentProject?.designResult?.type;
+    return editType === "ko" ? "knockout" : (editType === "pm" || editType === "genomic-snv") ? "snp" : "tag_small";
+  }, [qcResults, currentProject]);
+  const takeHome = useMemo(() => buildTakeHomeMessage(workflow, qcResults), [workflow, qcResults]);
   const [figureBusy, setFigureBusy] = useState(false);
   const [figureError, setFigureError] = useState("");
+
+  const handleDownloadHtmlReport = () => {
+    if (qcResults.length === 0) return;
+    const html = buildQcReportHtml({
+      title: `${currentProject?.gene || "CRISPR"} — Publication Clone Screening Report`,
+      workflow,
+      design: currentProject?.qcDesignSource || currentProject?.gene || "",
+      results: qcResults,
+    });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(currentProject?.gene || "clones").replace(/[^a-z0-9_-]/gi, "_")}_publication_report.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const downloadFigure = async (format) => {
     if (!selectionSvg || figureBusy) return;
@@ -109,18 +133,49 @@ export function DecisionView({ currentProject, onBackToQc }) {
         <div className="card-title" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <Award size={22} style={{ color: "var(--success)" }} />
-            <span>4. Clone Selection &amp; Screening Reports</span>
+            <span>4. Publication Report &amp; Clone Summary</span>
           </div>
 
-          <button className="btn btn-primary" onClick={handleDownloadCsv}>
-            <Download size={16} />
-            <span>Download Screening CSV</span>
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={handleDownloadHtmlReport}>
+              <FileText size={16} />
+              <span>Download Publication Report (HTML)</span>
+            </button>
+            <button className="btn btn-secondary" onClick={handleDownloadCsv}>
+              <Download size={16} />
+              <span>Download Screening CSV</span>
+            </button>
+          </div>
         </div>
 
-        <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", marginBottom: "1rem" }}>
-          The decision engine prioritized <strong>{topPanel.length}</strong> top clone{topPanel.length === 1 ? "" : "s"} for banking and phenotyping assays out of <strong>{qcResults.length}</strong> analyzed samples ({accepted.length} accepted, {held.length} held, {reseq.length} re-sequence, {rejected.length} rejected).
-        </p>
+        {/* Final Take-Home Message Callout */}
+        <div style={{
+          padding: "1rem 1.25rem",
+          borderRadius: "10px",
+          background: takeHome.status === "pass" ? "var(--success-bg)" : takeHome.status === "warn" ? "var(--warning-bg)" : "var(--danger-bg)",
+          border: `1.5px solid ${takeHome.status === "pass" ? "var(--success-border)" : takeHome.status === "warn" ? "var(--warning-border)" : "var(--danger-border)"}`,
+          marginBottom: "1rem"
+        }}>
+          <div style={{
+            fontSize: "0.72rem",
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            color: takeHome.status === "pass" ? "var(--success)" : takeHome.status === "warn" ? "var(--warning)" : "var(--danger)",
+            marginBottom: "0.3rem"
+          }}>
+            Final Take-Home Conclusion
+          </div>
+          <div style={{ fontSize: "1.08rem", fontWeight: 700, color: "var(--text-main)", marginBottom: "0.35rem" }}>
+            {takeHome.headline}
+          </div>
+          <div style={{ fontSize: "0.9rem", color: "var(--text-main)", lineHeight: 1.5, marginBottom: "0.5rem" }}>
+            {takeHome.summary}
+          </div>
+          <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", borderTop: "1px dashed rgba(0,0,0,0.12)", paddingTop: "0.45rem" }}>
+            <strong>Recommended Next Step:</strong> {takeHome.nextStep}
+          </div>
+        </div>
 
         {/* Verdict Summary KPI Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.75rem" }}>
@@ -236,14 +291,6 @@ export function DecisionView({ currentProject, onBackToQc }) {
           </div>
         </div>
       )}
-
-      {/* Interactive 96-Well Plate Coordinate Mapper */}
-      <PlateView
-        traces={[]}
-        results={qcResults}
-        selectedResult={activeClone}
-        onSelectResult={(res) => setSelectedClone(res)}
-      />
 
       {/* Selected Clone Diagnostic Inspector */}
       {activeClone && (

@@ -97,15 +97,76 @@ export function alignedSection(results) {
   return `<h2>All clones aligned</h2>${intro}${groups.map((items, g) => `${groups.length > 1 ? `<h3>Design group ${g + 1} (${items.length} samples)</h3>` : ""}<h3>Base calls</h3><div style="overflow-x:auto">${clonesAlignmentFigure(items)}</div>${items.length <= 48 ? `<h3>Chromatograms</h3><div style="overflow-x:auto">${clonesAlignedFigure(items)}</div>` : "<p class=\"muted\">More than 48 clones: the chromatograms are in the sample sections below.</p>"}`).join("")}`;
 }
 
-export function buildQcReportHtml({ title = "Sanger QC report", workflow, design = "", results, generatedAt = new Date(), notes = [] }) {
+export function buildTakeHomeMessage(workflow, results = []) {
+  const total = results.length;
+  const getDec = (r) => (r.decision?.decision || r.decision?.verdict || "").toLowerCase();
+  const accepted = results.filter((r) => getDec(r) === "accept");
+  const held = results.filter((r) => getDec(r) === "hold");
+  const reseq = results.filter((r) => getDec(r) === "re-sequence");
+  const rejected = results.filter((r) => getDec(r) === "reject");
+  const isKo = workflow === "knockout" || workflow === "deletion";
+  const panelNames = panelOf(results);
+  const carryNames = panelNames.length ? panelNames : accepted.slice(0, isKo ? 3 : 6).map((r) => r.name);
+  const carryObjects = carryNames.map((n) => results.find((r) => r.name === n)).filter(Boolean);
+
+  const describeClone = (r) => {
+    const s = r.summary || {};
+    const score = isKo
+      ? `${s.functionalKoPct ?? s.koScorePct ?? s.editedPct ?? 0}% KO`
+      : `${s.intendedEditPct ?? 0}% HDR`;
+    const call = r.genotype?.summary || headline(workflow, r) || score;
+    return `${r.name} (${call})`;
+  };
+
+  if (carryObjects.length > 0) {
+    const rate = Math.round((accepted.length / Math.max(1, total)) * 100);
+    return {
+      status: "pass",
+      headline: `Carry forward for expansion & banking: ${carryNames.join(", ")}`,
+      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, ${accepted.length} (${rate}%) met acceptance criteria (${held.length} held, ${reseq.length} re-sequence, ${rejected.length} rejected). Top prioritized clone${carryObjects.length === 1 ? "" : "s"}: ${carryObjects.map(describeClone).join("; ")}.`,
+      nextStep: isKo
+        ? "Next step: Expand prioritized clone(s), freeze low-passage vials, and confirm loss of protein expression (e.g. Western blot) and absence of large monoallelic deletions."
+        : "Next step: Expand prioritized clone(s), freeze low-passage vials, and confirm zygosity with bidirectional reads and primers outside the homology arms.",
+    };
+  }
+
+  if (held.length > 0 || reseq.length > 0) {
+    return {
+      status: "warn",
+      headline: held.length > 0
+        ? `Hold / Review: ${held.map((r) => r.name).join(", ")} (no unambiguous top clone yet)`
+        : `Re-sequencing required for ${reseq.length} trace${reseq.length === 1 ? "" : "s"}`,
+      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, 0 met strict acceptance criteria, ${held.length} ${held.length === 1 ? "is" : "are"} held for review (e.g. heterozygous or partial conversion), and ${reseq.length} require re-sequencing.`,
+      nextStep: "Next step: Re-sequence traces with low signal quality in both directions, or subclone/screen additional colonies.",
+    };
+  }
+
+  return {
+    status: "fail",
+    headline: "No edited clones identified in this cohort",
+    summary: `All ${total} screened sample${total === 1 ? "" : "s"} were called wild-type or rejected.`,
+    nextStep: "Next step: Screen additional colonies or verify RNP/donor delivery efficiency in the parental pool before picking clones.",
+  };
+}
+
+export function buildQcReportHtml({ title = "Publication Clone Screening Report", workflow, design = "", results, generatedAt = new Date(), notes = [] }) {
   const flow = WORKFLOWS[workflow]?.label || workflow;
-  const rows = results.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.decision ? esc(DECISION_LABEL[r.decision.decision]) : ""}</td><td class="${statusClass(r)}">${esc(headline(workflow, r))}</td><td>${r.ok ? (r.warnings?.length ? `${r.warnings.length} note${r.warnings.length === 1 ? "" : "s"}` : "none") : "not analysed"}</td></tr>`).join("");
+  const takeHome = buildTakeHomeMessage(workflow, results);
+  const boxBorder = takeHome.status === "pass" ? "#10b981" : takeHome.status === "warn" ? "#f59e0b" : "#ef4444";
+  const boxBg = takeHome.status === "pass" ? "#ecfdf5" : takeHome.status === "warn" ? "#fffbeb" : "#fef2f2";
+  const boxTitleColor = takeHome.status === "pass" ? "#065f46" : takeHome.status === "warn" ? "#92400e" : "#991b1b";
+  const rows = results.map((r) => `<tr><td>${r.recommendation?.rank ? `#${r.recommendation.rank}` : "—"}</td><td><b>${esc(r.name)}</b></td><td>${r.decision ? esc(DECISION_LABEL[r.decision.decision]) : ""}</td><td class="${statusClass(r)}">${esc(headline(workflow, r))}</td><td>${esc(r.genotype?.summary || "—")}</td><td>${r.ok ? (r.warnings?.length ? `${r.warnings.length} note${r.warnings.length === 1 ? "" : "s"}` : "none") : "not analysed"}</td></tr>`).join("");
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body>
 <h1>${esc(title)}</h1>
 <p class="muted">${esc(flow)}${design ? ` &middot; ${esc(design)}` : ""} &middot; ${results.length} sample${results.length === 1 ? "" : "s"} &middot; generated ${esc(generatedAt.toISOString().slice(0, 10))} by Assured QC ${QC_VERSION}</p>
-<div class="note"><b>Review required.</b> These are computed estimates from Sanger traces. Check the traces and the points flagged below before accepting a clone or releasing a line.</div>
+<div style="border:2px solid ${boxBorder};border-left-width:8px;background:${boxBg};border-radius:8px;padding:12px 16px;margin:14px 0;">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:${boxTitleColor};margin-bottom:4px;">Final Take-Home Conclusion</div>
+  <div style="font-size:16px;font-weight:700;color:${boxTitleColor};margin-bottom:6px;">${esc(takeHome.headline)}</div>
+  <div style="font-size:13px;color:#1f2937;margin-bottom:6px;">${esc(takeHome.summary)}</div>
+  <div style="font-size:12px;color:#475467;font-weight:600;">${esc(takeHome.nextStep)}</div>
+</div>
 ${notes.map((n) => `<p>${esc(n)}</p>`).join("")}
-<h2>Summary</h2>${(() => { const fig = runSummaryFigure(results, { title: "Run summary" }); return fig ? `<div style="overflow-x:auto">${fig}</div>` : ""; })()}<table><tr><th>Sample</th><th>Decision</th><th>Result</th><th>Notes</th></tr>${rows}</table>
+<h2>1. Clone Screening Summary</h2>${(() => { const fig = runSummaryFigure(results, { title: "Run summary" }); return fig ? `<div style="overflow-x:auto">${fig}</div>` : ""; })()}<table><tr><th>Rank</th><th>Sample / Clone</th><th>Decision</th><th>Result</th><th>Genotype Call</th><th>Notes</th></tr>${rows}</table>
 ${selectionSection(results, workflow)}
 ${alignedSection(results)}
 <h2>Samples</h2>${results.map((r) => sampleSection(workflow, r, { chromatogram: results.length <= 48 || !r.decision || r.decision.decision !== "reject" })).join("")}

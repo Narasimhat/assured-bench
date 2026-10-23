@@ -3,8 +3,8 @@ import { classifyFiles, buildPairs, readDesign, planTasks, runPool } from "./qui
 import { parseCodingFields } from "./coding.js";
 import { parseAbif } from "./abif.js";
 import { headline } from "./batch.js";
-import { buildQcReportHtml, buildResultsCsv } from "./report.js";
-import { buildPlateReportHtml, resequenceListCsv } from "./plateReport.js";
+import { buildQcReportHtml, buildResultsCsv, buildTakeHomeMessage } from "./report.js";
+import { resequenceListCsv } from "./plateReport.js";
 import { tally, DECISION_ORDER } from "./decision.js";
 import { withRecommendations, recommendationCsv, panelOf } from "./recommend.js";
 import { runProteinFigure } from "./proteinFigure.js";
@@ -770,71 +770,108 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
         </>
       )}
       {error && <p className="error">{error}</p>}
-      {outcome && (
-        <>
-          <h2>Decisions</h2>
-          <p className="chips">{DECISION_ORDER.map((k) => <span key={k} className={`chip d-${k.replace("-", "")}`}>{LABEL[k]} {counts[k]}</span>)}</p>
-          {summaryFigure && <div className="scroll" dangerouslySetInnerHTML={{ __html: summaryFigure }} />}
-          {selectionSvg && (
-            <details open className="aligned">
-              <summary><b>Clone selection</b></summary>
-              <p className="muted">From the design to the clones to take forward: the guides, cuts and designed changes over the chromatograms of those clones, and a table of all clones.</p>
-              <p><label>Clones to carry forward first <input type="number" min="1" max="48" value={panel || panelAuto} onChange={(e) => setPanel(Math.max(0, Math.min(48, Math.round(Number(e.target.value)) || 0)))} style={{ width: "4em" }} /></label> <span className="muted">({koRun ? "a knockout takes one clone per genotype" : "clones of one genotype are replicates, so up to six"}; the ranking itself does not change)</span></p>
-              <div className="scroll" dangerouslySetInnerHTML={{ __html: selectionSvg }} />
-              <p>
-                <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clone_selection_${stamp}.svg`, selectionSvg)}>Clone selection (SVG)</button>
-                <button type="button" className="link" onClick={() => savePng(`assured_qc_clone_selection_${stamp}_300dpi.png`, selectionSvg)}>Clone selection (PNG)</button>
-                <button type="button" className="link" onClick={() => savePdf(`assured_qc_clone_selection_${stamp}.pdf`, selectionSvg)}>Clone selection (PDF)</button>
-              </p>
-            </details>
-          )}
-          {alignedList.map((g, gi) => (
-            <details key={gi} className="aligned">
-              <summary><b>All clones aligned with the wild-type control</b>{alignedList.length > 1 ? ` (design group ${gi + 1}, ${g.items.length} samples)` : ` (${g.items.length} samples)`}</summary>
-              <p className="muted">Best clone first, on the same stretch of the control read. Base calls first, then the chromatograms{g.stack ? "" : " (not drawn above 48 clones)"}.</p>
-              <div className="scroll" dangerouslySetInnerHTML={{ __html: g.grid }} />
-              {g.stack && <div className="scroll" dangerouslySetInnerHTML={{ __html: g.stack }} />}
-              <p>
-                <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_alignment_${stamp}.svg`, g.grid)}>Base-call alignment (SVG)</button>
-                <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_alignment_${stamp}_300dpi.png`, g.grid)}>Base-call alignment (PNG)</button>
-                <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_alignment_${stamp}.pdf`, g.grid)}>Base-call alignment (PDF)</button>
-                {g.stack && <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_aligned_${stamp}.svg`, g.stack)}>Chromatograms (SVG)</button>}
-                {g.stack && <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_aligned_${stamp}_300dpi.png`, g.stack)}>Chromatograms (PNG)</button>}
-                {g.stack && <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_aligned_${stamp}.pdf`, g.stack)}>Chromatograms (PDF)</button>}
-              </p>
-            </details>
-          ))}
-            {panelOf(ranked).length > 0 && <p>Carry forward first: <b>{panelOf(ranked).join(", ")}</b> <span className="muted">{outcome.workflow === "knockout" || outcome.workflow === "deletion" ? "(ranked by how strongly the sequence predicts loss of protein; best clone of each genotype)" : "(ranked by the lower bound of the intended-edit interval; clones of one genotype count separately)"}</span></p>}
-          <p>
-            <button type="button" className="link" onClick={() => download(`assured_qc_${stamp}.html`, buildQcReportHtml({ workflow: outcome.workflow, results: ranked, notes: outcome.problems }), "text/html")}>Report (HTML)</button>
-            <button type="button" className="link" onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked), "text/csv")}>Table (CSV)</button>
-            <button type="button" className="link" onClick={() => download(`assured_qc_plate_${stamp}.html`, buildPlateReportHtml({ title: "Plate", results: ranked }), "text/html")}>Plate view (HTML)</button>
-            <button type="button" className="link" onClick={() => download(`assured_qc_resequence_${stamp}.csv`, resequenceListCsv(outcome.results), "text/csv")}>Re-sequence list (CSV)</button>
-            <button type="button" className="link" onClick={() => download(`assured_qc_recommendation_${stamp}.csv`, recommendationCsv(ranked), "text/csv")}>Recommendation (CSV)</button>
-            {summaryFigure && <button type="button" className="link" onClick={() => saveSvg(`assured_qc_summary_${stamp}.svg`, summaryFigure)}>Summary graph (SVG)</button>}
-            {summaryFigure && <button type="button" className="link" onClick={() => savePng(`assured_qc_summary_${stamp}_300dpi.png`, summaryFigure)}>Summary graph (PNG)</button>}
-            {summaryFigure && <button type="button" className="link" onClick={() => savePdf(`assured_qc_summary_${stamp}.pdf`, summaryFigure)}>Summary graph (PDF)</button>}
-            {runFigure && <button type="button" className="link" onClick={() => download(`assured_qc_protein_products_${stamp}.svg`, runFigure, "image/svg+xml")}>Protein products (SVG)</button>}
-            {runFigure && <button type="button" className="link" onClick={() => savePdf(`assured_qc_protein_products_${stamp}.pdf`, runFigure)}>Protein products (PDF)</button>}
-          </p>
-          <IceExport tasks={outcome.tasks} results={outcome.results} getBytes={name => {
-            const bytes = buffers.current.get(name); if (!bytes) throw new Error(`Trace no longer available: ${name}`); return bytes;
-          }} />
-          <div className="scroll">
-            <table><thead><tr><th>Decision</th><th>Sample</th><th>Result</th><th>Edited, 95% interval</th><th>Confidence</th><th>Priority</th></tr></thead><tbody>
-              {outcome.results.map((r, i) => (
-                <tr key={r.name + i} className={`pick${i === picked ? " active" : ""}`} onClick={() => setPicked(i)}>
-                  <td><span className={`chip d-${r.decision.decision.replace("-", "")}`}>{LABEL[r.decision.decision]}</span></td><td>{r.name}</td>
-                  <td>{r.ok ? headline(outcome.workflow, r) : r.error}</td><td>{r.ok ? `${r.summary.editedPct}% (${interval(r.intervals?.editedPct)})` : ""}</td><td>{r.confidence ? r.confidence.tier : ""}</td><td>{ranked[i].recommendation.rank ? `#${ranked[i].recommendation.rank} ${PRIORITY_LABEL[ranked[i].recommendation.priority] || ""}` : (PRIORITY_LABEL[ranked[i].recommendation.priority] || "")}</td></tr>
-              ))}
-            </tbody></table>
-          </div>
-          {result && <div className="card"><p><b>{LABEL[result.decision.decision]}.</b> {result.decision.reasons.join(" ")} <span className="muted">{result.decision.next}</span></p>
-            {recommendation && recommendation.priority !== "none" && <p><b>{/^KO score/.test(recommendation.basis || "") ? "KO score" : /^HDR score/.test(recommendation.basis || "") ? "HDR score, lower bound" : "Knockout support"} {recommendation.score} ({recommendation.tier}).</b> {recommendation.action} <span className="muted">{recommendation.why.join(" | ")}{recommendation.flags.length ? ` Note: ${recommendation.flags.join("; ")}.` : ""} The weights behind the support are provisional; only a protein result settles a knockout.</span></p>}
-            <p><button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("svg")}>Figure (SVG)</button><button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("png")}>Figure (PNG, 300 dpi)</button><button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("pdf")}>Figure (PDF)</button></p></div>}
-          {result && <Detail workflow={outcome.workflow} result={result} />}
-        </>
-      )}
+      {outcome && (() => {
+        const takeHome = buildTakeHomeMessage(outcome.workflow, ranked);
+        const boxBorder = takeHome.status === "pass" ? "var(--success)" : takeHome.status === "warn" ? "var(--warning)" : "#ef4444";
+        const boxBg = takeHome.status === "pass" ? "var(--success-bg)" : takeHome.status === "warn" ? "var(--warning-bg)" : "#fef2f2";
+        const boxColor = takeHome.status === "pass" ? "var(--success)" : takeHome.status === "warn" ? "var(--warning)" : "#991b1b";
+        return (
+          <>
+            <h2>Screening Report &amp; Final Take-Home Conclusion</h2>
+            <div style={{ border: `1px solid ${boxBorder}`, borderLeft: `6px solid ${boxBorder}`, background: boxBg, borderRadius: "8px", padding: "12px 16px", marginBottom: "12px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+                <div style={{ flex: "1 1 340px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", color: boxColor, marginBottom: "2px" }}>
+                    Final Take-Home Message
+                  </div>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-main)", marginBottom: "4px" }}>
+                    {takeHome.headline}
+                  </div>
+                  <div style={{ fontSize: "13px", color: "var(--text-main)", marginBottom: "4px" }}>
+                    {takeHome.summary}
+                  </div>
+                  <div className="muted" style={{ fontSize: "12px", fontWeight: 600 }}>
+                    {takeHome.nextStep}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => download(`assured_qc_publication_report_${stamp}.html`, buildQcReportHtml({ workflow: outcome.workflow, design: designName, results: ranked, notes: outcome.problems }), "text/html")}
+                    style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
+                  >
+                    Download Publication Report (HTML)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked), "text/csv")}
+                    style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
+                  >
+                    Download Table (CSV)
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="chips">{DECISION_ORDER.map((k) => <span key={k} className={`chip d-${k.replace("-", "")}`}>{LABEL[k]} {counts[k]}</span>)}</p>
+            {summaryFigure && <div className="scroll" dangerouslySetInnerHTML={{ __html: summaryFigure }} />}
+            {selectionSvg && (
+              <details open className="aligned">
+                <summary><b>Publication Figure: Clone Selection &amp; Chromatograms</b></summary>
+                <p className="muted">From the design to the clones to take forward: the guides, cuts and designed changes over the chromatograms of those clones, and a table of all clones.</p>
+                <p><label>Clones to carry forward first <input type="number" min="1" max="48" value={panel || panelAuto} onChange={(e) => setPanel(Math.max(0, Math.min(48, Math.round(Number(e.target.value)) || 0)))} style={{ width: "4em" }} /></label> <span className="muted">({koRun ? "a knockout takes one clone per genotype" : "clones of one genotype are replicates, so up to six"}; the ranking itself does not change)</span></p>
+                <div className="scroll" dangerouslySetInnerHTML={{ __html: selectionSvg }} />
+                <p>
+                  <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clone_selection_${stamp}.svg`, selectionSvg)}>Clone selection (SVG)</button>
+                  <button type="button" className="link" onClick={() => savePng(`assured_qc_clone_selection_${stamp}_300dpi.png`, selectionSvg)}>Clone selection (PNG)</button>
+                  <button type="button" className="link" onClick={() => savePdf(`assured_qc_clone_selection_${stamp}.pdf`, selectionSvg)}>Clone selection (PDF)</button>
+                </p>
+              </details>
+            )}
+            {alignedList.map((g, gi) => (
+              <details key={gi} className="aligned">
+                <summary><b>All clones aligned with the wild-type control</b>{alignedList.length > 1 ? ` (design group ${gi + 1}, ${g.items.length} samples)` : ` (${g.items.length} samples)`}</summary>
+                <p className="muted">Best clone first, on the same stretch of the control read. Base calls first, then the chromatograms{g.stack ? "" : " (not drawn above 48 clones)"}.</p>
+                <div className="scroll" dangerouslySetInnerHTML={{ __html: g.grid }} />
+                {g.stack && <div className="scroll" dangerouslySetInnerHTML={{ __html: g.stack }} />}
+                <p>
+                  <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_alignment_${stamp}.svg`, g.grid)}>Base-call alignment (SVG)</button>
+                  <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_alignment_${stamp}_300dpi.png`, g.grid)}>Base-call alignment (PNG)</button>
+                  <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_alignment_${stamp}.pdf`, g.grid)}>Base-call alignment (PDF)</button>
+                  {g.stack && <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_aligned_${stamp}.svg`, g.stack)}>Chromatograms (SVG)</button>}
+                  {g.stack && <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_aligned_${stamp}_300dpi.png`, g.stack)}>Chromatograms (PNG)</button>}
+                  {g.stack && <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_aligned_${stamp}.pdf`, g.stack)}>Chromatograms (PDF)</button>}
+                </p>
+              </details>
+            ))}
+            <p>
+              <button type="button" className="link" onClick={() => download(`assured_qc_resequence_${stamp}.csv`, resequenceListCsv(outcome.results), "text/csv")}>Re-sequence list (CSV)</button>
+              <button type="button" className="link" onClick={() => download(`assured_qc_recommendation_${stamp}.csv`, recommendationCsv(ranked), "text/csv")}>Recommendation (CSV)</button>
+              {summaryFigure && <button type="button" className="link" onClick={() => saveSvg(`assured_qc_summary_${stamp}.svg`, summaryFigure)}>Summary graph (SVG)</button>}
+              {summaryFigure && <button type="button" className="link" onClick={() => savePng(`assured_qc_summary_${stamp}_300dpi.png`, summaryFigure)}>Summary graph (PNG)</button>}
+              {summaryFigure && <button type="button" className="link" onClick={() => savePdf(`assured_qc_summary_${stamp}.pdf`, summaryFigure)}>Summary graph (PDF)</button>}
+              {runFigure && <button type="button" className="link" onClick={() => download(`assured_qc_protein_products_${stamp}.svg`, runFigure, "image/svg+xml")}>Protein products (SVG)</button>}
+              {runFigure && <button type="button" className="link" onClick={() => savePdf(`assured_qc_protein_products_${stamp}.pdf`, runFigure)}>Protein products (PDF)</button>}
+            </p>
+            <IceExport tasks={outcome.tasks} results={outcome.results} getBytes={name => {
+              const bytes = buffers.current.get(name); if (!bytes) throw new Error(`Trace no longer available: ${name}`); return bytes;
+            }} />
+            <div className="scroll">
+              <table><thead><tr><th>Decision</th><th>Sample</th><th>Result</th><th>Edited, 95% interval</th><th>Confidence</th><th>Priority</th></tr></thead><tbody>
+                {outcome.results.map((r, i) => (
+                  <tr key={r.name + i} className={`pick${i === picked ? " active" : ""}`} onClick={() => setPicked(i)}>
+                    <td><span className={`chip d-${r.decision.decision.replace("-", "")}`}>{LABEL[r.decision.decision]}</span></td><td>{r.name}</td>
+                    <td>{r.ok ? headline(outcome.workflow, r) : r.error}</td><td>{r.ok ? `${r.summary.editedPct}% (${interval(r.intervals?.editedPct)})` : ""}</td><td>{r.confidence ? r.confidence.tier : ""}</td><td>{ranked[i].recommendation.rank ? `#${ranked[i].recommendation.rank} ${PRIORITY_LABEL[ranked[i].recommendation.priority] || ""}` : (PRIORITY_LABEL[ranked[i].recommendation.priority] || "")}</td></tr>
+                ))}
+              </tbody></table>
+            </div>
+            {result && <div className="card"><p><b>{LABEL[result.decision.decision]}.</b> {result.decision.reasons.join(" ")} <span className="muted">{result.decision.next}</span></p>
+              {recommendation && recommendation.priority !== "none" && <p><b>{/^KO score/.test(recommendation.basis || "") ? "KO score" : /^HDR score/.test(recommendation.basis || "") ? "HDR score, lower bound" : "Knockout support"} {recommendation.score} ({recommendation.tier}).</b> {recommendation.action} <span className="muted">{recommendation.why.join(" | ")}{recommendation.flags.length ? ` Note: ${recommendation.flags.join("; ")}.` : ""} The weights behind the support are provisional; only a protein result settles a knockout.</span></p>}
+              <p><button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("svg")}>Figure (SVG)</button><button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("png")}>Figure (PNG, 300 dpi)</button><button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("pdf")}>Figure (PDF)</button></p></div>}
+            {result && <Detail workflow={outcome.workflow} result={result} />}
+          </>
+        );
+      })()}
     </div>
   );
 }

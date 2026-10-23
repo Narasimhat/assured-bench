@@ -80,7 +80,7 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
               onClick={onProceedToDecision}
               style={{ padding: "0.35rem 0.85rem", fontSize: "0.82rem" }}
             >
-              <span>Open 96-Well Plate &amp; Clone Reports</span>
+              <span>Open Publication Report &amp; Clone Summary</span>
               <ArrowRight size={14} />
             </button>
           )}
