@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { runDesign, summarizeProcurementReadiness } from "../../engine/design/designEngine.js";
+import React, { useMemo, useState } from "react";
+import { CASSETTES, INTERNAL_TAGS, runDesign, summarizeProcurementReadiness } from "../../engine/design/designEngine.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/design/designScheme.js";
 import { fetchGeneGenbank } from "../../services/ensembl.js";
 import { downloadReportHtml, downloadDesignJson, downloadSchemeSvg } from "../../services/designExport.js";
@@ -22,6 +22,75 @@ import {
   Shield
 } from "lucide-react";
 
+// Cassette menus mirror ASSURED CRISPR Designer so Bench emits the same inserts.
+const CT_TAG_OPTIONS = [
+  "FLAG",
+  "dTAG-V5",
+  "dTAG-HA",
+  "SD40-V5",
+  "SD40-HA",
+  "SD40-GGGGS-V5",
+  "GGGGS3-SD40-GGGGS-V5",
+  "miniIAA7-V5",
+  "miniIAA7-HA",
+  "2xHA-only",
+  "SD40-2xHA",
+  "dTAG-2xHA",
+  "mAID-2xHA",
+  "T2A-EGFP",
+  "T2A-mScarlet_I3",
+  "T2A-mStayGold2",
+  "P2A-mCherry",
+  "P2A-mScarlet",
+  "P2A-mStayGold2",
+  "SD40-2xHA-P2A-mCherry",
+  "dTAG-2xHA-P2A-mCherry",
+  "mAID-2xHA-P2A-mCherry",
+  "dTAG-V5-P2A-BlastiR",
+  "dTAG-V5-P2A-HygroR",
+  "SD40-V5-P2A-BlastiR",
+  "SD40-V5-P2A-HygroR",
+];
+
+const NT_TAG_OPTIONS = [
+  "FLAG",
+  "N:EGFP-Linker",
+  "N:mStayGold2-Linker",
+  "N:dTAG-V5",
+  "N:dTAG-HA",
+  "N:SD40-V5",
+  "N:SD40-HA",
+  "N:miniIAA7-V5",
+  "N:miniIAA7-HA",
+  "N:SD40-Linker",
+  "N:dTAG-Linker",
+  "N:mAID-Linker",
+  "N:2xHA-dTAG-Linker",
+  "T2A-EGFP",
+  "T2A-mScarlet_I3",
+  "T2A-mStayGold2",
+  "P2A-mCherry",
+  "P2A-mScarlet",
+  "P2A-mStayGold2",
+  "N:dTAG-V5-P2A-BlastiR",
+  "N:dTAG-V5-P2A-HygroR",
+  "N:SD40-V5-P2A-BlastiR",
+  "N:SD40-V5-P2A-HygroR",
+];
+
+function availableTags(editType) {
+  if (editType === "it") return Object.keys(INTERNAL_TAGS);
+  const keys = editType === "nt" ? NT_TAG_OPTIONS : CT_TAG_OPTIONS;
+  return keys.filter((key) => key === "FLAG" || CASSETTES[key] || INTERNAL_TAGS[key]);
+}
+
+function defaultTagFor(editType) {
+  const options = availableTags(editType);
+  if (editType === "it") return options[0] || "SPOT";
+  if (editType === "nt") return options.includes("N:dTAG-V5") ? "N:dTAG-V5" : options[0] || "FLAG";
+  return options.includes("dTAG-V5") ? "dTAG-V5" : options[0] || "FLAG";
+}
+
 export function DesignView({
   currentProject,
   onUpdateProject,
@@ -33,15 +102,24 @@ export function DesignView({
   const geneInput = currentProject.gene ?? "";
   const editType = currentProject.editType ?? "ko";
   const mutation = currentProject.mutation ?? "";
-  const tag = currentProject.tag ?? "FLAG";
+  const tagOptions = useMemo(() => availableTags(editType), [editType]);
+  const tag = tagOptions.includes(currentProject.tag) ? currentProject.tag : defaultTagFor(editType);
   const homologyArmLength = currentProject.homologyArmLength ?? 400;
   const deliveryMethod = currentProject.options?.deliveryMethod ?? "rnp";
   const maxBlockingChanges = currentProject.options?.maxBlockingChanges ?? 3;
-  const coDelivery = currentProject.options?.coDeliveryBlocking ?? currentProject.options?.coDelivery ?? false;
+  const coDelivery = currentProject.options?.coDeliveryBlocking ?? currentProject.options?.coDelivery ?? true;
+  const acceptWeakProtection = currentProject.options?.acceptWeakProtection ?? false;
+  const weakProtectionReason = currentProject.options?.weakProtectionReason ?? "";
+  const acceptedBy = currentProject.options?.acceptedBy ?? "";
   const geneMeta = currentProject.geneMeta ?? null;
   const genbankRaw = currentProject.genbankRaw ?? "";
   const setGeneInput = gene => onUpdateProject({ gene, geneMeta: null, genbankRaw: "" });
-  const setEditType = editType => onUpdateProject({ editType });
+  const setEditType = nextType => {
+    const nextTag = availableTags(nextType).includes(currentProject.tag)
+      ? currentProject.tag
+      : defaultTagFor(nextType);
+    onUpdateProject({ editType: nextType, tag: nextTag });
+  };
   const setMutation = mutation => onUpdateProject({ mutation });
   const setTag = tag => onUpdateProject({ tag });
   const setHomologyArmLength = len => onUpdateProject({ homologyArmLength: len });
@@ -110,6 +188,9 @@ export function DesignView({
         deliveryMethod,
         maxBlockingChanges: Number(maxBlockingChanges),
         coDeliveryBlocking: coDelivery,
+        acceptWeakProtection: !coDelivery && acceptWeakProtection,
+        weakProtectionReason: !coDelivery && acceptWeakProtection ? weakProtectionReason : "",
+        acceptedBy: !coDelivery && acceptWeakProtection ? acceptedBy : "",
         expectedGene: geneMeta?.geneSymbol || geneInput.trim(),
         ensureGuidePair: true,
         allowNonCodingBlockers: true,
@@ -221,7 +302,7 @@ export function DesignView({
           {/* Target Gene Entry */}
           <div>
             <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 500, fontSize: "0.9rem" }}>
-              Target Gene Symbol or Ensembl ID
+              Gene symbol, ENST…, or NM_…
             </label>
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <input
@@ -231,7 +312,7 @@ export function DesignView({
                 aria-label="Target gene"
                 onChange={(e) => setGeneInput(e.target.value.toUpperCase())}
                 onKeyDown={(e) => { if (e.key === "Enter" && geneInput.trim()) handleFetchEnsembl(); }}
-                placeholder="e.g. SCN5A, APOE, TP53"
+                placeholder="e.g. TP53, ENST00000269305, NM_000546.5"
                 style={{ flex: 1 }}
               />
               <button
@@ -299,16 +380,14 @@ export function DesignView({
           {(editType === "ct" || editType === "nt" || editType === "it") && (
             <div>
               <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 500, fontSize: "0.9rem" }}>
-                Tag Cassette
+                {editType === "it" ? "Internal Tag" : "Tag Cassette"}
               </label>
               <select value={tag} onChange={(e) => setTag(e.target.value)} style={{ width: "100%" }}>
-                <option value="SD40-V5">SD40-V5 (Split-GFP &amp; V5)</option>
-                <option value="FLAG">FLAG (DYKDDDDK)</option>
-                <option value="HA">HA (YPYDVPDYA)</option>
-                <option value="Myc">Myc (EQKLISEEDL)</option>
-                <option value="V5">V5 (GKPIPNPLLGLDST)</option>
-                <option value="HiBiT">HiBiT (VSGWRLFKKIS)</option>
-                <option value="mEGFP">mEGFP (Monomeric Enhanced GFP)</option>
+                {tagOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}{INTERNAL_TAGS[option] ? ` (${INTERNAL_TAGS[option].len} bp)` : CASSETTES[option] ? ` (${CASSETTES[option].len || CASSETTES[option].seq?.length || "?"} bp)` : ""}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -354,13 +433,40 @@ export function DesignView({
             </div>
           )}
 
-          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer" }}>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer", maxWidth: "28rem" }}>
             <input
               type="checkbox"
               checked={coDelivery}
-              onChange={(e) => setOption({ coDeliveryBlocking: e.target.checked })}
+              onChange={(e) => setOption({
+                coDeliveryBlocking: e.target.checked,
+                ...(e.target.checked ? { acceptWeakProtection: false } : {})
+              })}
+              style={{ marginTop: "0.2rem" }}
             />
-            <span>Co-delivery mode (block all offered guides)</span>
+            <span>
+              <strong>Co-transfect both guides and both ssODNs</strong>
+              <span style={{ display: "block", color: "var(--text-muted)", fontSize: "0.78rem", lineHeight: 1.4 }}>
+                Builds every donor to block every offered guide. On by default, matching ASSURED CRISPR Designer.
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", fontSize: "0.85rem", cursor: coDelivery ? "not-allowed" : "pointer", maxWidth: "28rem", opacity: coDelivery ? 0.5 : 1 }}>
+            <input
+              type="checkbox"
+              disabled={coDelivery}
+              checked={!coDelivery && acceptWeakProtection}
+              onChange={(e) => setOption({ acceptWeakProtection: e.target.checked })}
+              style={{ marginTop: "0.2rem" }}
+            />
+            <span>
+              <strong>Accept weak guide protection and order anyway</strong>
+              <span style={{ display: "block", color: "var(--text-muted)", fontSize: "0.78rem", lineHeight: 1.4 }}>
+                {coDelivery
+                  ? "Not available with co-delivery. Order matched pairs separately instead."
+                  : "Records a reviewed decision; the design never reads as ready."}
+              </span>
+            </span>
           </label>
 
           <button
@@ -373,6 +479,35 @@ export function DesignView({
             <span>{isDesigning ? "Computing Design..." : "Generate design"}</span>
           </button>
         </div>
+
+        {!coDelivery && acceptWeakProtection && (
+          <div className="grid-2" style={{ marginTop: "0.85rem" }}>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 500, fontSize: "0.85rem" }}>
+                Weak-protection reason
+              </label>
+              <input
+                type="text"
+                value={weakProtectionReason}
+                onChange={(e) => setOption({ weakProtectionReason: e.target.value })}
+                placeholder="Why is weak protection acceptable for this order?"
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: "0.35rem", fontWeight: 500, fontSize: "0.85rem" }}>
+                Accepted by
+              </label>
+              <input
+                type="text"
+                value={acceptedBy}
+                onChange={(e) => setOption({ acceptedBy: e.target.value })}
+                placeholder="Reviewer initials or name"
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+        )}
 
         {!genbankRaw && <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>Fetch a gene, upload a GenBank reference, or click one of the Instant Presets above to enable design.</p>}
         {error && (

@@ -105,7 +105,8 @@ export function App() {
       const options = {
         deliveryMethod: "rnp",
         maxBlockingChanges: 3,
-        coDeliveryBlocking: false,
+        coDeliveryBlocking: true,
+        acceptWeakProtection: false,
         expectedGene: "TP53",
         ensureGuidePair: true,
         allowNonCodingBlockers: true
