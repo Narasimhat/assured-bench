@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { classifyFiles, buildPairs, readDesign, planTasks, runPool } from "./quick.js";
+import { parseSampleSheet } from "./sheet.js";
+import { validateDesignSpec } from "./designSpec.js";
 import { parseCodingFields } from "./coding.js";
 import { parseAbif } from "./abif.js";
 import { headline } from "./batch.js";
@@ -79,13 +81,39 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       setTraceNames((previous) => Array.from(new Set([...previous, ...kinds.traces])));
       if (role === "control" && kinds.traces.length) {
         setExplicitControls((previous) => Array.from(new Set([...previous, ...kinds.traces])));
+      } else if (role === "auto" && kinds.traces.length) {
+        const autoCtrls = kinds.traces.filter((n) => /(?:^|[\s_\-.])(wt|wild[\s_-]?type|ctrl|control|parental|unedited|untreated)(?:$|[\s_\-.])/i.test(n));
+        if (autoCtrls.length) setExplicitControls((previous) => Array.from(new Set([...previous, ...autoCtrls])));
       }
       setPairsEdit({}); setOutcome(null);
-      const sheet = incoming.find((f) => kinds.sheets.includes(f.name)); if (sheet) setSheetText(await sheet.text());
-      const design = incoming.find((f) => kinds.designs.includes(f.name)); if (design) { setDesignName(design.name); setDesignText(""); setDesignIndex(0); setDesignText(await design.text()); }
+      for (const sheetFile of incoming.filter((f) => kinds.sheets.includes(f.name))) {
+        const txt = await sheetFile.text();
+        const parsed = parseSampleSheet(txt);
+        if (parsed.rows.length > 0 && parsed.errors.length === 0) {
+          setSheetText(txt);
+          break;
+        }
+      }
+      const validDesigns = [];
+      for (const designFile of incoming.filter((f) => kinds.designs.includes(f.name))) {
+        try {
+          const txt = await designFile.text();
+          const d = readDesign(txt);
+          if (d.kind === "spec" && validateDesignSpec(d.spec).ok) validDesigns.push({ name: designFile.name, text: txt });
+          else if (d.kind === "report" && d.designs?.length > 0) validDesigns.push({ name: designFile.name, text: txt });
+        } catch {
+          // Ignore non-Assured JSON/HTML files in folders
+        }
+      }
+      if (validDesigns.length > 0) {
+        setDesignName(validDesigns[0].name);
+        setDesignText("");
+        setDesignIndex(0);
+        setDesignText(validDesigns[0].text);
+      }
       const gene = incoming.find((f) => kinds.genes.includes(f.name)); if (gene) { setGeneText(await gene.text()); setGeneName(gene.name); }
       if (duplicates.length && role !== "control") setError(`Already loaded: ${duplicates.join(", ")}. Kept the existing traces. For different reads with the same filename, rename them before adding; to replace a trace, remove it first.`);
-      if (kinds.designs.length > 1) setError("More than one design file was selected. Loaded the first; use Replace design to choose a different report.");
+      if (validDesigns.length > 1) setError("More than one design file was selected. Loaded the first; use Replace design to choose a different report.");
     } catch (e) { setImportStatus(""); setError(`Could not read the selected file. Try copying it from the network drive to a local folder and selecting it again. ${e.message || ""}`); }
   };
 
@@ -107,6 +135,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       buffers.current.clear();
       setTraceNames([]);
       setExplicitControls([]);
+      setSheetText("");
       setPairsEdit({});
       setOutcome(null);
       await addFiles([file], "auto");

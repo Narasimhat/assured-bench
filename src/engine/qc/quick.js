@@ -8,7 +8,15 @@ import { wellOf } from "./decision.js";
 const ext = (name) => String(name).toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
 export function classifyFiles(names) {
   const out = { traces: [], sheets: [], designs: [], genes: [], other: [] };
-  names.forEach((name) => { const e = ext(name); if (e === "ab1" || e === "abi") out.traces.push(name); else if (e === "csv" || e === "tsv" || e === "txt") out.sheets.push(name); else if (e === "json" || e === "html" || e === "htm") out.designs.push(name); else if (e === "gb" || e === "gbk" || e === "gbff" || e === "genbank") out.genes.push(name); else out.other.push(name); });
+  names.forEach((name) => {
+    const base = String(name).split(/[\\/]/).pop() || "";
+    const e = ext(base);
+    if (e === "ab1" || e === "abi") out.traces.push(name);
+    else if ((e === "csv" || e === "tsv" || e === "txt") && !/^(about|readme|license|notes)\.txt$/i.test(base)) out.sheets.push(name);
+    else if (e === "json" || e === "html" || e === "htm") out.designs.push(name);
+    else if (e === "gb" || e === "gbk" || e === "gbff" || e === "genbank") out.genes.push(name);
+    else out.other.push(name);
+  });
   return out;
 }
 
@@ -64,10 +72,18 @@ export function buildPairs({ traceNames, sheetText = "", explicitControls = [] }
   return { pairs: paired.pairs, problems: [...paired.unpaired.map((u) => `${u.name}: ${u.reason}`), ...paired.problems.map((p) => `Check: ${p}`)], source: "names" };
 }
 
-/** A design from what was dropped: a JSON spec, an HTML design report, or nothing (the guides then come from the text box or from the traces). */
+/** A design from what was dropped: a JSON spec (or Assured Studio project JSON wrapping qcSpec), an HTML design report, or nothing. */
 export function readDesign(text, { designIndex = 0 } = {}) {
   if (!text) return { kind: "none" };
-  if (/^\s*[{[]/.test(text)) { const spec = JSON.parse(text); return { kind: "spec", spec, label: spec.design?.label || spec.design?.gene || "design file" }; }
+  if (/^\s*[{[]/.test(text)) {
+    const raw = JSON.parse(text);
+    const spec = (raw && typeof raw === "object" && raw.schema === "assured-studio/1" && raw.qcSpec)
+      ? raw.qcSpec
+      : (raw && typeof raw === "object" && raw.qcSpec && raw.qcSpec.schema === "assured-qc-design/1")
+        ? raw.qcSpec
+        : raw;
+    return { kind: "spec", spec, label: spec.design?.label || spec.design?.gene || raw?.title || "design file" };
+  }
   const designs = parseDesignReport(text); const chosen = designs[Math.min(designIndex, designs.length - 1)];
   return { kind: "report", designs, chosen, guides: chosen.guides.map((g) => g.sequence), donors: chosen.donors, label: chosen.title, protein: chosen.protein || [] };
 }

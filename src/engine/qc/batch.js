@@ -22,9 +22,10 @@ export const WORKFLOWS = {
 /** Spec from an exported design, or built from the control trace, guides and donor. */
 function planDesignCore({ designSpec, control, guides, donor, gene, nuclease, baseEditor = null, editedForCut = [], protein = [] }) {
   if (designSpec) {
-    const check = validateDesignSpec(designSpec);
+    const unwrappedSpec = (designSpec.schema === "assured-studio/1" && designSpec.qcSpec) ? designSpec.qcSpec : designSpec;
+    const check = validateDesignSpec(unwrappedSpec);
     if (!check.ok) return { error: `The design file is not usable: ${check.errors[0]}${check.errors.length > 1 ? ` (and ${check.errors.length - 1} more)` : ""}`, warnings: check.warnings };
-    return { spec: annotateSpecProtein(designSpec, protein), warnings: check.warnings, source: "design" };
+    return { spec: annotateSpecProtein(unwrappedSpec, protein), warnings: check.warnings, source: "design" };
   }
   if (!control) return { error: "Add the control trace, or a design file." };
   const guideList = (Array.isArray(guides) ? guides : String(guides || "").split(/[,\s;]+/)).filter(Boolean);
