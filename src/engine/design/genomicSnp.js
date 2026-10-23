@@ -3,6 +3,7 @@ import { buildPairDesign, pairSectionHtml } from './pairBlocking.js';
 import { buildReportHtml } from './reportHtml.js';
 import { parseGB, mkODN, assessGuideAgainstPointMutationDonor, assessGuideSequence, designCenteredPrimerPairs, buildPrimerRecord, summarizePrimerPairQuality } from './designEngine.js';
 import { normalizeGenBankToTranscriptModel, findSpCas9Guides } from './transcriptModel.js';
+import { complementBase, genomicAt, genomicSpan, indexOfGenomic, isReverse } from './genomicCoords.js';
 
 const rc = (s) => s.split('').reverse().map(b => ({ A:'T', T:'A', C:'G', G:'C', N:'N' }[b] || 'N')).join('');
 const chromosome = (s) => String(s || '').replace(/^chr/i, '');
@@ -22,18 +23,25 @@ export function designGenomicSnp(raw, input) {
     if (!record.seq || !/^[ACGTN]+$/.test(record.seq)) throw Error('Upload a GenBank reference with an A/C/G/T/N genomic sequence.');
     const meta = readGenomicReferenceMetadata(raw);
     const start = Number(input.referenceStart), position = Number(input.position);
-    const ref = String(input.ref || '').toUpperCase(), alt = String(input.alt || '').toUpperCase();
+    // The alleles and the position are forward-strand genomic values, as ClinVar and VCF give them.
+    const forwardRef = String(input.ref || '').toUpperCase(), forwardAlt = String(input.alt || '').toUpperCase();
     if (!input.assembly?.trim() || !input.chromosome?.trim()) throw Error('Specify the genome assembly and chromosome.');
     if (!Number.isSafeInteger(start) || start < 1 || !Number.isSafeInteger(position) || position < 1) throw Error('Coordinates must be positive, 1-based integers.');
-    if (!/^[ACGT]$/.test(ref) || !/^[ACGT]$/.test(alt) || ref === alt) throw Error('Enter different single reference and alternate bases (A, C, G or T).');
+    if (!/^[ACGT]$/.test(forwardRef) || !/^[ACGT]$/.test(forwardAlt) || forwardRef === forwardAlt) throw Error('Enter different single reference and alternate bases (A, C, G or T).');
+    // A record of a reverse-strand gene is written along the transcript (Location ...:-1); its coordinates are mapped from the Location annotation.
+    let orientation = 1;
     if (meta) {
-      if (meta.orientation !== 1) throw Error('This mode requires a forward genomic reference. Reverse-oriented reference records are not supported yet.');
       if (meta.assembly !== input.assembly.trim() || chromosome(meta.chromosome) !== chromosome(input.chromosome) || meta.start !== start) throw Error('Assembly, chromosome or reference start conflicts with the GenBank Location annotation.');
       if (meta.end - meta.start + 1 !== record.seq.length) throw Error('The annotated genomic interval does not match the reference sequence length.');
+      orientation = meta.orientation === -1 ? -1 : 1;
     } else if (!input.forwardConfirmed) throw Error('Confirm that the reference sequence is in forward genomic orientation.');
-    const gp = position - start;
-    if (gp < 0 || gp >= record.seq.length) throw Error('The requested position lies outside this reference.');
-    if (record.seq[gp] !== ref) throw Error(`Reference mismatch at ${position}: requested ${ref}, but the uploaded sequence contains ${record.seq[gp]}.`);
+    const end = start + record.seq.length - 1;
+    const frame = { referenceStart: start, referenceEnd: end, orientation };
+    if (position < start || position > end) throw Error('The requested position lies outside this reference.');
+    const gp = indexOfGenomic(frame, position);
+    // Inside the designers the alleles are read as the record reads them: the transcript strand for a reverse record.
+    const ref = isReverse(frame) ? complementBase(forwardRef) : forwardRef, alt = isReverse(frame) ? complementBase(forwardAlt) : forwardAlt;
+    if (record.seq[gp] !== ref) throw Error(`Reference mismatch at ${position}: requested ${forwardRef}, but the uploaded sequence contains ${isReverse(frame) ? complementBase(record.seq[gp]) : record.seq[gp]}${isReverse(frame) ? ' on the forward strand' : ''}.`);
     const normalized = normalizeGenBankToTranscriptModel(record, { expectedGene: input.gene || '' });
     const issues = normalized?.referenceIssues || [];
     const fatalIssues = issues.filter(i => ['error','blocker'].includes(i.severity));
@@ -51,9 +59,9 @@ export function designGenomicSnp(raw, input) {
       const comparison=buildBlockingComparison(model,guide,gp,alt,isTwoGuidePolicy(policy)?'none':policy,maxChanges);
       const chosen=comparison.selected;
       const additionalChanges=chosen.changes.length;
-      return { name:`gRNA${index+1}`, ...guide, interval:{ start:start+guide.ps,end:start+guide.ps+22 }, qc:assessGuideSequence(guide.sp,input.deliveryMethod || 'rnp'), donor:chosen.donor, protection:chosen.protection, blockingChanges:chosen.changes, comparison, spliceAssessment:chosen.splice, nucleotideValidation:{ valid:true, differences:1+additionalChanges, additionalChanges } };
+      return { name:`gRNA${index+1}`, ...guide, interval:(([low,high])=>({ start:low,end:high }))(genomicSpan(frame,guide.ps,guide.ps+22)), qc:assessGuideSequence(guide.sp,input.deliveryMethod || 'rnp'), donor:chosen.donor, protection:chosen.protection, blockingChanges:chosen.changes, comparison, spliceAssessment:chosen.splice, nucleotideValidation:{ valid:true, differences:1+additionalChanges, additionalChanges } };
     });
-    const pair = isTwoGuidePolicy(policy) ? buildPairDesign({ model, seq:record.seq, exactCandidates, gp, ref, alt, start, shared:policy==='pair', maxChanges, pinned:Array.isArray(input.guideSpacers) ? input.guideSpacers : null }) : null;
+    const pair = isTwoGuidePolicy(policy) ? buildPairDesign({ model, seq:record.seq, exactCandidates, gp, ref, alt, start, frame, shared:policy==='pair', maxChanges, pinned:Array.isArray(input.guideSpacers) ? input.guideSpacers : null }) : null;
     const candidates = pair ? pair.candidates : exactCandidates;
     const primers = designCenteredPrimerPairs(record.seq,gp,{ minAmp:400,maxAmp:700,desiredAmp:500 }).slice(0,3).map((p,index)=>({ rank:index+1,ampliconLength:p.amp,forward:buildPrimerRecord('Fw',p.fw.seq),reverse:buildPrimerRecord('Rev',p.rev.seq),quality:p.quality || summarizePrimerPairQuality(p.fw.seq,p.rev.seq) }));
     const boundaries = (model.exons || []).flatMap(exon => [
@@ -64,6 +72,7 @@ export function designGenomicSnp(raw, input) {
       ...issues.map(i=>i.message),
       ...(!normalized ? ['No usable CDS annotation. Coding and splice context have not been established.'] : []),
       ...(!meta ? ['Genomic mapping is user-supplied; no Location annotation was available to verify it.'] : []),
+      ...(isReverse(frame) ? [`The reference is written along the transcript (reverse-strand gene): guide and donor strands (+/−), primers and cut offsets are relative to the transcript direction, while positions and alleles are shown on the forward genomic strand.`] : []),
       'Genome-wide guide and primer specificity are not checked.',
       ...(pair ? [pair.warnings.lead[0]] : [candidates.some(c=>c.blockingChanges.length) ? 'Permitted blocking substitutions were added. Noncoding changes are not silent. Splice effects remain unassessed; review the allele comparison.' : 'No additional blocking substitutions were added. Review each guide against its matched repaired allele.']),
       ...(pair && pair.feasible ? [] : ['Local splice screening compares WT to requested edit, then requested edit to final donor; it is not a splice-strength prediction.']),
@@ -74,7 +83,7 @@ export function designGenomicSnp(raw, input) {
     const blockers = !candidates.length ? ['No SpCas9 NGG guides passed the native sequence filters within 30 bp.']
       : pair && pair.feasible ? (pair.pairStrong ? [] : ['The selected guide pair is not strongly protected on the repaired allele.'])
       : candidates.every(c=>c.protection.tier!=='strong') ? [pair ? `No blocking set was found (${pair.blocking.reason}) and no candidate has strong predicted re-cutting protection from the requested edit alone.` : policy==='none'?'No candidate has strong predicted re-cutting protection from the requested edit alone.':'No candidate has strong predicted re-cutting protection under the selected blocking policy.'] : [];
-    return { type:'genomic-snv',status:blockers.length?'BLOCKED':'REVIEW REQUIRED',blockers,warnings,input:{ ...input,blockingPolicy:policy,maxBlockingChanges:maxChanges,ref,alt,position,referenceStart:start },...(pair ? { blocking:pair.blocking,splice:pair.splice,recommendation:pair.recommendation } : {}),gb:{genomicSequence:record.seq,exons:model.exons,cdsSegments:model.cdsSegments,transcriptId:model.transcriptId},reference:{ length:record.seq.length,metadata:meta,issues },context:{ before:record.seq.slice(Math.max(0,gp-20),gp),ref,alt,after:record.seq.slice(gp+1,gp+21),nearestExonBoundary:boundaries[0] || null },candidates,primers };
+    return { type:'genomic-snv',status:blockers.length?'BLOCKED':'REVIEW REQUIRED',blockers,warnings,input:{ ...input,blockingPolicy:policy,maxBlockingChanges:maxChanges,ref:forwardRef,alt:forwardAlt,position,referenceStart:start,referenceEnd:end,orientation },...(pair ? { blocking:pair.blocking,splice:pair.splice,recommendation:pair.recommendation } : {}),gb:{genomicSequence:record.seq,exons:model.exons,cdsSegments:model.cdsSegments,transcriptId:model.transcriptId},reference:{ length:record.seq.length,metadata:meta,issues },context:{ before:record.seq.slice(Math.max(0,gp-20),gp),ref,alt,after:record.seq.slice(gp+1,gp+21),nearestExonBoundary:boundaries[0] || null },candidates,primers };
   } catch (error) { return { err:error.message }; }
 }
 
@@ -85,7 +94,7 @@ export function buildGenomicSnpReport(r) {
   const clean = value => typeof value === 'string' ? escape(value) : Array.isArray(value) ? value.map(clean) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k,v])=>[k,clean(v)])) : value;
   const safe = clean(r);
   const result = {
-    ...safe, gene:safe.input.gene || 'Locus', gp:r.input.position-r.input.referenceStart,
+    ...safe, gene:safe.input.gene || 'Locus', gp:indexOfGenomic(r.input,r.input.position),
     deliveryMethod:r.input.deliveryMethod,
     gs:safe.candidates.map(c=>({...c,n:c.name,pm:c.pam,note:`chr${safe.input.chromosome}:${c.interval.start}–${c.interval.end}; cut offset ${c.d} bp; ${c.protection.tier} protection; residual CFD ${c.protection.cfd?.toFixed(4) ?? 'unscored'}`})),
     os:safe.candidates.map(c=>({...c.donor,n:`ssODN matched to ${c.name}`,guideName:c.name,guideStrand:c.str,nucleotideValidation:c.nucleotideValidation,guideProtection:c.crossProtection || [{guideName:c.name,...c.protection}]})),

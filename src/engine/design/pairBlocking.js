@@ -11,6 +11,7 @@
 //  - otherwise (deeper intron) any base, preferring changes that do not create a new GT or AG within 60 bp of an exon.
 // Splicing outcomes are still unvalidated: the optional SpliceAI check (scripts/splice_check.py) can be attached to the design.
 import { scoreResidualActivity, CFD_PROTECTION_THRESHOLDS, normalizeMaxBlockingChanges, mkODN, assessGuideAgainstPointMutationDonor } from './designEngine.js';
+import { complementBase, genomicAt, isReverse } from './genomicCoords.js';
 import { screenSpliceChanges } from './genomicBlocking.js';
 import { SPLICE_WINDOWS, exonList, classifyPosition } from './spliceZones.js';
 
@@ -215,14 +216,16 @@ export function screenSplice({ model, gp, ref, alt, changes }) {
 /** What to give a splice predictor: the edit alone and the edit with each donor's blocking changes, as allele definitions on the reference. */
 export function buildSpliceCheckRequest(result) {
   const inp = result.input; const b = result.blocking || {};
-  const refOf = (c) => (c.oc.length === 1 ? c.oc : seqRef(result, c.gp));
-  const listOf = (changes) => changes.map((c) => ({ position: inp.referenceStart + c.gp, ref: refOf(c), alt: c.nb }));
+  // Forward genomic positions and alleles, whichever way the reference record is written; a reverse-oriented record is flagged so the script can read it.
+  const refOf = (c) => forwardOf(inp, c.oc.length === 1 ? c.oc : seqRef(result, c.gp));
+  const listOf = (changes) => changes.map((c) => ({ position: genomicAt(inp, c.gp), ref: refOf(c), alt: forwardOf(inp, c.nb) }));
   return {
-    schema: 'assured-splice-check-request/1', assembly: inp.assembly, chromosome: String(inp.chromosome).replace(/^chr/i, ''), referenceStart: inp.referenceStart, referenceFile: inp.fileName || '',
+    schema: 'assured-splice-check-request/1', assembly: inp.assembly, chromosome: String(inp.chromosome).replace(/^chr/i, ''), referenceStart: inp.referenceStart, ...(isReverse(inp) ? { orientation: -1 } : {}), referenceFile: inp.fileName || '',
     edit: { position: inp.position, ref: inp.ref, alt: inp.alt }, blocking: listOf(b.changes || []), donors: (b.donors || []).map((d) => ({ name: d.name, blocking: listOf(d.changes) })),
   };
 }
 const seqRef = (result, gp) => String((result.gb && result.gb.genomicSequence) || '')[gp] || 'N';
+const forwardOf = (inp, base) => (isReverse(inp) ? complementBase(base) : base);
 
 /**
  * Add the scores of scripts/splice_check.py to a design. The recommendation follows the largest score change that the blocking changes cause on the edited allele
@@ -264,10 +267,13 @@ const dedupe = (changes) => { const seen = new Set(); return changes.filter((c) 
  * Every change avoids the splice-site windows and is silent inside coding sequence (see the header). The guide candidates returned are the two of the pair
  * (engine-shaped, with blockingChanges and spliceAssessment as the other policies provide). If no pair is feasible the exact-edit candidates come back unchanged with the reason.
  */
-export function buildPairDesign({ model, seq, exactCandidates, gp, ref, alt, start, shared = true, maxChanges, pinned = null }) {
+export function buildPairDesign({ model, seq, exactCandidates, gp, ref, alt, start, frame = null, shared = true, maxChanges, pinned = null }) {
+  // Positions and alleles are shown on the forward genomic strand; a reverse-strand record is written along the transcript (see genomicCoords.js).
+  const where = frame || { referenceStart: start, referenceEnd: start + seq.length - 1, orientation: 1 };
+  const forward = (b) => (isReverse(where) ? complementBase(b) : b);
   const blocking = { mode: shared ? 'pair' : 'independent', coDelivery: shared, feasible: false, pair: [], changes: [], donors: [], reason: '', otherPairs: [], alternatives: [] };
   let candidates = exactCandidates; let splice = null;
-  const note = (changeList) => changeList.map((c) => `${start + c.gp}: ${c.oc}→${c.nc} (${c.location})`);
+  const note = (changeList) => changeList.map((c) => (isReverse(where) ? `${genomicAt(where, c.gp)}: ${forward(seq[c.gp])}→${forward(c.nb)} on the forward strand, ${c.oc}→${c.nc} on the transcript (${c.location})` : `${genomicAt(where, c.gp)}: ${c.oc}→${c.nc} (${c.location})`));
   const edited = seq.slice(0, gp) + alt + seq.slice(gp + 1);
   if (exactCandidates.length < 2) blocking.reason = 'Fewer than two SpCas9 guides were found within 30 bp, so a two-guide design is not possible.';
   else {
@@ -295,7 +301,7 @@ export function buildPairDesign({ model, seq, exactCandidates, gp, ref, alt, sta
         candidates = best.guides.map((g, at) => {
           const c = exactCandidates[index(g)]; const donor = donors[at]; const changes = perGuideChanges[at];
           const own = { ...c, donor, inPair: true, protection: assessGuideAgainstPointMutationDonor(c, donor), blockingChanges: changes, comparison: null, spliceAssessment: screenSpliceChanges(model, edited, changes),
-            nucleotideValidation: { valid: true, differences: 1 + changes.length, additionalChanges: changes.length, blockingPositions: changes.map((x) => start + x.gp) } };
+            nucleotideValidation: { valid: true, differences: 1 + changes.length, additionalChanges: changes.length, blockingPositions: changes.map((x) => genomicAt(where, x.gp)) } };
           return shared ? { ...own, crossProtection: best.guides.map((x) => ({ guideName: x.name, ...assessGuideAgainstPointMutationDonor(x, donor) })) } : own;
         }).sort((a, b) => index(a) - index(b));
         const union = dedupe(candidates.flatMap((c) => c.blockingChanges));
@@ -327,7 +333,7 @@ export function buildPairDesign({ model, seq, exactCandidates, gp, ref, alt, sta
 /** The report block for a two-guide design: recommendation, the changes with the ssODNs that carry them and their splice screen, the guide pair, and how to run the optional splice check. */
 export function pairSectionHtml(r) {
   const b = r && r.blocking; if (!b) return '';
-  const e = escapeHtml; const start = r.input.referenceStart; const rec = r.recommendation;
+  const e = escapeHtml; const rec = r.recommendation; const reverse = isReverse(r.input);
   const label = { blockers: 'Use the blocking changes', review: 'Review before use', exact: 'Use the exact edit only' };
   const parts = [`<h2>Blocking changes and splice screen</h2>`];
   if (rec) parts.push(`<p><strong>${e(label[rec.use] || rec.use)}.</strong> ${e(rec.text)} <span class="sub">(basis: ${e(rec.basis)})</span></p>`);
@@ -338,7 +344,7 @@ export function pairSectionHtml(r) {
       const screen = new Map((r.splice ? r.splice.items : []).map((i) => [i.gp, i]));
       const carriedBy = (c) => { const n = (b.donors || []).filter((d) => d.changes.some((x) => x.gp === c.gp && x.nb === c.nb)).map((d) => d.name); return n.length === (b.donors || []).length && n.length > 1 ? 'both ssODNs' : n.join(', '); };
       const head = `<tr><th>Position</th><th>Change</th><th>Where</th><th>Purpose</th><th>Carried by</th>${r.splice ? '<th>Splice screen</th>' : ''}</tr>`;
-      const rows = b.changes.map((c) => { const s = screen.get(c.gp); return `<tr><td>${e(`${r.input.assembly} chr${r.input.chromosome}:${start + c.gp}`)}</td><td>${e(`${c.oc}→${c.nc}`)}</td><td>${e(c.location)}</td><td>${e(c.pur)}</td><td>${e(carriedBy(c))}</td>${r.splice ? `<td>${s ? `${e(s.risk)}: ${e(s.reason)}` : ''}</td>` : ''}</tr>`; }).join('');
+      const rows = b.changes.map((c) => { const s = screen.get(c.gp); return `<tr><td>${e(`${r.input.assembly} chr${r.input.chromosome}:${genomicAt(r.input, c.gp)}`)}</td><td>${e(reverse ? `${complementBase(r.gb.genomicSequence[c.gp])}→${complementBase(c.nb)} forward strand (${c.oc}→${c.nc} on the transcript)` : `${c.oc}→${c.nc}`)}</td><td>${e(c.location)}</td><td>${e(c.pur)}</td><td>${e(carriedBy(c))}</td>${r.splice ? `<td>${s ? `${e(s.risk)}: ${e(s.reason)}` : ''}</td>` : ''}</tr>`; }).join('');
       parts.push(`<table>${head}${rows}</table>`);
     }
     if (r.splice) parts.push(`<p class="sub">${e(r.splice.edit.note)} Screen: ${e(r.splice.method)}.</p>`);

@@ -580,11 +580,19 @@ const TYPE_LABEL = {
 };
 const TAG_TYPES = ["ct", "nt"];
 
+// Genomic SNP references: a reverse-strand gene's record is written along the transcript (Location ...:-1), so index i is coordinate referenceEnd - i.
+// Kept local because this module has no imports; the same mapping lives in genomicCoords.js.
+const isReverseRecord = (input) => Number(input?.orientation) === -1;
+const genomicAt = (input, index) => (isReverseRecord(input) ? Number(input.referenceEnd) - index : Number(input.referenceStart) + index);
+const indexOfGenomic = (input, position) => (isReverseRecord(input) ? Number(input.referenceEnd) - position : position - Number(input.referenceStart));
+const firstTickIndex = (input, from, step) => (isReverseRecord(input) ? from + ((((Number(input.referenceEnd) - from) % step) + step) % step) : Math.ceil((from + Number(input.referenceStart)) / step) * step - Number(input.referenceStart));
+
 // Genomic substitutions use real genomic coordinates and nucleotide checks, never a protein-edit surrogate.
 function genomicScheme(result, options = {}) {
   const {input, candidates, gb} = result;
   const genome = gb.genomicSequence;
-  const edit = input.position - input.referenceStart;
+  const edit = indexOfGenomic(input, input.position);
+  const reverse = isReverseRecord(input);
   const guides = candidates.filter(g => finite(g.cut));
   const c = createCanvas(1100);
   const left = 160, right = 790;
@@ -592,8 +600,8 @@ function genomicScheme(result, options = {}) {
   const lo = Math.max(0,Math.min(edit-22,...guides.map(g=>g.ps))-3);
   const hi = Math.min(genome.length,Math.max(edit+20,...guides.map(g=>g.ps+23))+3);
   const X = p => left + (p-lo)/(hi-lo)*(right-left);
-  const gx = p => fmtBp(input.referenceStart+p);
-  const title = `${input.gene || 'Locus'} — ${input.assembly} chr${String(input.chromosome).replace(/^chr/i,'')}:${input.position} ${input.ref}>${input.alt}`;
+  const gx = p => fmtBp(genomicAt(input,p));
+  const title = `${input.gene || 'Locus'} — ${input.assembly} chr${String(input.chromosome).replace(/^chr/i,'')}:${input.position} ${input.ref}>${input.alt}${reverse ? ' (reverse-strand gene, drawn along the transcript)' : ''}`;
   c.text(20,22,title,{size:18,weight:'bold'});
   c.text(20,49,`${result.status} — alternative guide/donor pairs; use separately`,{size:13,fill:COLORS.alarm});
   c.text(20,80,'a  Target sequence, exon boundary, guides and PAMs',{size:16,weight:'bold'});
@@ -610,11 +618,11 @@ function genomicScheme(result, options = {}) {
   };
   geneTrack(X,lo,hi,125);
   c.text(810,120,'Exons shaded; introns shown as lines',{size:10,fill:COLORS.muted});
-  for(let p=Math.ceil((lo+input.referenceStart)/10)*10-input.referenceStart;p<hi;p+=10){c.text(X(p+.5),155,gx(p),{size:10,anchor:'middle',fill:COLORS.muted});c.line(X(p+.5),163,X(p+.5),170,{stroke:COLORS.muted});}
+  for(let p=firstTickIndex(input,lo,10);p<hi;p+=10){c.text(X(p+.5),155,gx(p),{size:10,anchor:'middle',fill:COLORS.muted});c.line(X(p+.5),163,X(p+.5),170,{stroke:COLORS.muted});}
   const cell=(right-left)/(hi-lo);
   for(let p=lo;p<hi;p++)c.text(X(p+.5),190,genome[p],{size:Math.min(12,cell*.85),family:MONO,anchor:'middle'});
   c.rect(X(edit),175,cell,29,{stroke:COLORS.alarm,sw:2});
-  c.text(X(edit+.5),222,input.alt,{size:13,weight:'bold',anchor:'middle',fill:COLORS.alarm});
+  c.text(X(edit+.5),222,reverse ? revcomp(input.alt) : input.alt,{size:13,weight:'bold',anchor:'middle',fill:COLORS.alarm});
   let y=262;
   guides.forEach((g,i)=>{
     const color=palette[i%palette.length],site=guideSite(g);
@@ -630,7 +638,7 @@ function genomicScheme(result, options = {}) {
   });
   c.text(20,y+2,'Orange: requested edit     Black: PAM / cut tick     CFD: predicted residual activity against the edited allele',{size:11,fill:COLORS.muted});
   y+=54;
-  c.text(20,y,'b  Matched ssODNs — forward genomic view',{size:16,weight:'bold'});
+  c.text(20,y,reverse ? 'b  Matched ssODNs — transcript-strand view' : 'b  Matched ssODNs — forward genomic view',{size:16,weight:'bold'});
   const dLo=Math.max(0,Math.min(edit-10,...guides.map(g=>g.donor.donorStart))-3);
   const dHi=Math.min(genome.length,Math.max(edit+10,...guides.map(g=>g.donor.donorEnd))+3);
   const D=p=>left+(p-dLo)/(dHi-dLo)*(right-left);
@@ -652,8 +660,8 @@ function genomicScheme(result, options = {}) {
   });
   c.line(left,y-20,right,y-20,{sw:1});
   const step=niceStep(dHi-dLo,5);
-  for(let p=Math.ceil((dLo+input.referenceStart)/step)*step-input.referenceStart;p<dHi;p+=step){c.line(D(p),y-20,D(p),y-15);c.text(D(p),y,gx(p),{size:10,anchor:'middle'});}
-  c.text((left+right)/2,y+25,`${input.assembly} chr${String(input.chromosome).replace(/^chr/i,'')} — 1-based genomic coordinates, forward strand`,{size:12,anchor:'middle'});
+  for(let p=firstTickIndex(input,dLo,step);p<dHi;p+=step){c.line(D(p),y-20,D(p),y-15);c.text(D(p),y,gx(p),{size:10,anchor:'middle'});}
+  c.text((left+right)/2,y+25,`${input.assembly} chr${String(input.chromosome).replace(/^chr/i,'')} — 1-based genomic coordinates, forward strand${reverse ? '; the sequence is drawn along the transcript, so coordinates fall left to right' : ''}`,{size:12,anchor:'middle'});
   c.text(20,y+53,'Arms are measured from the cut. Splicing outcomes and genome-wide specificity are not validated.',{size:12,fill:COLORS.muted});
   return c.build(y+75,options.responsive,title);
 }

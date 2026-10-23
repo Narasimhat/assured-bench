@@ -51,3 +51,10 @@ test("import rejects unrelated JSON and malformed experiment fields", () => {
     assert.throws(() => parseProject(JSON.stringify(value)));
   }
 });
+
+test("new experiments default to designer co-delivery and a real cassette tag", () => {
+  const project = createProject();
+  assert.equal(project.options.coDeliveryBlocking, true);
+  assert.equal(project.options.acceptWeakProtection, false);
+  assert.equal(project.tag, "dTAG-V5");
+});

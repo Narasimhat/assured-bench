@@ -6,9 +6,17 @@ export function createProject() {
     gene: "",
     editType: "ko",
     mutation: "",
-    tag: "FLAG",
+    tag: "dTAG-V5",
     homologyArmLength: 400,
-    options: { deliveryMethod: "rnp", maxBlockingChanges: 3, coDeliveryBlocking: false },
+    options: {
+      deliveryMethod: "rnp",
+      maxBlockingChanges: 3,
+      // Match ASSURED CRISPR Designer: co-delivery on by default (each ssODN blocks every offered guide).
+      coDeliveryBlocking: true,
+      acceptWeakProtection: false,
+      weakProtectionReason: "",
+      acceptedBy: ""
+    },
     geneMeta: null,
     genbankRaw: "",
     designResult: null,
@@ -42,7 +50,13 @@ export function parseProject(text) {
   }
   const defaults = createProject();
   return { ...defaults, ...value, id: value.id || defaults.id,
-    options: { ...defaults.options, ...value.options,
-      coDeliveryBlocking: value.options?.coDeliveryBlocking ?? value.options?.coDelivery ?? false },
+    options: {
+      ...defaults.options,
+      ...value.options,
+      coDeliveryBlocking: value.options?.coDeliveryBlocking ?? value.options?.coDelivery ?? false,
+      acceptWeakProtection: value.options?.acceptWeakProtection ?? false,
+      weakProtectionReason: value.options?.weakProtectionReason ?? "",
+      acceptedBy: value.options?.acceptedBy ?? ""
+    },
     qcResults: value.qcResults || [] };
 }

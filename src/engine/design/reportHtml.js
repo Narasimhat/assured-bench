@@ -15,6 +15,7 @@ import { DESIGN_TYPES } from "./designTypes.js";
 import { getDonorReleaseStatus, getReleaseVerdict, getReleaseVerdictSections } from "./releaseVerdict.js";
 import { describeDonorFormat } from "./donorFormat.js";
 import { buildDesignSchemeCaption, buildDesignSchemeFilename, buildDesignSchemeSvg, supportsDesignScheme } from "./designScheme.js";
+import { complementBase, genomicAt, isReverse } from "./genomicCoords.js";
 
 const CODON_TABLE = {
   TTT: "F", TTC: "F", TTA: "L", TTG: "L", CTT: "L", CTC: "L", CTA: "L", CTG: "L",
@@ -607,7 +608,7 @@ function describeDonorFormatSummary(format) {
 export function buildDesignReadinessChecks(result) {
   if (!result) return [];
   if (result.type === "genomic-snv") return [
-    {label:"Reference allele",status:"pass",detail:`${result.input.assembly} chr${result.input.chromosome}:${result.input.position} ${result.input.ref}→${result.input.alt}; reference base verified.`},
+    {label:"Reference allele",status:"pass",detail:`${result.input.assembly} chr${result.input.chromosome}:${result.input.position} ${result.input.ref}→${result.input.alt}${isReverse(result.input) ? ` (forward strand; ${complementBase(result.input.ref)}→${complementBase(result.input.alt)} on the transcript)` : ""}; reference base verified.`},
     {label:"Exact nucleotide change",status:result.os.length ? "pass" : "warn",detail:"Each emitted donor contains the requested substitution and only its documented, policy-permitted blocking changes."},
     {label:"Re-cutting protection",status:"warn",detail:result.blockers.join(' ') || "Review matched guide/donor protection before ordering."},
     ...result.candidates.map(c=>({label:`${c.name} sequence QC`,status:c.qc.warnings.length ? "warn" : "pass",detail:c.qc.warnings.join(' ') || "No local guide-sequence warnings; specificity untested."})),
@@ -775,7 +776,7 @@ export function buildReportSnapshotItems(result) {
   if (!result) return [];
   if (result.type === "genomic-snv") return [
     {label:"Edit class",value:"Genomic SNP",tone:"accent"},
-    {label:"Target",value:`${result.input.position} ${result.input.ref}→${result.input.alt}`,tone:"default"},
+    {label:"Target",value:`${result.input.position} ${result.input.ref}→${result.input.alt}${isReverse(result.input) ? " (reverse-strand gene)" : ""}`,tone:"default"},
     {label:"Guides",value:String(result.gs.length),tone:"default"},
     {label:"Primers",value:result.amp || "Pending",tone:"warm"},
   ];
@@ -948,7 +949,7 @@ export function buildLocusMapItems(result, window) {
       });
     }
   });
-  if (result.type === "genomic-snv" && Number.isFinite(result.gp)) pushItem({ label:"Edit", detail:`${result.input.ref}→${result.input.alt}`, start:result.gp, end:result.gp+1, color:"#D97706", kind:"target" });
+  if (result.type === "genomic-snv" && Number.isFinite(result.gp)) pushItem({ label:"Edit", detail:isReverse(result.input) ? `${complementBase(result.input.ref)}→${complementBase(result.input.alt)}` : `${result.input.ref}→${result.input.alt}`, start:result.gp, end:result.gp+1, color:"#D97706", kind:"target" });
   if (result.type === "pm" && Number.isFinite(result.gp)) {
     pushItem({ label: "Edit", detail: `${result.wA}${result.an}${result.mA}`, start: result.gp, end: result.gp + 3, color: "#D97706", kind: "target" });
   }
@@ -1296,7 +1297,7 @@ function buildReleaseVerdictHtml(result) {
 }
 
 function buildGenomicBlockingComparisonHtml(result) {
-  const at=p=>result.input.referenceStart+p;
+  const at=p=>genomicAt(result.input,p);
   const screen=s=>!s?'unassessed':`${s.risk}; ${s.junctionChanges.length} junction changes, ${s.nearby.length} proximity flags, ${s.motifChanges.length} GT/AG motif changes${s.motifChanges.length ? ' ('+s.motifChanges.map(m=>at(m.gp)+': '+m.before+' to '+m.after).join('; ')+')' : ''}. Splice-strength prediction: unassessed.`;
   return `<h2>Blocking alternatives and splice screen</h2><p>Policy: ${result.input.blockingPolicy || 'none'}. Synonymous coding changes preserve amino acids relative to the requested-edit allele; noncoding changes are not silent.</p><p>Compare the intended effect (WT to requested edit) separately from added effects (requested edit to final donor). This is a local sequence screen, not a prediction of exon skipping, intron retention or cryptic-site use.</p>${result.candidates.map(c=>{
     const comp=c.comparison;
