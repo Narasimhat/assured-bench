@@ -1,7 +1,7 @@
 import React from "react";
 
 const steps = [
-  { id: "design", title: "Design", text: "Choose your gene and edit, fetch or upload a GenBank reference, then generate and review the design." },
+  { id: "design", title: "Design", text: "Use the embedded ASSURED CRISPR Designer workspace: parse requests or load a demo, generate designs, then continue to Order." },
   { id: "order", title: "Plan reagents", text: "Review guides, donor, and primers, complete the listed checks, and export your reagent sheet." },
   { id: "qc", title: "Trace Analysis", text: "Upload the parental control and edited AB1 traces, check the detected control and clone counts, then click Analyse." },
   { id: "decision", title: "Reports", text: "Inspect QC results and candidate reasons, compare clones, and download the screening CSV." },
@@ -21,15 +21,18 @@ export function QuickStart({ onNavigate, onDesignExample, isLoadingExample }) {
         ))}
       </ol>
       <section className="quick-start-example" aria-labelledby="design-example-heading">
-        <h3 id="design-example-heading">Design example · TP53 C-terminal FLAG</h3>
+        <h3 id="design-example-heading">Design · ASSURED CRISPR Designer</h3>
         <ol>
-          <li>Load the example to fill in <strong>TP53</strong>, <strong>C-Terminal Tag Knock-in</strong>, and <strong>FLAG</strong>, with a bundled GenBank reference.</li>
-          <li>Click <strong>Generate design</strong>. Review the primary guide, alternatives, donor, primers, and schematic.</li>
-          <li>Open <strong>Order</strong> to review the order sheet, or download the HTML report.</li>
+          <li>Open <strong>Design</strong> and click <strong>Load demo requests</strong> (or paste your own edit requests).</li>
+          <li>Fetch or upload a GenBank reference for each row, then generate the design and review the report.</li>
+          <li>The selected design is handed to Bench automatically — open <strong>Order</strong> or <strong>Trace Analysis</strong>.</li>
         </ol>
-        <p>The button saves your current experiment in Projects, then starts a separate example. No gene lookup is needed.</p>
+        <p>Optional: load a bundled TP53 FLAG knock-in into the Bench project for Order/QC without using the designer workspace.</p>
         <button type="button" className="btn btn-secondary" onClick={onDesignExample} disabled={isLoadingExample}>
-          {isLoadingExample ? "Loading example…" : "Load TP53 FLAG example"}
+          {isLoadingExample ? "Loading example…" : "Load TP53 FLAG Bench preset"}
+        </button>
+        <button type="button" className="btn btn-primary" style={{ marginLeft: "0.5rem" }} onClick={() => onNavigate("design")}>
+          Open Designer
         </button>
       </section>
       <div className="quick-start-paths">

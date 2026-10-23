@@ -243,8 +243,6 @@ export function App() {
             onUpdateProject={handleUpdateProject}
             onProceedToOrder={() => setActiveStep("order")}
             onProceedToQc={() => setActiveStep("qc")}
-            onOpenProtocol={() => setShowProtocolModal(true)}
-            onLoadPreset={handleLoadPreset}
           />
         )}
 
