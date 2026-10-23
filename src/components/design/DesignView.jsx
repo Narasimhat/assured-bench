@@ -927,11 +927,6 @@ export function DesignView({
               </button>
             </div>
 
-            {!genbankRaw && (
-              <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
-                Fetch a gene from Ensembl/NCBI, upload a GenBank reference, or click one of the Instant Presets above to enable design.
-              </p>
-            )}
             {error && (
               <div role="alert" style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "8px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger)", fontSize: "0.9rem", fontWeight: 600 }}>
                 {error}
