@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   runDesign,
   summarizeProcurementReadiness,
+  getCassetteSequenceLength,
   CASSETTES,
   INTERNAL_TAGS
 } from "../../engine/design/designEngine.js";
@@ -185,10 +186,7 @@ function resolveConstructSelection(tag, editType) {
 }
 
 function getCassetteLengthBp(cassetteKey, editType) {
-  const entry = CASSETTES[cassetteKey];
-  if (!entry) return 0;
-  const seq = editType === "nt" ? entry.nt : entry.ct;
-  return seq ? seq.length : 0;
+  return getCassetteSequenceLength(cassetteKey, editType === "nt" ? "nt" : "ct");
 }
 
 const THREE_TO_ONE_AA = {
