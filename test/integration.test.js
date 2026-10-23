@@ -123,3 +123,72 @@ test("Assured Bench: Vendor ordering exports complete guides, donors, primers, T
   const fasta = formatOligosFasta(idtRows);
   assert.ok(fasta.startsWith(">"), "FASTA export must start with header");
 });
+
+import { designGenomicSnp, buildGenomicSnpReport } from "../src/engine/design/genomicSnp.js";
+import { parseGeneQuery, SPECIES } from "../src/engine/design/geneFetch.js";
+import { INTERNAL_TAGS, CASSETTES } from "../src/engine/design/designEngine.js";
+
+test("Assured Bench: Full parity with Assured_CRISPR_Design (Genomic SNP, Internal Tag SPOT/alphaBtx, Construct Builder Cassettes, and geneFetch)", () => {
+  // 1. Verify geneFetch query parser & species support
+  assert.deepStrictEqual(Object.keys(SPECIES), ["human", "mouse", "rat", "zebrafish"]);
+  assert.strictEqual(parseGeneQuery("ENST00000269305.9").kind, "ensembl-transcript");
+  assert.strictEqual(parseGeneQuery("NM_000546.6").kind, "refseq-transcript");
+  assert.strictEqual(parseGeneQuery("TP53").kind, "symbol");
+
+  // 2. Verify Internal Tag (it) with SPOT and alphaBtx on APOE fixture
+  const apoeGbPath = fileURLToPath(new URL("./fixtures/apoe-r154s.gb", import.meta.url));
+  const apoeGb = fs.readFileSync(apoeGbPath, "utf8");
+  assert.ok(INTERNAL_TAGS.SPOT, "SPOT internal tag must be available");
+  assert.ok(INTERNAL_TAGS.alphaBtx, "alphaBtx internal tag must be available");
+  const itResult = runDesign("it", apoeGb, "R154", "SPOT", 400, {
+    deliveryMethod: "rnp",
+    expectedGene: "APOE"
+  });
+  assert.strictEqual(itResult.err, undefined);
+  assert.strictEqual(itResult.type, "it");
+  assert.strictEqual(itResult.tag, "SPOT");
+  assert.ok(itResult.os?.length >= 1, "Internal tag design must produce ssODN donor(s)");
+
+  // 3. Verify C-terminal Construct Builder cassette (e.g. dTAG-V5 and T2A-EGFP)
+  assert.ok(CASSETTES["dTAG-V5"], "dTAG-V5 cassette must exist");
+  assert.ok(CASSETTES["T2A-EGFP"], "T2A-EGFP cassette must exist");
+  assert.ok(CASSETTES["FLAG"], "FLAG cassette must exist");
+  const ctResult = runDesign("ct", apoeGb, "", "dTAG-V5", 250, {
+    deliveryMethod: "rnp",
+    donorFormat: "block",
+    expectedGene: "APOE"
+  });
+  assert.strictEqual(ctResult.err, undefined);
+  assert.strictEqual(ctResult.type, "ct");
+  assert.ok(ctResult.donor?.length > 200, "dTAG-V5 C-terminal donor must be generated");
+
+  // 4. Verify Genomic SNP (genomic-snv) design, report HTML, and QC handoff
+  const snpResult = designGenomicSnp(apoeGb, {
+    gene: "APOE",
+    assembly: "GRCh38",
+    chromosome: "19",
+    referenceStart: 44905791,
+    position: 44907290, // 0-based index 1499 in apoeGb ('T')
+    ref: "T",
+    alt: "C",
+    forwardConfirmed: true,
+    blockingPolicy: "pair",
+    deliveryMethod: "rnp"
+  });
+  assert.strictEqual(snpResult.err, undefined);
+  assert.strictEqual(snpResult.type, "genomic-snv");
+  assert.ok(snpResult.candidates?.length >= 1, "Genomic SNP must produce candidate guide/donor pairs");
+  const reportHtml = buildGenomicSnpReport(snpResult);
+  assert.ok(reportHtml.includes("Genomic SNP"), "Genomic SNP report HTML must render");
+  const qcSpec = buildQcDesignSpec({
+    ...snpResult,
+    gene: "APOE",
+    gp: 1499,
+    gs: snpResult.candidates.map(c => ({ ...c, n: c.name, pm: c.pam })),
+    os: snpResult.candidates.map(c => ({ ...c.donor, n: c.name, desiredDiffIndexes: [1499 - c.donor.donorStart] })),
+    ps: snpResult.primers.length ? [snpResult.primers[0].forward, snpResult.primers[0].reverse] : []
+  });
+  assert.strictEqual(qcSpec.schema, "assured-qc-design/1");
+  assert.strictEqual(qcSpec.design.editKind, "snp");
+});
+

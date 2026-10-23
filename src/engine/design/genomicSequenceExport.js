@@ -1,3 +1,5 @@
+import { complementBase, genomicAt, isReverse } from './genomicCoords.js';
+
 // Sequence export is independent of biological release approval.
 export function buildGenomicSequenceCsv(result, { selectedNames = [], acknowledged = false, note = '', reviewedAt = '' } = {}) {
   if (!result || result.err) throw Error('Generate a valid design first.');
@@ -14,7 +16,7 @@ export function buildGenomicSequenceCsv(result, { selectedNames = [], acknowledg
   const add=(name,type,seq,pair,pam,strand,protection='',cfd='')=>{
     if(!/^[ACGT]+$/.test(seq || ''))throw Error(`Invalid sequence for ${name}`);
     rows.push([name,type,seq,seq.length,pair,pam,strand,protection,cfd,result.status,acknowledged?'User acknowledged limitations; proceeding after review':'Draft; not reviewed',note,acknowledged?reviewedAt:'',target,result.input.blockingPolicy || 'none',
-      (result.candidates.find(c=>c.name===pair)?.blockingChanges || []).map(m=>`${result.input.referenceStart+m.gp} ${result.gb.genomicSequence[m.gp]}>${m.nb} (${m.mt==='silent'?'synonymous coding':'noncoding'})`).join('; '),
+      (result.candidates.find(c=>c.name===pair)?.blockingChanges || []).map(m=>`${genomicAt(result.input,m.gp)} ${isReverse(result.input)?complementBase(result.gb.genomicSequence[m.gp]):result.gb.genomicSequence[m.gp]}>${isReverse(result.input)?complementBase(m.nb):m.nb}${isReverse(result.input)?' forward strand':''} (${m.mt==='silent'?'synonymous coding':'noncoding'})`).join('; '),
       result.candidates.find(c=>c.name===pair)?.spliceAssessment?.risk || 'unassessed',warnings]);
   };
   for(const c of selected){

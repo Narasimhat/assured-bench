@@ -33,7 +33,7 @@ export function updateProject(project, fields) {
 export function parseProject(text) {
   const value = JSON.parse(text);
   if (!value || typeof value !== "object" || Array.isArray(value) ||
-      typeof value.gene !== "string" || !["ko", "pm", "ct", "nt", "it"].includes(value.editType) ||
+      typeof value.gene !== "string" || !["ko", "pm", "genomic-snv", "ct", "nt", "it"].includes(value.editType) ||
       (value.qcResults != null && !Array.isArray(value.qcResults)) ||
       (value.designResult != null && (typeof value.designResult !== "object" || Array.isArray(value.designResult))) ||
       (value.options != null && (typeof value.options !== "object" || Array.isArray(value.options))) ||

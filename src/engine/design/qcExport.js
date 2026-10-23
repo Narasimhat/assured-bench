@@ -118,7 +118,7 @@ export function buildQcDesignSpec(result, options = {}) {
   const guides = (result.gs || []).slice(0, 3).map((guide, index) => describeGuide(genome, guide, index, guide.name || `${result.gene || "gene"}_gRNA${index + 1}`));
   const donors = [];
   const markerList = [];
-  let editKind = type === "ko" ? "deletion" : type === "pm" ? "snp" : type === "it" ? "internal_tag" : "terminal_tag";
+  let editKind = type === "ko" ? "deletion" : (type === "pm" || type === "genomic-snv") ? "snp" : type === "it" ? "internal_tag" : "terminal_tag";
   let intendedDescription = "";
 
   if (type === "ct" || type === "nt") {
@@ -139,13 +139,21 @@ export function buildQcDesignSpec(result, options = {}) {
     });
     editKind = format === "block" || format === "aav" ? (insertBp > 300 ? "reporter" : "tag_large") : "tag_small";
     intendedDescription = `${type === "ct" ? "C" : "N"}-terminal knock-in of ${result.tag} (${insertBp} bp)`;
-  } else if (type === "pm" || type === "it") {
+  } else if (type === "pm" || type === "it" || type === "genomic-snv") {
     const insertBp = type === "it" ? result.il : 0;
-    (result.os || []).forEach((donor, index) => {
+    const rawDonors = result.os?.length
+      ? result.os
+      : (result.candidates || []).map((c, idx) => ({
+          ...c.donor,
+          n: `ssODN${idx + 1}`,
+          gi: idx,
+          desiredDiffIndexes: Number.isFinite(result.gp) && Number.isFinite(c.donor?.donorStart) ? [result.gp - c.donor.donorStart] : [],
+        }));
+    rawDonors.forEach((donor, index) => {
       const genomic = String(donor.genomicDonor || donor.donorSense || "").toUpperCase();
       const refSegment = genome.slice(donor.donorStart, donor.donorEnd);
       const k = type === "it" ? donor.senseInsertStart : null;
-      const intendedPositions = new Set((donor.desiredDiffIndexes || []).map((i) => donor.donorStart + i));
+      const intendedPositions = new Set((donor.desiredDiffIndexes || (Number.isFinite(result.gp) && Number.isFinite(donor.donorStart) ? [result.gp - donor.donorStart] : [])).map((i) => donor.donorStart + i));
       const placement = type === "it"
         ? { left: refSegment.slice(0, k), donorLeft: genomic.slice(0, k), right: refSegment.slice(k), donorRight: genomic.slice(k + insertBp), refStart: donor.donorStart, refEnd: donor.donorEnd, arm3: refSegment.length - k }
         : { left: refSegment, donorLeft: genomic, right: "", donorRight: "", refStart: donor.donorStart, refEnd: donor.donorEnd, arm3: 0 };
@@ -159,7 +167,11 @@ export function buildQcDesignSpec(result, options = {}) {
         carriesMarkers: markers.map((marker) => marker.pos),
       });
     });
-    intendedDescription = type === "pm" ? `${result.wA}${result.an}${result.mA} (${result.wC}>${result.mC})` : `Internal ${result.tag} insertion after ${result.wA}${result.an}`;
+    intendedDescription = type === "pm"
+      ? `${result.wA}${result.an}${result.mA} (${result.wC}>${result.mC})`
+      : type === "genomic-snv"
+        ? `chr${result.input?.chromosome || ""}:${result.input?.position || ""} ${result.input?.ref || ""}>${result.input?.alt || ""}`
+        : `Internal ${result.tag} insertion after ${result.wA}${result.an}`;
   } else if (type === "ko") {
     intendedDescription = "Deletion between the two cuts";
   }

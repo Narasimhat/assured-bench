@@ -7,12 +7,16 @@ import { buildReportHtml, getProjectTypeMeta } from "../engine/design/reportHtml
 import { buildRowMeta, buildHistoricalContext, buildReviewItems } from "../engine/design/reportInputs.js";
 import { buildQcDesignSpec } from "../engine/design/qcExport.js";
 import { buildDesignSchemeSvg } from "../engine/design/designScheme.js";
+import { buildGenomicSnpReport } from "../engine/design/genomicSnp.js";
 
 /**
  * Generate full standalone HTML report string
  */
 export function generateReportHtml(project, designResult) {
   if (!designResult) return "";
+  if (designResult.type === "genomic-snv" && Array.isArray(designResult.candidates)) {
+    return buildGenomicSnpReport(designResult);
+  }
 
   const projectType = project.editType || designResult.type || "ko";
   const fileName = `${project.gene || "gene"}_reference.gb`;
