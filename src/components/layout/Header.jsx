@@ -1,5 +1,5 @@
 import React from "react";
-import { Dna, Save, FolderOpen, Download, Upload, Plus, FlaskConical, Check } from "lucide-react";
+import { Dna, Save, FolderOpen, Download, Upload, Plus, Check } from "lucide-react";
 
 export function Header({
   activeStep,
@@ -9,7 +9,6 @@ export function Header({
   onNewProject,
   onSaveProject,
   onOpenProjects,
-  onOpenProtocol,
   onExportBundle,
   onImportBundle
 }) {
@@ -86,18 +85,6 @@ export function Header({
 
       {/* Project Controls */}
       <div className="project-controls">
-        {onOpenProtocol && (
-          <button
-            className="btn btn-secondary"
-            onClick={onOpenProtocol}
-            title="Open ASSURED wet-lab protocol & RNP molarity calculator"
-            style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem" }}
-          >
-            <FlaskConical size={16} />
-            <span>Protocol</span>
-          </button>
-        )}
-
         <button
           className="btn btn-secondary"
           onClick={onNewProject}

@@ -5,7 +5,6 @@ import { OrderView } from "./components/order/OrderView.jsx";
 import { QcView } from "./components/qc/QcView.jsx";
 import { DecisionView } from "./components/qc/DecisionView.jsx";
 import { saveProject, listProjects, deleteProject, exportProjectBundle } from "./services/storage.js";
-import { ProtocolModal } from "./components/common/ProtocolModal.jsx";
 import { createProject, updateProject, parseProject } from "./services/projectState.js";
 import { runDesign, summarizeProcurementReadiness } from "./engine/design/designEngine.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "./engine/design/designScheme.js";
@@ -18,7 +17,6 @@ export function App() {
   const [isLoadingExample, setIsLoadingExample] = useState(false);
   const [savedProjects, setSavedProjects] = useState([]);
   const [showProjectsModal, setShowProjectsModal] = useState(false);
-  const [showProtocolModal, setShowProtocolModal] = useState(false);
   const [notification, setNotification] = useState(null);
 
   useEffect(() => {
@@ -204,7 +202,6 @@ export function App() {
         onNewProject={handleNewProject}
         onSaveProject={handleSave}
         onOpenProjects={() => setShowProjectsModal(true)}
-        onOpenProtocol={() => setShowProtocolModal(true)}
         onExportBundle={handleExport}
         onImportBundle={handleImport}
       />
@@ -235,7 +232,6 @@ export function App() {
             onUpdateProject={handleUpdateProject}
             onProceedToOrder={() => setActiveStep("order")}
             onProceedToQc={() => setActiveStep("qc")}
-            onOpenProtocol={() => setShowProtocolModal(true)}
             onLoadPreset={handleLoadPreset}
           />
         )}
@@ -244,7 +240,6 @@ export function App() {
           <OrderView
             currentProject={currentProject}
             onProceedToQc={() => setActiveStep("qc")}
-            onOpenProtocol={() => setShowProtocolModal(true)}
           />
         )}
 
@@ -344,13 +339,6 @@ export function App() {
           </div>
         </div>
       )}
-
-      {/* Experimental Bench Protocol & Checklist Modal */}
-      <ProtocolModal
-        isOpen={showProtocolModal}
-        onClose={() => setShowProtocolModal(false)}
-        currentProject={currentProject}
-      />
     </div>
   );
 }

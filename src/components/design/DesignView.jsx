@@ -36,7 +36,6 @@ import {
   Upload,
   Download,
   FileText,
-  FlaskConical,
   Sparkles
 } from "lucide-react";
 
@@ -221,7 +220,6 @@ export function DesignView({
   onUpdateProject,
   onProceedToOrder,
   onProceedToQc,
-  onOpenProtocol,
   onLoadPreset
 }) {
   const geneInput = currentProject.gene ?? "";
@@ -945,16 +943,6 @@ export function DesignView({
               >
                 <Download size={16} />
                 <span>Design JSON</span>
-              </button>
-
-              <button
-                className="btn btn-secondary"
-                onClick={onOpenProtocol}
-                style={{ color: "var(--primary)", borderColor: "rgba(2, 132, 199, 0.4)", fontWeight: 600 }}
-                title="View wet-lab bench protocol and pipetting checklist"
-              >
-                <FlaskConical size={16} />
-                <span>Bench Protocol</span>
               </button>
 
               <button className="btn btn-primary" onClick={onProceedToOrder}>

@@ -6,9 +6,9 @@ import {
   formatBulkPasteTsv,
   formatOligosFasta
 } from "../../services/vendorExport.js";
-import { ShoppingCart, Copy, Download, Check, ArrowRight, FlaskConical, ClipboardList } from "lucide-react";
+import { ShoppingCart, Copy, Download, Check, ArrowRight, ClipboardList } from "lucide-react";
 
-export function OrderView({ currentProject, onProceedToQc, onOpenProtocol }) {
+export function OrderView({ currentProject, onProceedToQc }) {
   const [activeVendor, setActiveVendor] = useState("idt");
   const [filterType, setFilterType] = useState("all");
   const [copiedIdx, setCopiedIdx] = useState(null);
@@ -77,15 +77,6 @@ export function OrderView({ currentProject, onProceedToQc, onOpenProtocol }) {
           </div>
 
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button
-              className="btn btn-secondary"
-              onClick={onOpenProtocol}
-              style={{ color: "var(--primary)", borderColor: "rgba(2, 132, 199, 0.4)", fontWeight: 600 }}
-              title="View wet-lab bench protocol and pipetting checklist"
-            >
-              <FlaskConical size={16} />
-              <span>Bench Protocol</span>
-            </button>
             <button
               className="btn btn-secondary"
               onClick={() => handleBulkCopy("tsv")}
