@@ -222,3 +222,96 @@ code { font-family: var(--font-mono); font-size: 12px; background: #f1f5f9; bord
 details > summary { cursor: pointer; padding: 6px 0; color: var(--text-main); font-weight: 600; }
 details.aligned { margin: 12px 0; }
 details.aligned summary { cursor: pointer; margin: 6px 0; }
+
+/* Responsive 2-Column Setup Grid & Master-Detail Results Split */
+.qc-setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+.qc-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #fafcff 100%);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 34, 68, 0.04);
+}
+
+.qc-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.qc-step-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.qc-action-bar {
+  background: linear-gradient(90deg, #f0f6fc 0%, #f8fbfe 100%);
+  border: 1px solid #b9d5f5;
+  border-left: 5px solid var(--primary);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.qc-results-split {
+  display: grid;
+  grid-template-columns: minmax(380px, 44%) minmax(460px, 56%);
+  gap: 16px;
+  align-items: start;
+  margin-top: 12px;
+}
+
+@media (max-width: 1040px) {
+  .qc-setup-grid {
+    grid-template-columns: 1fr;
+  }
+  .qc-results-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.qc-master-pane {
+  background: #ffffff;
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 6px rgba(0, 34, 68, 0.04);
+  position: sticky;
+  top: 12px;
+}
+
+.qc-detail-pane .card {
+  margin-top: 0;
+  border-color: var(--border-light);
+  box-shadow: 0 2px 8px rgba(0, 34, 68, 0.06);
+}
+

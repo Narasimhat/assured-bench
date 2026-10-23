@@ -556,22 +556,75 @@ export function DesignView({
 
         {/* Project Type Selector (All 6 ASSURED CRISPR Design Project Types) */}
         <div style={{ marginBottom: "1.25rem" }}>
-          <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 600, fontSize: "0.9rem" }}>
-            What do you want to design?
-          </label>
-          <select
-            aria-label="Edit Type"
-            value={editType}
-            onChange={(e) => setEditType(e.target.value)}
-            style={{ width: "100%", fontWeight: 600 }}
-          >
-            <option value="ko">Knockout (Dual-guide exon deletion / frameshift)</option>
-            <option value="pm">Point Mutation (Single amino-acid substitution, e.g. R175H)</option>
-            <option value="genomic-snv">Genomic SNP (Exact 1-based nucleotide substitution: intron, splice site, UTR, or coding)</option>
-            <option value="ct">C-Terminal Knock-in (Fusion tags, dTAG/IAA7 degrons, T2A/P2A reporters &amp; selection)</option>
-            <option value="nt">N-Terminal Knock-in (Fusion tags, reporters, dTAG/IAA7 degrons &amp; P2A selection)</option>
-            <option value="it">Internal Tag Knock-in (In-frame SPOT or alphaBtx tag insertion)</option>
-          </select>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.55rem" }}>
+            <label style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-main)" }}>
+              A. Select Edit Strategy (6 ASSURED Project Types)
+            </label>
+            <select
+              aria-label="Edit Type"
+              value={editType}
+              onChange={(e) => setEditType(e.target.value)}
+              style={{ width: "auto", minWidth: "280px", fontWeight: 600, fontSize: "0.82rem", padding: "0.35rem 0.65rem" }}
+            >
+              <option value="ko">Knockout (Dual-guide exon deletion / frameshift)</option>
+              <option value="pm">Point Mutation (Single amino-acid substitution, e.g. R175H)</option>
+              <option value="genomic-snv">Genomic SNP (Exact 1-based nucleotide substitution)</option>
+              <option value="ct">C-Terminal Knock-in (Fusion tags, degrons, reporters)</option>
+              <option value="nt">N-Terminal Knock-in (Fusion tags, reporters, degrons)</option>
+              <option value="it">Internal Tag Knock-in (In-frame SPOT or alphaBtx tag)</option>
+            </select>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))", gap: "0.55rem" }}>
+            {[
+              { id: "ko", badge: "KO", title: "Knockout", desc: "Dual-guide deletion & frameshift" },
+              { id: "pm", badge: "AA", title: "Point Mutation", desc: "Codon substitution + PAM block" },
+              { id: "genomic-snv", badge: "SNV", title: "Genomic SNP", desc: "1-based coding / non-coding SNV" },
+              { id: "ct", badge: "C-Term", title: "C-Terminal Tag", desc: "Stop-codon fusion / degron / 2A" },
+              { id: "nt", badge: "N-Term", title: "N-Terminal Tag", desc: "Start-codon fusion / degron / 2A" },
+              { id: "it", badge: "In-Frame", title: "Internal Tag", desc: "Surface-loop SPOT / alphaBtx" }
+            ].map((item) => {
+              const active = editType === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setEditType(item.id)}
+                  style={{
+                    textAlign: "left",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "8px",
+                    border: active ? "2px solid var(--primary)" : "1px solid var(--border-color)",
+                    background: active ? "var(--primary-bg, #eef5fc)" : "var(--bg-surface)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.15rem"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.35rem" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.84rem", color: active ? "var(--primary)" : "var(--text-main)" }}>
+                      {item.title}
+                    </span>
+                    <span style={{
+                      fontSize: "0.68rem",
+                      fontWeight: 800,
+                      padding: "0.1rem 0.4rem",
+                      borderRadius: "999px",
+                      background: active ? "var(--primary)" : "#e2eefb",
+                      color: active ? "#ffffff" : "#003366"
+                    }}>
+                      {item.badge}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: "0.74rem", color: "var(--text-muted)", lineHeight: 1.3 }}>
+                    {item.desc}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {editType === "genomic-snv" ? (
@@ -908,65 +961,67 @@ export function DesignView({
       {/* Results Display: Single Unified ASSURED Design Report (Zero Duplication) */}
       {designResult && (
         <>
-          {/* Compact Action Bar */}
-          <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--warning)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "1.05rem", fontWeight: 700 }}>Design Report:</span>
-              {getStatusBadge(designResult.procurement?.status || "review")}
-            </div>
+          <div className="card" style={{ padding: 0, overflow: "hidden", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--border-light)" }}>
+            {/* Integrated Report Header Toolbar */}
+            <div style={{ padding: "0.85rem 1.25rem", background: "linear-gradient(90deg, #f0f6fc 0%, #f8fbfe 100%)", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "1.02rem", fontWeight: 700, color: "var(--text-main)" }}>Design Report:</span>
+                {getStatusBadge(designResult.procurement?.status || "review")}
+              </div>
 
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              <button
-                className="btn btn-secondary"
-                onClick={() => downloadReportHtml(currentProject, designResult)}
-                title="Download standalone HTML report"
-              >
-                <FileText size={16} />
-                <span>Download HTML Report</span>
-              </button>
-
-              {currentProject?.svgScheme && (
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 <button
                   className="btn btn-secondary"
-                  onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)}
-                  title="Download standalone SVG vector schematic"
+                  onClick={() => downloadReportHtml(currentProject, designResult)}
+                  title="Download standalone HTML report"
+                >
+                  <FileText size={16} />
+                  <span>Download HTML Report</span>
+                </button>
+
+                {currentProject?.svgScheme && (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)}
+                    title="Download standalone SVG vector schematic"
+                  >
+                    <Download size={16} />
+                    <span>Download SVG</span>
+                  </button>
+                )}
+
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => downloadDesignJson(currentProject, designResult)}
+                  title="Download machine-readable design specification JSON"
                 >
                   <Download size={16} />
-                  <span>Download SVG</span>
+                  <span>Design JSON</span>
                 </button>
-              )}
 
-              <button
-                className="btn btn-secondary"
-                onClick={() => downloadDesignJson(currentProject, designResult)}
-                title="Download machine-readable design specification JSON"
-              >
-                <Download size={16} />
-                <span>Design JSON</span>
-              </button>
-
-              <button className="btn btn-primary" onClick={onProceedToOrder}>
-                <span>Proceed to Order</span>
-                <ArrowRight size={16} />
-              </button>
+                <button className="btn btn-primary" onClick={onProceedToOrder}>
+                  <span>Proceed to Order</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Single Authoritative ASSURED Design Report */}
-          <div className="card" style={{ padding: "0.5rem", overflow: "hidden" }}>
-            <iframe
-              title="ASSURED design report"
-              srcDoc={generateReportHtml(currentProject, designResult)}
-              sandbox="allow-same-origin"
-              style={{
-                width: "100%",
-                height: "82vh",
-                minHeight: "740px",
-                border: "none",
-                borderRadius: "8px",
-                background: "#ffffff"
-              }}
-            />
+            {/* Single Authoritative ASSURED Design Report */}
+            <div style={{ padding: "0.4rem" }}>
+              <iframe
+                title="ASSURED design report"
+                srcDoc={generateReportHtml(currentProject, designResult)}
+                sandbox="allow-same-origin"
+                style={{
+                  width: "100%",
+                  height: "82vh",
+                  minHeight: "740px",
+                  border: "none",
+                  borderRadius: "8px",
+                  background: "#ffffff"
+                }}
+              />
+            </div>
           </div>
 
           {designResult.guideAlternatives?.candidates?.length > 0 && (

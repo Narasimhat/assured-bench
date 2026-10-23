@@ -42,51 +42,30 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
   const acceptedCount = qcResults.filter(r => (r.decision?.decision || r.decision?.verdict) === "accept").length;
 
   return <div>
-    <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <h3>3. Trace Analysis &amp; Clone Screening Report</h3>
-          <p style={{ color: "var(--text-muted)", margin: "0.5rem 0" }}>
-            Sanger chromatogram deconvolution, clone ranking, final take-home conclusion, and publication report export in one unified workspace.
-          </p>
+    <div className="card" style={{ padding: "0.9rem 1.25rem", marginBottom: "0.75rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <h3 style={{ margin: 0, fontSize: "1.05rem" }}>3. Trace Analysis &amp; Clone Screening Report</h3>
+          {design ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.25rem 0.7rem", borderRadius: "999px", background: "#eef5fc", border: "1px solid #b9d5f5", color: "#003366", fontSize: "0.8rem", fontWeight: 700 }}>
+              <CheckCircle size={14} style={{ color: "#0055aa" }} />
+              Active Design: {design.name} ({currentProject.gene || "Gene"})
+            </span>
+          ) : (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.25rem 0.7rem", borderRadius: "999px", background: "var(--warning-bg)", border: "1px solid var(--warning-border)", color: "#92400e", fontSize: "0.8rem", fontWeight: 600 }}>
+              <AlertCircle size={14} style={{ color: "var(--warning)" }} />
+              Standalone Mode (enter gRNA/donor below or load a preset)
+            </span>
+          )}
         </div>
         <div className="project-controls" style={{ margin: 0 }}>
           {currentProject.designResult && <>
-            <button className="btn btn-secondary" onClick={() => downloadReportHtml(currentProject, currentProject.designResult)}>Download design HTML</button>
-            <button className="btn btn-secondary" onClick={() => downloadDesignJson(currentProject, currentProject.designResult)}>Download Design JSON</button>
+            <button className="btn btn-secondary" style={{ padding: "0.35rem 0.7rem", fontSize: "0.8rem" }} onClick={() => downloadReportHtml(currentProject, currentProject.designResult)}>Download design HTML</button>
+            <button className="btn btn-secondary" style={{ padding: "0.35rem 0.7rem", fontSize: "0.8rem" }} onClick={() => downloadDesignJson(currentProject, currentProject.designResult)}>Download Design JSON</button>
           </>}
         </div>
       </div>
-
-      {design ? (
-        <div style={{ marginTop: "1rem", padding: "0.85rem 1.25rem", borderRadius: "8px", background: "linear-gradient(90deg, #eef5fc 0%, #f4f8fd 100%)", border: "1px solid #c8dcf4", borderLeft: "4px solid #0055aa", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <CheckCircle size={22} style={{ color: "#0055aa", flexShrink: 0 }} />
-            <div>
-              <div style={{ fontWeight: 700, color: "#003366", fontSize: "0.95rem" }}>
-                Active Bench Design: {design.name}
-              </div>
-              <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
-                Target: <strong style={{ color: "var(--text-main)" }}>{currentProject.gene || "Gene"}</strong> · Loaded into QC pipeline. Review or override gRNA &amp; donor sequences directly in the workspace below.
-              </div>
-            </div>
-          </div>
-          <div style={{ fontSize: "0.85rem", background: "#ffffff", color: "#003366", border: "1px solid #b9d5f5", padding: "0.4rem 0.85rem", borderRadius: "6px", fontWeight: 600, boxShadow: "0 1px 2px rgba(0, 34, 68, 0.05)" }}>
-            Next: Provide matching Parental Control &amp; Sample .ab1 files below
-          </div>
-        </div>
-      ) : (
-        <div style={{ marginTop: "1rem", padding: "0.85rem 1.25rem", borderRadius: "8px", background: "var(--warning-bg)", border: "1px solid var(--warning-border)", borderLeft: "4px solid var(--warning)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <AlertCircle size={22} style={{ color: "var(--warning)", flexShrink: 0 }} />
-          <div>
-            <div style={{ fontWeight: 700, color: "#92400e" }}>No active design loaded</div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
-              Provide your <strong>gRNA sequences and donor sequence</strong> directly in the workspace below, click a <strong>1-click benchmark trace set</strong>, or design an edit in <strong>Step 1</strong>.
-            </div>
-          </div>
-        </div>
-      )}
     </div>
-    <iframe ref={frame} src={source} title="Trace Analysis upload and analysis" style={{ width: "100%", height: "88vh", minHeight: 760, border: "none", borderRadius: 12, background: "transparent" }} />
+    <iframe ref={frame} src={source} title="Trace Analysis upload and analysis" style={{ width: "100%", height: "88vh", minHeight: 820, border: "none", borderRadius: 12, background: "transparent" }} />
   </div>;
 }

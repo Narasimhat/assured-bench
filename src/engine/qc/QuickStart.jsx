@@ -298,414 +298,420 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
   }, [explicitControls, pairs]);
 
   return (
-    <div className="card quick">
-      <h2>Upload Sanger Traces (.ab1 / .zip)</h2>
-
-      {/* Option 1: Separated Parental Control vs. Edited Clones Dropzones */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "10px" }}>
-        {/* Box 1: Parental / WT Control */}
-        <div
-          className={`drop${draggingControl ? " over" : ""}`}
-          style={{ margin: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", borderColor: explicitControls.length ? "var(--success)" : undefined }}
-          onDragOver={(e) => { e.preventDefault(); setDraggingControl(true); }}
-          onDragLeave={() => setDraggingControl(false)}
-          onDrop={(e) => { e.preventDefault(); setDraggingControl(false); addFiles(e.dataTransfer.files, "control"); }}
-        >
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: "13.5px", color: "var(--text-main)" }}>
-                  1. Parental / WT Control (.ab1)
-                </div>
-                <div className="muted" style={{ fontSize: "11.5px", marginTop: "2px" }}>
-                  Drop unedited reference chromatogram (forward &amp; reverse reads supported).
-                </div>
-              </div>
-              <input
-                ref={controlPicker}
-                hidden
-                style={{ display: "none" }}
-                type="file"
-                multiple
-                accept=".ab1,.abi"
-                disabled={running}
-                onChange={(e) => { addFiles(e.target.files, "control"); e.target.value = ""; }}
-                aria-label="Choose parental control AB1 files"
-              />
-              <button type="button" disabled={running} onClick={() => controlPicker.current.click()} style={{ whiteSpace: "nowrap", fontSize: "12px" }}>
-                Select Control .ab1
-              </button>
-            </div>
-
-            {explicitControls.length > 0 ? (
-              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
-                {explicitControls.map((ctrl) => (
-                  <span
-                    key={ctrl}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      fontSize: "11.5px",
-                      fontFamily: "monospace",
-                      padding: "2px 8px",
-                      borderRadius: "999px",
-                      background: "var(--success-bg)",
-                      color: "var(--success)",
-                      border: "1px solid var(--success-border)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    ✓ {ctrl}
-                    <button
-                      type="button"
-                      disabled={running}
-                      onClick={() => setExplicitControls((prev) => prev.filter((c) => c !== ctrl))}
-                      style={{ border: "none", background: "transparent", color: "inherit", padding: "0 2px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
-                      title="Unassign as explicit control"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : autoDetectedControls.length > 0 ? (
-              <div style={{ marginTop: "8px", fontSize: "11.5px", color: "var(--text-muted)" }}>
-                Auto-detected control: <code>{autoDetectedControls.join(", ")}</code> (drop a file here to override)
-              </div>
-            ) : (
-              <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-dim)" }}>
-                Optional if uploading a full sequencing <code>.zip</code> or folder that already contains a control file (e.g. <code>WT</code> / <code>Ctrl</code>).
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Box 2: Edited Clone Samples / Sequencing ZIP / Folder */}
-        <div
-          className={`drop${draggingEdited ? " over" : ""}`}
-          style={{ margin: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}
-          onDragOver={(e) => { e.preventDefault(); setDraggingEdited(true); }}
-          onDragLeave={() => setDraggingEdited(false)}
-          onDrop={(e) => { e.preventDefault(); setDraggingEdited(false); addFiles(e.dataTransfer.files, "edited"); }}
-        >
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: "13.5px", color: "var(--text-main)" }}>
-                  2. Edited Clones (.ab1, .zip, or Folder)
-                </div>
-                <div className="muted" style={{ fontSize: "11.5px", marginTop: "2px" }}>
-                  Drop edited clone <code>.ab1</code> traces, a plate <code>.zip</code> archive, or a folder.
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                <input
-                  ref={filePicker}
-                  hidden
-                  style={{ display: "none" }}
-                  type="file"
-                  multiple
-                  accept=".zip,.ab1,.abi,.csv,.tsv,.json,.html,.htm,.gb,.gbk,.gbff,.genbank,text/html,application/json"
-                  disabled={running}
-                  onChange={(e) => { addFiles(e.target.files, "edited"); e.target.value = ""; }}
-                  aria-label="Choose files"
-                />
-                <button type="button" disabled={running} onClick={() => filePicker.current.click()} style={{ fontSize: "12px" }}>
-                  Add Clones / ZIP
-                </button>
-                <input
-                  ref={folderPicker}
-                  hidden
-                  style={{ display: "none" }}
-                  type="file"
-                  multiple
-                  webkitdirectory=""
-                  directory=""
-                  disabled={running}
-                  onChange={(e) => { addFiles(e.target.files, "edited"); e.target.value = ""; }}
-                  aria-label="Choose a folder"
-                />
-                <button type="button" disabled={running} onClick={() => folderPicker.current.click()} style={{ fontSize: "12px" }}>
-                  Add Folder
-                </button>
-              </div>
-            </div>
-            <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-dim)" }}>
-              Also accepts design reports (<code>.html</code> / <code>.json</code>), sample sheets (<code>.csv</code>), and GenBank files.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Option 3: Load Directly from Sequencing URL / Cloud Link */}
-      <div style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "var(--bg-surface)", marginBottom: "8px" }}>
-        <form onSubmit={loadFromUrl} style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-          <label htmlFor="q-trace-url" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-main)", whiteSpace: "nowrap" }}>
-            🔗 Load from URL:
-          </label>
-          <input
-            id="q-trace-url"
-            type="text"
-            value={traceUrl}
-            disabled={running || loadingUrl}
-            onChange={(e) => setTraceUrl(e.target.value)}
-            placeholder="Paste direct link to sequencing .zip archive or .ab1 file (Core facility / LIMS / Cloud URL)…"
-            style={{ flex: "1 1 260px", fontSize: "12px", padding: "5px 9px", margin: 0 }}
-          />
-          <select
-            aria-label="Role for fetched URL"
-            value={urlRole}
-            disabled={running || loadingUrl}
-            onChange={(e) => setUrlRole(e.target.value)}
-            style={{ fontSize: "12px", padding: "5px 8px", width: "auto", margin: 0 }}
-          >
-            <option value="edited">Clones / Sequencing ZIP</option>
-            <option value="control">Parental Control (.ab1)</option>
-          </select>
-          <button
-            type="submit"
-            disabled={running || loadingUrl || !traceUrl.trim()}
-            style={{ fontSize: "12px", padding: "5px 12px", margin: 0, whiteSpace: "nowrap" }}
-          >
-            {loadingUrl ? "Fetching…" : "Fetch URL"}
-          </button>
-        </form>
-
-        <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "6px", marginTop: "6px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-            <strong style={{ color: "var(--text-muted)" }}>Try 1-click benchmark trace sets:</strong>
-            <button
-              type="button"
-              className="link"
-              disabled={running}
-              onClick={() => loadSampleBundle("apoe")}
-              style={{ fontSize: "11px", padding: "2px 8px", margin: 0, fontWeight: 600 }}
-            >
-              Load APOE R176C SNP Practice (4 traces)
-            </button>
-            <button
-              type="button"
-              className="link"
-              disabled={running}
-              onClick={() => loadSampleBundle("myd88")}
-              style={{ fontSize: "11px", padding: "2px 8px", margin: 0, fontWeight: 600 }}
-            >
-              Load MYD88 KO hiPSC Cohort (11 traces)
-            </button>
-          </div>
-          <span>🔒 Processed 100% locally in your browser.</span>
-        </div>
-      </div>
-      {importStatus && <p role="status" className="note">{importStatus}</p>}
+    <div className="card quick" style={{ padding: "18px 20px" }}>
       <input ref={designPicker} hidden style={{ display: "none" }} id="q-design" aria-label="Design report file" type="file" accept=".html,.htm,.json,text/html,application/json" disabled={running} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-      {!designName && <p className="muted" style={{ margin: "8px 0" }}>Add a design report (HTML or JSON) using Add files above, or enter gRNA and donor sequences directly below.</p>}
-      {designName && <div role="status">
-        <p><b>{design.error ? "Design needs attention:" : "Design loaded & parsed:"}</b> {designName} <button type="button" disabled={running} onClick={() => designPicker.current.click()}>Replace design</button> <button type="button" disabled={running} onClick={() => { setDesignName(""); setDesignText(""); setDesignIndex(0); setOutcome(null); setError(""); }}>Remove design</button></p>
-        {design.error ? <p className="error">{design.error} Replace or remove this file to continue.</p> : design.kind === "report" ? <>
-          {design.designs.length > 1 && <><label htmlFor="q-design-choice">Design in this report</label><select id="q-design-choice" disabled={running} value={designIndex} onChange={(e) => { setDesignIndex(Number(e.target.value)); setOutcome(null); }}>{design.designs.map((d, i) => <option key={i} value={i}>{d.title}</option>)}</select></>}
-          {!traceNames.length && <p className="note" style={{ color: "var(--success)", fontWeight: 500, margin: "0.5rem 0" }}>✓ Design ready ({designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}). Now provide your parental control and edited clone .ab1 files above.</p>}
-        </> : design.kind === "spec" ? <>
-          {!traceNames.length && <p className="note" style={{ color: "var(--success)", fontWeight: 500, margin: "0.5rem 0" }}>✓ Design ready ({design.spec?.design?.gene ? `${design.spec.design.gene} — ` : ""}{design.label}: {designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}). Now provide your parental control and edited clone .ab1 files above.</p>}
-        </> : <p className="note">The design is empty or could not be read. Replace or remove it to continue.</p>}
-      </div>}
 
-      {/* Prominent gRNA and Donor Sequences Section */}
-      <div className="card sequence-config" style={{ marginTop: "1rem", border: "1px solid var(--border-color)", borderRadius: "10px", padding: "14px 16px", background: "var(--bg-surface)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+      {/* 2-Column Side-by-Side Setup Workspace */}
+      <div className="qc-setup-grid">
+        {/* LEFT PANEL: Sanger Chromatogram Traces */}
+        <div className="qc-panel">
           <div>
-            <h3 style={{ margin: 0, fontSize: "14px", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px" }}>
-              <span>🧬 CRISPR Sequences: gRNA &amp; Donor</span>
-            </h3>
-            <p className="muted" style={{ margin: "2px 0 0", fontSize: "12px" }}>
-              Specify gRNA spacer sequences (for cut site determination) and donor ssODN templates (for knock-in / point-mutation calling).
-            </p>
-          </div>
-          {designName && (
-            <div>
-              {!customSequenceMode ? (
-                <button
-                  type="button"
-                  className="link"
-                  style={{ fontSize: "12px", background: "var(--bg-input)", borderColor: "var(--primary)", color: "var(--primary)", fontWeight: 600, margin: 0 }}
-                  onClick={handlePopulateFromDesign}
-                >
-                  ✎ Customize / Override Sequences
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="link"
-                  style={{ fontSize: "12px", background: "var(--warning-bg)", borderColor: "var(--warning-border)", color: "var(--warning)", fontWeight: 600, margin: 0 }}
-                  onClick={() => setCustomSequenceMode(false)}
-                >
-                  ↺ Revert to Parsed Design File
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {designName && !customSequenceMode ? (
-          <div style={{ padding: "10px 14px", background: "var(--success-bg)", borderRadius: "8px", border: "1px solid var(--success-border)", fontSize: "13px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
-              <span style={{ fontWeight: 600, color: "var(--success)" }}>
-                ✓ Using sequences from design: {designName} ({designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} donor{designDonorItems.length === 1 ? "" : "s"})
-              </span>
-              <span className="muted" style={{ fontSize: "11px" }}>Click &quot;Customize / Override&quot; to edit gRNAs or ssODNs</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+            <div className="qc-panel-header">
               <div>
-                <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  gRNA Spacers ({designGuideItems.length}):
-                </strong>
-                {designGuideItems.length > 0 ? (
-                  <ul style={{ margin: "6px 0 0 16px", padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {designGuideItems.map((g, idx) => (
-                      <li key={idx} style={{ fontFamily: "monospace", fontSize: "12px" }}>
-                        <strong>{g.name || `Guide ${idx + 1}`}:</strong> <code>{g.sequence}</code> ({g.sequence.length} nt{g.pam ? `, PAM: ${g.pam}` : ""})
-                      </li>
-                    ))}
-                  </ul>
-                ) : <span className="muted"> (none specified; cut site will be inferred)</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
+                  <span className="qc-step-pill">Step 1</span>
+                  <h2 style={{ margin: 0, fontSize: "15.5px" }}>Upload Sanger Traces (.ab1 / .zip)</h2>
+                </div>
+                <div className="muted" style={{ fontSize: "12px" }}>
+                  Provide your unedited parental control and edited clone chromatograms, or launch a 1-click benchmark cohort.
+                </div>
               </div>
-              <div>
-                <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                  Donor Templates ({designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}):
-                </strong>
-                {designDonorItems.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
-                    {designDonorItems.map((d, idx) => (
-                      <div key={idx} style={{ background: "var(--bg-input)", color: "var(--text-main)", border: "1px solid var(--border-color)", padding: "5px 8px", borderRadius: "4px" }}>
-                        <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", marginBottom: "2px", display: "flex", justifyContent: "space-between" }}>
-                          <span>{d.name || `ssODN ${idx + 1}`}</span>
-                          <span>{d.sequence.length} nt</span>
-                        </div>
-                        <div style={{ fontFamily: "monospace", fontSize: "11.5px", wordBreak: "break-all", maxHeight: "54px", overflowY: "auto" }}>
-                          {d.sequence}
-                        </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="link"
+                  disabled={running}
+                  onClick={() => loadSampleBundle("apoe")}
+                  style={{ fontSize: "11px", padding: "4px 9px", margin: 0, fontWeight: 700 }}
+                  title="Load 4 APOE R176C SNP knock-in traces + matched design"
+                >
+                  ⚡ APOE R176C Set (4)
+                </button>
+                <button
+                  type="button"
+                  className="link"
+                  disabled={running}
+                  onClick={() => loadSampleBundle("myd88")}
+                  style={{ fontSize: "11px", padding: "4px 9px", margin: 0, fontWeight: 700 }}
+                  title="Load 11 MYD88 KO hiPSC clone traces + matched design"
+                >
+                  ⚡ MYD88 KO Set (11)
+                </button>
+              </div>
+            </div>
+
+            {/* Side-by-Side Dropzones inside Panel 1 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+              {/* Box 1: Parental / WT Control */}
+              <div
+                className={`drop${draggingControl ? " over" : ""}`}
+                style={{ margin: 0, padding: "12px 14px", display: "flex", flexDirection: "column", justifyContent: "space-between", borderColor: explicitControls.length ? "var(--success)" : undefined }}
+                onDragOver={(e) => { e.preventDefault(); setDraggingControl(true); }}
+                onDragLeave={() => setDraggingControl(false)}
+                onDrop={(e) => { e.preventDefault(); setDraggingControl(false); addFiles(e.dataTransfer.files, "control"); }}
+              >
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6px" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-main)" }}>
+                        1A. Parental Control (.ab1)
                       </div>
-                    ))}
-                  </div>
-                ) : <div className="muted" style={{ fontSize: "12px", marginTop: "4px" }}>No donor (knockout / deletion workflow)</div>}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {customSequenceMode && designName && (
-              <div style={{ padding: "8px 12px", background: "var(--warning-bg)", border: "1px solid var(--warning-border)", borderRadius: "6px", fontSize: "12px", color: "var(--warning)" }}>
-                ⚠️ <strong>Manual Override Active:</strong> The analysis will use your custom gRNA and donor sequences below instead of the design file.
-              </div>
-            )}
-
-            <div className="row" style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-              {/* gRNA sequence input */}
-              <div style={{ flex: "1 1 320px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
-                  <label htmlFor="q-guides-main" style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-main)" }}>
-                    gRNA Sequence(s)
-                  </label>
-                  <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
-                    {guides.length > 0 ? `${guides.length} guide(s) entered` : "optional (inferred if blank)"}
-                  </span>
-                </div>
-                <input
-                  id="q-guides-main"
-                  type="text"
-                  value={guidesText}
-                  onChange={(e) => setGuidesText(e.target.value.toUpperCase())}
-                  placeholder="e.g. ACACTGCCAGGCGCTTCTGC, CCCCGGCCTGGTACACTGCC"
-                  style={{ fontFamily: "monospace", letterSpacing: "0.5px" }}
-                />
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px", alignItems: "center" }}>
-                  {guides.map((g, gi) => {
-                    const isStandardLen = g.length === 20;
-                    return (
-                      <span
-                        key={gi}
-                        style={{
-                          fontSize: "11px",
-                          fontFamily: "monospace",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: isStandardLen ? "#ecfdf5" : "#fffbeb",
-                          color: isStandardLen ? "#047857" : "#b45309",
-                          border: `1px solid ${isStandardLen ? "#a7f3d0" : "#fde68a"}`
-                        }}
-                      >
-                        gRNA {gi + 1}: {g.length} nt {isStandardLen ? "✓" : "(standard: 20 nt)"}
-                      </span>
-                    );
-                  })}
-                  <span className="muted" style={{ fontSize: "11px" }}>
-                    Enter 1–3 spacers without PAM (e.g. 20 nt).
-                  </span>
-                </div>
-              </div>
-
-              {/* Donor sequence input */}
-              <div style={{ flex: "1 1 320px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
-                  <label htmlFor="q-donor-main" style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-main)" }}>
-                    Donor Sequence(s) (ssODN, one per line)
-                  </label>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)" }}>
-                    {manualDonors.length > 0 ? `${manualDonors.length} ssODN${manualDonors.length === 1 ? "" : "s"} (${manualDonors.map((d) => `${d.sequence.length} nt`).join(", ")})` : "0 ssODNs"}
-                  </span>
-                </div>
-                <textarea
-                  id="q-donor-main"
-                  value={donorText}
-                  onChange={(e) => setDonorText(e.target.value.toUpperCase())}
-                  placeholder="Paste 1 or more single-stranded donor sequences (ssODNs), one per line..."
-                  style={{ fontFamily: "monospace", minHeight: "68px", resize: "vertical", fontSize: "12px" }}
-                />
-                {manualDonors.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px", alignItems: "center" }}>
-                    {manualDonors.map((d, di) => (
-                      <span
-                        key={di}
-                        style={{
-                          fontSize: "11px",
-                          fontFamily: "monospace",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                          background: "#ecfdf5",
-                          color: "#047857",
-                          border: "1px solid #a7f3d0",
-                        }}
-                      >
-                        {d.name}: {d.sequence.length} nt ✓
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
-                  <span className="muted" style={{ fontSize: "11px" }}>
-                    Put each matched ssODN on a new line (supports 1–3 donors with ≥15 nt homology arms).
-                  </span>
-                  {(guidesText || donorText) && (
-                    <button
-                      type="button"
-                      className="link"
-                      style={{ fontSize: "11px", padding: "1px 6px", border: "none", color: "var(--text-dim)", textDecoration: "underline", background: "none", cursor: "pointer", margin: 0 }}
-                      onClick={() => { setGuidesText(""); setDonorText(""); }}
-                    >
-                      Clear
+                      <div className="muted" style={{ fontSize: "11px", marginTop: "2px" }}>
+                        Unedited WT chromatogram.
+                      </div>
+                    </div>
+                    <input
+                      ref={controlPicker}
+                      hidden
+                      style={{ display: "none" }}
+                      type="file"
+                      multiple
+                      accept=".ab1,.abi"
+                      disabled={running}
+                      onChange={(e) => { addFiles(e.target.files, "control"); e.target.value = ""; }}
+                      aria-label="Choose parental control AB1 files"
+                    />
+                    <button type="button" disabled={running} onClick={() => controlPicker.current.click()} style={{ whiteSpace: "nowrap", fontSize: "11.5px", padding: "5px 10px", margin: 0 }}>
+                      Select Control
                     </button>
+                  </div>
+
+                  {explicitControls.length > 0 ? (
+                    <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "5px", alignItems: "center" }}>
+                      {explicitControls.map((ctrl) => (
+                        <span
+                          key={ctrl}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "11px",
+                            fontFamily: "monospace",
+                            padding: "2px 7px",
+                            borderRadius: "999px",
+                            background: "var(--success-bg)",
+                            color: "var(--success)",
+                            border: "1px solid var(--success-border)",
+                            fontWeight: 600,
+                          }}
+                        >
+                          ✓ {ctrl}
+                          <button
+                            type="button"
+                            disabled={running}
+                            onClick={() => setExplicitControls((prev) => prev.filter((c) => c !== ctrl))}
+                            style={{ border: "none", background: "transparent", color: "inherit", padding: "0 2px", cursor: "pointer", fontSize: "12px", lineHeight: 1 }}
+                            title="Unassign as explicit control"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : autoDetectedControls.length > 0 ? (
+                    <div style={{ marginTop: "8px", fontSize: "11px", color: "var(--text-muted)" }}>
+                      Auto-detected: <code>{autoDetectedControls.join(", ")}</code>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: "8px", fontSize: "10.5px", color: "var(--text-dim)" }}>
+                      Auto-detected if named <code>WT</code> / <code>Ctrl</code> in ZIP.
+                    </div>
                   )}
                 </div>
               </div>
+
+              {/* Box 2: Edited Clone Samples / Sequencing ZIP / Folder */}
+              <div
+                className={`drop${draggingEdited ? " over" : ""}`}
+                style={{ margin: 0, padding: "12px 14px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+                onDragOver={(e) => { e.preventDefault(); setDraggingEdited(true); }}
+                onDragLeave={() => setDraggingEdited(false)}
+                onDrop={(e) => { e.preventDefault(); setDraggingEdited(false); addFiles(e.dataTransfer.files, "edited"); }}
+              >
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "6px" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-main)" }}>
+                        1B. Edited Clones (.ab1 / .zip)
+                      </div>
+                      <div className="muted" style={{ fontSize: "11px", marginTop: "2px" }}>
+                        Drop clone <code>.ab1</code> files, plate <code>.zip</code>, or folder.
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                      <input
+                        ref={filePicker}
+                        hidden
+                        style={{ display: "none" }}
+                        type="file"
+                        multiple
+                        accept=".zip,.ab1,.abi,.csv,.tsv,.json,.html,.htm,.gb,.gbk,.gbff,.genbank,text/html,application/json"
+                        disabled={running}
+                        onChange={(e) => { addFiles(e.target.files, "edited"); e.target.value = ""; }}
+                        aria-label="Choose files"
+                      />
+                      <button type="button" disabled={running} onClick={() => filePicker.current.click()} style={{ fontSize: "11.5px", padding: "5px 10px", margin: 0 }}>
+                        Add Clones / ZIP
+                      </button>
+                      <input
+                        ref={folderPicker}
+                        hidden
+                        style={{ display: "none" }}
+                        type="file"
+                        multiple
+                        webkitdirectory=""
+                        directory=""
+                        disabled={running}
+                        onChange={(e) => { addFiles(e.target.files, "edited"); e.target.value = ""; }}
+                        aria-label="Choose a folder"
+                      />
+                      <button type="button" disabled={running} onClick={() => folderPicker.current.click()} style={{ fontSize: "11.5px", padding: "5px 10px", margin: 0 }}>
+                        Folder
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "8px", fontSize: "10.5px", color: "var(--text-dim)" }}>
+                    Also accepts design (<code>.html</code>/<code>.json</code>) &amp; sample sheets (<code>.csv</code>).
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Compact Remote URL Loader at bottom of Left Panel */}
+          <div style={{ padding: "8px 10px", borderRadius: "8px", border: "1px solid var(--border-color)", background: "#f8fbfe" }}>
+            <form onSubmit={loadFromUrl} style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              <label htmlFor="q-trace-url" style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--text-main)", whiteSpace: "nowrap" }}>
+                🔗 Remote URL:
+              </label>
+              <input
+                id="q-trace-url"
+                type="text"
+                value={traceUrl}
+                disabled={running || loadingUrl}
+                onChange={(e) => setTraceUrl(e.target.value)}
+                placeholder="Paste sequencing .zip or .ab1 link (LIMS / Core facility)…"
+                style={{ flex: "1 1 180px", fontSize: "11.5px", padding: "4px 8px", margin: 0 }}
+              />
+              <select
+                aria-label="Role for fetched URL"
+                value={urlRole}
+                disabled={running || loadingUrl}
+                onChange={(e) => setUrlRole(e.target.value)}
+                style={{ fontSize: "11.5px", padding: "4px 6px", width: "auto", margin: 0 }}
+              >
+                <option value="edited">Clones / ZIP</option>
+                <option value="control">Control (.ab1)</option>
+              </select>
+              <button
+                type="submit"
+                className="link"
+                disabled={running || loadingUrl || !traceUrl.trim()}
+                style={{ fontSize: "11.5px", padding: "4px 10px", margin: 0, whiteSpace: "nowrap" }}
+              >
+                {loadingUrl ? "Fetching…" : "Fetch"}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL: Target Design & CRISPR Sequences (gRNA & ssODN) */}
+        <div className="qc-panel sequence-config">
+          <div>
+            <div className="qc-panel-header">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
+                  <span className="qc-step-pill">Step 2</span>
+                  <h2 style={{ margin: 0, fontSize: "15.5px" }}>Target Design: gRNA &amp; Donor Sequences</h2>
+                </div>
+                <div className="muted" style={{ fontSize: "12px" }}>
+                  Upload an ASSURED Design file or enter gRNA spacers &amp; ssODN templates directly.
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                {!designName ? (
+                  <button
+                    type="button"
+                    className="link"
+                    disabled={running}
+                    onClick={() => designPicker.current.click()}
+                    style={{ fontSize: "11.5px", padding: "4px 10px", margin: 0, fontWeight: 700 }}
+                  >
+                    📄 Upload Design (.html / .json)
+                  </button>
+                ) : (
+                  <>
+                    {!customSequenceMode ? (
+                      <button
+                        type="button"
+                        className="link"
+                        style={{ fontSize: "11.5px", padding: "4px 9px", background: "var(--bg-input)", borderColor: "var(--primary)", color: "var(--primary)", fontWeight: 700, margin: 0 }}
+                        onClick={handlePopulateFromDesign}
+                      >
+                        ✎ Override Sequences
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="link"
+                        style={{ fontSize: "11.5px", padding: "4px 9px", background: "var(--warning-bg)", borderColor: "var(--warning-border)", color: "var(--warning)", fontWeight: 700, margin: 0 }}
+                        onClick={() => setCustomSequenceMode(false)}
+                      >
+                        ↺ Revert to Design
+                      </button>
+                    )}
+                    <button type="button" className="link" style={{ fontSize: "11.5px", padding: "4px 8px", margin: 0 }} disabled={running} onClick={() => designPicker.current.click()}>Replace</button>
+                    <button type="button" className="link" style={{ fontSize: "11.5px", padding: "4px 8px", margin: 0 }} disabled={running} onClick={() => { setDesignName(""); setDesignText(""); setDesignIndex(0); setOutcome(null); setError(""); }}>Remove</button>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Quick Presets / Examples */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", paddingTop: "6px", borderTop: "1px dashed var(--border-color)" }}>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)" }}>Quick sample sequences:</span>
+            {designName && (
+              <div role="status" style={{ marginBottom: "8px" }}>
+                {design.error ? (
+                  <p className="error" style={{ margin: "4px 0", fontSize: "12px" }}>
+                    <b>Design needs attention ({designName}):</b> {design.error} Replace or remove this file to continue.
+                  </p>
+                ) : design.kind === "report" && design.designs.length > 1 ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <label htmlFor="q-design-choice" style={{ fontSize: "12px", fontWeight: 600 }}>Design in report:</label>
+                    <select id="q-design-choice" disabled={running} value={designIndex} onChange={(e) => { setDesignIndex(Number(e.target.value)); setOutcome(null); }} style={{ width: "auto", fontSize: "12px", padding: "4px 8px" }}>
+                      {design.designs.map((d, i) => <option key={i} value={i}>{d.title}</option>)}
+                    </select>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {designName && !customSequenceMode && !design.error ? (
+              <div style={{ padding: "10px 12px", background: "var(--success-bg)", borderRadius: "8px", border: "1px solid var(--success-border)", fontSize: "12.5px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+                  <span style={{ fontWeight: 700, color: "var(--success)" }}>
+                    ✓ Active Design: {designName} ({designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"})
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
+                  <div>
+                    <strong style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                      gRNA Spacers ({designGuideItems.length}):
+                    </strong>
+                    {designGuideItems.length > 0 ? (
+                      <ul style={{ margin: "4px 0 0 16px", padding: 0, display: "flex", flexDirection: "column", gap: "3px" }}>
+                        {designGuideItems.map((g, idx) => (
+                          <li key={idx} style={{ fontFamily: "monospace", fontSize: "11.5px" }}>
+                            <strong>{g.name || `Guide ${idx + 1}`}:</strong> <code>{g.sequence}</code> ({g.sequence.length} nt{g.pam ? `, ${g.pam}` : ""})
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <span className="muted"> (inferred automatically)</span>}
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: "11.5px", color: "var(--text-muted)" }}>
+                      Donor Templates ({designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}):
+                    </strong>
+                    {designDonorItems.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "4px" }}>
+                        {designDonorItems.map((d, idx) => (
+                          <div key={idx} style={{ background: "var(--bg-input)", color: "var(--text-main)", border: "1px solid var(--border-color)", padding: "4px 7px", borderRadius: "4px" }}>
+                            <div style={{ fontSize: "10.5px", fontWeight: 700, color: "var(--text-muted)", display: "flex", justifyContent: "space-between" }}>
+                              <span>{d.name || `ssODN ${idx + 1}`}</span>
+                              <span>{d.sequence.length} nt</span>
+                            </div>
+                            <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", maxHeight: "42px", overflowY: "auto" }}>
+                              {d.sequence}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div className="muted" style={{ fontSize: "11.5px", marginTop: "4px" }}>No donor (knockout / deletion workflow)</div>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {customSequenceMode && designName && (
+                  <div style={{ padding: "6px 10px", background: "var(--warning-bg)", border: "1px solid var(--warning-border)", borderRadius: "6px", fontSize: "11.5px", color: "var(--warning)" }}>
+                    ⚠️ <strong>Manual Override Active:</strong> Using custom gRNA and donor sequences below instead of {designName}.
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px" }}>
+                  {/* gRNA sequence input */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
+                      <label htmlFor="q-guides-main" style={{ fontWeight: 700, fontSize: "12px", color: "var(--text-main)" }}>
+                        gRNA Spacer(s) (1–3 guides)
+                      </label>
+                      <span style={{ fontSize: "10.5px", color: "var(--text-dim)" }}>
+                        {guides.length > 0 ? `${guides.length} guide(s)` : "inferred if blank"}
+                      </span>
+                    </div>
+                    <input
+                      id="q-guides-main"
+                      type="text"
+                      value={guidesText}
+                      onChange={(e) => setGuidesText(e.target.value.toUpperCase())}
+                      placeholder="e.g. ACACTGCCAGGCGCTTCTGC, CCCCGGCCTGGTACACTGCC"
+                      style={{ fontFamily: "monospace", fontSize: "12px", padding: "6px 9px" }}
+                    />
+                    {guides.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+                        {guides.map((g, gi) => {
+                          const isStandardLen = g.length === 20;
+                          return (
+                            <span
+                              key={gi}
+                              style={{
+                                fontSize: "10.5px",
+                                fontFamily: "monospace",
+                                padding: "1px 5px",
+                                borderRadius: "4px",
+                                background: isStandardLen ? "#ecfdf5" : "#fffbeb",
+                                color: isStandardLen ? "#047857" : "#b45309",
+                                border: `1px solid ${isStandardLen ? "#a7f3d0" : "#fde68a"}`
+                              }}
+                            >
+                              gRNA {gi + 1}: {g.length} nt {isStandardLen ? "✓" : ""}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Donor sequence input */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
+                      <label htmlFor="q-donor-main" style={{ fontWeight: 700, fontSize: "12px", color: "var(--text-main)" }}>
+                        Donor ssODN(s) (1 per line)
+                      </label>
+                      <span style={{ fontSize: "10.5px", fontWeight: 600, color: "var(--text-muted)" }}>
+                        {manualDonors.length > 0 ? `${manualDonors.length} ssODN (${manualDonors.map((d) => `${d.sequence.length}nt`).join(", ")})` : "optional (HDR)"}
+                      </span>
+                    </div>
+                    <textarea
+                      id="q-donor-main"
+                      value={donorText}
+                      onChange={(e) => setDonorText(e.target.value.toUpperCase())}
+                      placeholder="Paste 1 or more ssODN donor sequences (one per line)…"
+                      style={{ fontFamily: "monospace", minHeight: "54px", resize: "vertical", fontSize: "11.5px", padding: "6px 9px" }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Sequence Presets at bottom of Right Panel */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px", flexWrap: "wrap", paddingTop: "8px", marginTop: "8px", borderTop: "1px dashed var(--border-color)", fontSize: "11px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 700, color: "var(--text-muted)" }}>Sample sequences:</span>
               <button
                 type="button"
                 className="link"
-                style={{ fontSize: "11px", padding: "2px 8px", margin: 0 }}
+                style={{ fontSize: "11px", padding: "2px 7px", margin: 0 }}
                 onClick={() => {
                   setGuidesText("ACACTGCCAGGCGCTTCTGC, CCCCGGCCTGGTACACTGCC");
                   setDonorText([
@@ -715,88 +721,147 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                   setCustomSequenceMode(true);
                 }}
               >
-                APOE R176C (2 gRNAs + 2 ssODNs)
+                APOE R176C (2 gRNA + 2 ssODN)
               </button>
               <button
                 type="button"
                 className="link"
-                style={{ fontSize: "11px", padding: "2px 8px", margin: 0 }}
+                style={{ fontSize: "11px", padding: "2px 7px", margin: 0 }}
                 onClick={() => {
                   setGuidesText("CCTCAGTGTCTTCGAGCTGG, ACTGAGGCCGAGCTGTACCG");
                   setDonorText("");
                   setCustomSequenceMode(true);
                 }}
               >
-                Dual-Guide Deletion Example
+                Dual-Guide KO
               </button>
             </div>
-          </div>
-        )}
-      </div>
-
-      {traceNames.length > 0 && <details>
-        <summary>Manage loaded trace files ({traceNames.length})</summary>
-        <ul>{traceNames.map((name) => {
-          const isExplicitCtrl = explicitControls.includes(name);
-          return (
-            <li key={name} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-              <span>{name}</span>
-              {isExplicitCtrl && <span style={{ fontSize: "11px", color: "var(--success)", fontWeight: 600 }}>(Parental Control)</span>}
+            {(guidesText || donorText) && (
               <button
                 type="button"
-                disabled={running}
-                onClick={() => {
-                  setExplicitControls((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
-                  setPairsEdit({});
-                  setOutcome(null);
-                }}
-                style={{ fontSize: "11px", padding: "2px 6px" }}
+                className="link"
+                style={{ fontSize: "11px", padding: "1px 6px", border: "none", color: "var(--text-dim)", textDecoration: "underline", background: "none", cursor: "pointer", margin: 0 }}
+                onClick={() => { setGuidesText(""); setDonorText(""); }}
               >
-                {isExplicitCtrl ? "Unset Control" : "Set as Control"}
+                Clear
               </button>
-              <button type="button" disabled={running} aria-label={`Remove trace ${name}`} onClick={() => {
-                files.current.delete(name); buffers.current.delete(name); setTraceNames((previous) => previous.filter((n) => n !== name)); setExplicitControls((previous) => previous.filter((n) => n !== name)); setPairsEdit({}); setOutcome(null); setError("");
-              }} style={{ fontSize: "11px", padding: "2px 6px" }}>Remove</button>
-            </li>
-          );
-        })}</ul>
-      </details>}
+            )}
+          </div>
+        </div>
+      </div>
+
+      {importStatus && <p role="status" className="note" style={{ margin: "8px 0" }}>{importStatus}</p>}
+
+      {/* Prominent Action & Sample Pairing Section */}
       {traceNames.length > 0 && (
-        <>
-          <p>{traceNames.length} trace{traceNames.length === 1 ? "" : "s"}; {pairs.length} sample{pairs.length === 1 ? "" : "s"} paired by {built.source === "explicit" ? "uploaded Parental Control" : built.source === "sheet" ? "the sample sheet" : "file names"}. Guides from {guideSource}.</p>
+        <div style={{ marginTop: "10px" }}>
+          <div className="qc-action-bar">
+            <div>
+              <div style={{ fontWeight: 700, fontSize: "14px", color: "var(--text-main)" }}>
+                Ready to Screen: {pairs.length} sample{pairs.length === 1 ? "" : "s"} ({traceNames.length} trace{traceNames.length === 1 ? "" : "s"})
+              </div>
+              <div className="muted" style={{ fontSize: "12px" }}>
+                Paired by {built.source === "explicit" ? "uploaded Parental Control" : built.source === "sheet" ? "sample sheet" : "file names"} · Guides from {guideSource}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <label htmlFor="q-nuc" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>Nuclease:</label>
+                <select id="q-nuc" value={nuclease} onChange={(e) => setNuclease(e.target.value)} style={{ width: "auto", fontSize: "12px", padding: "5px 8px" }}>
+                  {Object.entries(NUCLEASES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <label htmlFor="q-goal" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-muted)", whiteSpace: "nowrap" }}>Accept:</label>
+                <select id="q-goal" value={goal} onChange={(e) => setGoal(e.target.value)} style={{ width: "auto", fontSize: "12px", padding: "5px 8px" }}>
+                  <option value="homozygous">Homozygous edits only</option>
+                  <option value="any">Heterozygous edits too</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="primary"
+                disabled={running || !pairs.length || (!customSequenceMode && (!!design.error || !!(designName && !designText)))}
+                onClick={run}
+                style={{ fontSize: "13.5px", padding: "8px 18px", boxShadow: "0 2px 6px rgba(0, 85, 170, 0.25)" }}
+              >
+                {running ? "Analysing…" : `Analyse ${pairs.length} sample${pairs.length === 1 ? "" : "s"}`}
+              </button>
+              {progress && <span className="muted" style={{ fontSize: "12px", fontWeight: 600 }}>{progress.done} of {progress.total}</span>}
+            </div>
+          </div>
+
           {built.problems.map((p) => <p key={p} className="note">{p}</p>)}
           {lowCount > 0 && <p className="note">{lowCount} pairing{lowCount === 1 ? " is" : "s are"} a guess (marked low): check the control column before running.</p>}
-          <div className="scroll">
-            <table><thead><tr><th>Sample</th><th>Reads</th><th>Control</th><th>Type</th><th>Pairing</th></tr></thead><tbody>
-              {pairs.map((p, i) => (
-                <tr key={p.sample + i}><td>{p.sample}</td><td>{p.edited.length}</td>
-                  <td><select value={p.control[0]} onChange={(e) => setPairsEdit({ ...pairsEdit, [i]: { control: [e.target.value], confidence: "set by you" } })}>{traceNames.map((n) => <option key={n} value={n}>{n}</option>)}</select></td>
-                  <td><select value={p.type} onChange={(e) => setPairsEdit({ ...pairsEdit, [i]: { ...(pairsEdit[i] || {}), type: e.target.value } })}><option value="clone">clone</option><option value="pool">pool</option></select></td>
-                  <td className={p.confidence === "low" ? "warn" : ""} title={p.reason}>{p.confidence}</td></tr>
-              ))}
-            </tbody></table>
-          </div>
-          <details><summary>Additional settings: Nuclease, Sample type, Protein assessment</summary>
-            <label className="field" htmlFor="q-nuc">Nuclease</label>
-            <select id="q-nuc" value={nuclease} onChange={(e) => setNuclease(e.target.value)}>{Object.entries(NUCLEASES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>
-            <label className="field" htmlFor="q-type">Sample type (overrides the guess for every sample)</label>
-            <select id="q-type" value={typeOverride} onChange={(e) => setTypeOverride(e.target.value)}><option value="">as paired</option><option value="clone">clones</option><option value="pool">pools</option></select>
-            <label className="field" htmlFor="q-goal">Accept</label>
-            <select id="q-goal" value={goal} onChange={(e) => setGoal(e.target.value)}><option value="homozygous">homozygous edits only (heterozygous clones are held)</option><option value="any">heterozygous edits too</option></select>
-            <label className="field" htmlFor="q-gene">Gene record (GenBank, optional): judges knockouts on the protein</label>
-            <input id="q-gene" type="file" accept=".gb,.gbk,.gbff,.genbank,.txt" onChange={async (e) => { const f = e.target.files && e.target.files[0]; if (f) { setGeneText(await f.text()); setGeneName(f.name); } else { setGeneText(""); setGeneName(""); } }} />
-            {geneName && <p className="muted">Using {geneName}: each allele is translated, nonsense-mediated decay and splice sites are assessed, and the knockout is called on the predicted protein.</p>}
-            {geneText && (
-              <>
-                <label className="field" htmlFor="q-regions">Essential regions (optional, residue numbers)</label>
-                <input id="q-regions" type="text" value={regionsText} onChange={(e) => setRegionsText(e.target.value)} placeholder="TIR domain:172-314, Death domain:67-122" />
-                <label className="field" htmlFor="q-epitope">Antibody epitope (optional, residue numbers)</label>
-                <input id="q-epitope" type="text" value={epitopeText} onChange={(e) => setEpitopeText(e.target.value)} placeholder="200-250" />
-              </>
-            )}
+
+          <details open={!outcome} style={{ marginTop: "6px" }}>
+            <summary style={{ fontSize: "12.5px", color: "var(--text-muted)" }}>
+              Sample &amp; Control Pairing Table ({pairs.length} sample{pairs.length === 1 ? "" : "s"}) — {outcome ? "click to expand / adjust pairings" : "verify control assignment before running"}
+            </summary>
+            <div className="scroll" style={{ maxHeight: "240px", marginTop: "6px" }}>
+              <table><thead><tr><th>Sample</th><th>Reads</th><th>Control</th><th>Type</th><th>Pairing</th></tr></thead><tbody>
+                {pairs.map((p, i) => (
+                  <tr key={p.sample + i}><td><b>{p.sample}</b></td><td>{p.edited.length}</td>
+                    <td><select value={p.control[0]} onChange={(e) => setPairsEdit({ ...pairsEdit, [i]: { control: [e.target.value], confidence: "set by you" } })} style={{ padding: "4px 8px", fontSize: "12px" }}>{traceNames.map((n) => <option key={n} value={n}>{n}</option>)}</select></td>
+                    <td><select value={p.type} onChange={(e) => setPairsEdit({ ...pairsEdit, [i]: { ...(pairsEdit[i] || {}), type: e.target.value } })} style={{ padding: "4px 8px", fontSize: "12px" }}><option value="clone">clone</option><option value="pool">pool</option></select></td>
+                    <td className={p.confidence === "low" ? "warn" : ""} title={p.reason}>{p.confidence}</td></tr>
+                ))}
+              </tbody></table>
+            </div>
+
+            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center", marginTop: "6px" }}>
+              <details>
+                <summary style={{ fontSize: "12px", color: "var(--text-muted)" }}>Manage loaded trace files ({traceNames.length})</summary>
+                <ul style={{ marginTop: "6px" }}>{traceNames.map((name) => {
+                  const isExplicitCtrl = explicitControls.includes(name);
+                  return (
+                    <li key={name} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", fontSize: "12px" }}>
+                      <span>{name}</span>
+                      {isExplicitCtrl && <span style={{ fontSize: "11px", color: "var(--success)", fontWeight: 600 }}>(Parental Control)</span>}
+                      <button
+                        type="button"
+                        disabled={running}
+                        onClick={() => {
+                          setExplicitControls((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
+                          setPairsEdit({});
+                          setOutcome(null);
+                        }}
+                        style={{ fontSize: "11px", padding: "2px 6px" }}
+                      >
+                        {isExplicitCtrl ? "Unset Control" : "Set as Control"}
+                      </button>
+                      <button type="button" disabled={running} aria-label={`Remove trace ${name}`} onClick={() => {
+                        files.current.delete(name); buffers.current.delete(name); setTraceNames((previous) => previous.filter((n) => n !== name)); setExplicitControls((previous) => previous.filter((n) => n !== name)); setPairsEdit({}); setOutcome(null); setError("");
+                      }} style={{ fontSize: "11px", padding: "2px 6px" }}>Remove</button>
+                    </li>
+                  );
+                })}</ul>
+              </details>
+
+              <details>
+                <summary style={{ fontSize: "12px", color: "var(--text-muted)" }}>Advanced: Sample type override &amp; GenBank protein assessment</summary>
+                <div style={{ padding: "8px 0" }}>
+                  <label className="field" htmlFor="q-type">Sample type (overrides the guess for every sample)</label>
+                  <select id="q-type" value={typeOverride} onChange={(e) => setTypeOverride(e.target.value)}><option value="">as paired</option><option value="clone">clones</option><option value="pool">pools</option></select>
+                  <label className="field" htmlFor="q-gene">Gene record (GenBank, optional): judges knockouts on the protein</label>
+                  <input id="q-gene" type="file" accept=".gb,.gbk,.gbff,.genbank,.txt" onChange={async (e) => { const f = e.target.files && e.target.files[0]; if (f) { setGeneText(await f.text()); setGeneName(f.name); } else { setGeneText(""); setGeneName(""); } }} />
+                  {geneName && <p className="muted">Using {geneName}: each allele is translated, nonsense-mediated decay and splice sites are assessed, and the knockout is called on the predicted protein.</p>}
+                  {geneText && (
+                    <>
+                      <label className="field" htmlFor="q-regions">Essential regions (optional, residue numbers)</label>
+                      <input id="q-regions" type="text" value={regionsText} onChange={(e) => setRegionsText(e.target.value)} placeholder="TIR domain:172-314, Death domain:67-122" />
+                      <label className="field" htmlFor="q-epitope">Antibody epitope (optional, residue numbers)</label>
+                      <input id="q-epitope" type="text" value={epitopeText} onChange={(e) => setEpitopeText(e.target.value)} placeholder="200-250" />
+                    </>
+                  )}
+                </div>
+              </details>
+            </div>
           </details>
-          <p><button type="button" className="primary" disabled={running || !pairs.length || (!customSequenceMode && (!!design.error || !!(designName && !designText)))} onClick={run}>{running ? "Analysing..." : `Analyse ${pairs.length} sample${pairs.length === 1 ? "" : "s"}`}</button> {progress && <span className="muted">{progress.done} of {progress.total}</span>}</p>
-        </>
+        </div>
       )}
       {error && <p className="error">{error}</p>}
       {outcome && (() => {
@@ -805,83 +870,117 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
         const boxBg = takeHome.status === "pass" ? "var(--success-bg)" : takeHome.status === "warn" ? "var(--warning-bg)" : "#fef2f2";
         const boxColor = takeHome.status === "pass" ? "var(--success)" : takeHome.status === "warn" ? "var(--warning)" : "#991b1b";
         return (
-          <>
-            <h2>Screening Report &amp; Final Take-Home Conclusion</h2>
-            <div style={{ border: `1px solid ${boxBorder}`, borderLeft: `6px solid ${boxBorder}`, background: boxBg, borderRadius: "8px", padding: "12px 16px", marginBottom: "12px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
-                <div style={{ flex: "1 1 340px" }}>
+          <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "2px solid var(--border-color)" }}>
+            <div style={{ border: `1px solid ${boxBorder}`, borderLeft: `6px solid ${boxBorder}`, background: boxBg, borderRadius: "10px", padding: "12px 16px", marginBottom: "14px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                <div style={{ flex: "1 1 360px" }}>
                   <div style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", color: boxColor, marginBottom: "2px" }}>
-                    Final Take-Home Message
+                    Final Take-Home Conclusion
                   </div>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-main)", marginBottom: "4px" }}>
+                  <div style={{ fontSize: "15.5px", fontWeight: 800, color: "var(--text-main)", marginBottom: "3px" }}>
                     {takeHome.headline}
                   </div>
-                  <div style={{ fontSize: "13px", color: "var(--text-main)", marginBottom: "4px" }}>
-                    {takeHome.summary}
-                  </div>
-                  <div className="muted" style={{ fontSize: "12px", fontWeight: 600 }}>
-                    {takeHome.nextStep}
+                  <div style={{ fontSize: "13px", color: "var(--text-main)", marginBottom: "2px" }}>
+                    {takeHome.summary} <span className="muted" style={{ fontWeight: 600 }}>— {takeHome.nextStep}</span>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                   <button
                     type="button"
                     className="primary"
                     onClick={() => download(`assured_qc_publication_report_${stamp}.html`, buildQcReportHtml({ workflow: outcome.workflow, design: designName, results: ranked, notes: outcome.problems }), "text/html")}
-                    style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
+                    style={{ fontSize: "12px", padding: "7px 14px", margin: 0 }}
                   >
                     Download Publication Report (HTML)
                   </button>
                   <button
                     type="button"
+                    className="link"
                     onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked), "text/csv")}
-                    style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
+                    style={{ fontSize: "12px", padding: "7px 12px", margin: 0, background: "#ffffff" }}
                   >
                     Download Table (CSV)
                   </button>
                 </div>
               </div>
             </div>
-            <p className="chips">{DECISION_ORDER.map((k) => <span key={k} className={`chip d-${k.replace("-", "")}`}>{LABEL[k]} {counts[k]}</span>)}</p>
-            <div className="scroll">
-              <table><thead><tr><th>Priority</th><th>Decision</th><th>Sample</th><th>Result</th><th>Edited, 95% interval</th><th>Confidence</th></tr></thead><tbody>
-                {outcome.results.map((r, i) => (
-                  <tr key={r.name + i} className={`pick${i === picked ? " active" : ""}`} onClick={() => setPicked(i)} style={{ cursor: "pointer" }}>
-                    <td>{ranked[i].recommendation.rank ? <b>#{ranked[i].recommendation.rank} {PRIORITY_LABEL[ranked[i].recommendation.priority] || ""}</b> : (PRIORITY_LABEL[ranked[i].recommendation.priority] || "—")}</td>
-                    <td><span className={`chip d-${r.decision.decision.replace("-", "")}`}>{LABEL[r.decision.decision]}</span></td>
-                    <td><b>{r.name}</b></td>
-                    <td>{r.ok ? headline(outcome.workflow, r) : r.error}</td>
-                    <td>{r.ok ? `${r.summary.editedPct}% (${interval(r.intervals?.editedPct)})` : ""}</td>
-                    <td>{r.confidence ? r.confidence.tier : ""}</td>
-                  </tr>
-                ))}
-              </tbody></table>
-            </div>
-            {result && (
-              <Detail
-                workflow={outcome.workflow}
-                result={result}
-                headerExtra={
-                  <div>
-                    <p><b>{LABEL[result.decision.decision]}.</b> {result.decision.reasons.join(" ")} <span className="muted">{result.decision.next}</span></p>
-                    {recommendation && recommendation.priority !== "none" && (
-                      <p>
-                        <b>{/^KO score/.test(recommendation.basis || "") ? "KO score" : /^HDR score/.test(recommendation.basis || "") ? "HDR score, lower bound" : "Knockout support"} {recommendation.score} ({recommendation.tier}).</b>{" "}
-                        {recommendation.action}{" "}
-                        <span className="muted">
-                          {recommendation.why.join(" | ")}{recommendation.flags.length ? ` Note: ${recommendation.flags.join("; ")}.` : ""}
-                        </span>
-                      </p>
-                    )}
-                    <p>
-                      <button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("svg")}>Clone summary figure (SVG)</button>
-                      <button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("png")}>Clone summary figure (PNG, 300 dpi)</button>
-                      <button type="button" className="link" disabled={figureBusy || !result.ok} onClick={() => figure("pdf")}>Clone summary figure (PDF)</button>
-                    </p>
+
+            {/* Side-by-Side Master-Detail Results Split */}
+            <div className="qc-results-split">
+              {/* LEFT: Clone Screening Table (Master) */}
+              <div className="qc-master-pane">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                  <h3 style={{ margin: 0, fontSize: "14.5px" }}>
+                    Clone Screening Table ({outcome.results.length})
+                  </h3>
+                  <div className="chips" style={{ margin: 0 }}>
+                    {DECISION_ORDER.map((k) => (
+                      <span key={k} className={`chip d-${k.replace("-", "")}`} style={{ marginBottom: "2px" }}>
+                        {LABEL[k]} {counts[k]}
+                      </span>
+                    ))}
                   </div>
-                }
-              />
-            )}
+                </div>
+                <div className="muted" style={{ fontSize: "11.5px", marginBottom: "6px" }}>
+                  Click any clone row below to inspect its chromatogram and allele breakdown on the right →
+                </div>
+                <div className="scroll" style={{ maxHeight: "620px", margin: 0 }}>
+                  <table style={{ margin: 0 }}>
+                    <thead>
+                      <tr>
+                        <th>Priority</th>
+                        <th>Decision</th>
+                        <th>Sample</th>
+                        <th>Result</th>
+                        <th>Edited (95% CI)</th>
+                        <th>Conf.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outcome.results.map((r, i) => (
+                        <tr key={r.name + i} className={`pick${i === picked ? " active" : ""}`} onClick={() => setPicked(i)} style={{ cursor: "pointer" }}>
+                          <td>{ranked[i].recommendation.rank ? <b>#{ranked[i].recommendation.rank} {PRIORITY_LABEL[ranked[i].recommendation.priority] || ""}</b> : (PRIORITY_LABEL[ranked[i].recommendation.priority] || "—")}</td>
+                          <td><span className={`chip d-${r.decision.decision.replace("-", "")}`}>{LABEL[r.decision.decision]}</span></td>
+                          <td><b>{r.name}</b></td>
+                          <td>{r.ok ? headline(outcome.workflow, r) : r.error}</td>
+                          <td>{r.ok ? `${r.summary.editedPct}% (${interval(r.intervals?.editedPct)})` : ""}</td>
+                          <td>{r.confidence ? r.confidence.tier : ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* RIGHT: Selected Clone Inspector (Detail) */}
+              <div className="qc-detail-pane">
+                {result && (
+                  <Detail
+                    workflow={outcome.workflow}
+                    result={result}
+                    headerExtra={
+                      <div>
+                        <p style={{ margin: "4px 0" }}><b>{LABEL[result.decision.decision]}.</b> {result.decision.reasons.join(" ")} <span className="muted">{result.decision.next}</span></p>
+                        {recommendation && recommendation.priority !== "none" && (
+                          <p style={{ margin: "4px 0" }}>
+                            <b>{/^KO score/.test(recommendation.basis || "") ? "KO score" : /^HDR score/.test(recommendation.basis || "") ? "HDR score, lower bound" : "Knockout support"} {recommendation.score} ({recommendation.tier}).</b>{" "}
+                            {recommendation.action}{" "}
+                            <span className="muted">
+                              {recommendation.why.join(" | ")}{recommendation.flags.length ? ` Note: ${recommendation.flags.join("; ")}.` : ""}
+                            </span>
+                          </p>
+                        )}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+                          <button type="button" className="link" style={{ margin: 0 }} disabled={figureBusy || !result.ok} onClick={() => figure("svg")}>Clone figure (SVG)</button>
+                          <button type="button" className="link" style={{ margin: 0 }} disabled={figureBusy || !result.ok} onClick={() => figure("png")}>Clone figure (PNG, 300 dpi)</button>
+                          <button type="button" className="link" style={{ margin: 0 }} disabled={figureBusy || !result.ok} onClick={() => figure("pdf")}>Clone figure (PDF)</button>
+                        </div>
+                      </div>
+                    }
+                  />
+                )}
+              </div>
+            </div>
             <details className="aligned" style={{ marginTop: "12px" }}>
               <summary><b>Multi-Clone Publication Figures &amp; Cohort Alignments (SVG / PNG / PDF)</b></summary>
               {selectionSvg && (
@@ -924,7 +1023,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                 const bytes = buffers.current.get(name); if (!bytes) throw new Error(`Trace no longer available: ${name}`); return bytes;
               }} />
             </details>
-          </>
+          </div>
         );
       })()}
     </div>
