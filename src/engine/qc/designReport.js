@@ -60,8 +60,21 @@ export function parseDesignReport(html) {
         const nameHeading = [...donorNodes].reverse().find((n) => n.tag === "h3" && nodes.indexOf(n) < nodes.indexOf(label));
         const name = nameHeading ? text(nameHeading) : "ssODN donor";
         if (donors.some((d) => d.name === name && (d.sequence === sequence || d.sequence === reverseComplement(sequence)))) continue;
-        const card = label.parent && label.parent.parent; const recommended = /Order this strand|Recommended to order/i.test(card ? text(card) : "");
+        const card = label.parent && label.parent.parent;
+        const cardText = card ? text(card) : "";
+        const isOppositeRef = /Opposite\s+(?:donor\s+)?strand|Reference\s+strand/i.test(cardText);
+        if (isOppositeRef) continue;
+        const recommended = /Order this strand|Recommended to order|Candidate donor|Candidate strand/i.test(cardText) || !isOppositeRef;
         donors.push({ name, sequence, recommended });
+      }
+      if (!donors.length) {
+        for (const node of donorNodes) {
+          if (node.tag !== "div" || !node.children.length || node.children.some((c) => c.tag !== "span")) continue;
+          const sequence = dna(node);
+          if (valid(sequence, 60, 4000) && !donors.some((d) => d.sequence === sequence || d.sequence === reverseComplement(sequence))) {
+            donors.push({ name: "HDR donor", sequence, recommended: true });
+          }
+        }
       }
     }
     if (guides.length) designs.push({ title: start ? text(start) : "Assured design", guides, donors, protein: parseProteinNotes(proteinTexts) });

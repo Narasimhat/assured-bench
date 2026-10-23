@@ -64,7 +64,14 @@ export function OrderView({ currentProject, onProceedToQc }) {
   }
 
   const guideCount = (currentProject.designResult.gs || currentProject.designResult.guides || []).length;
-  const donorSeq = currentProject.designResult.donor || currentProject.designResult.os?.[0]?.od || currentProject.designResult.donors?.[0]?.sequence || "";
+  const donorList = currentProject.designResult.os?.length
+    ? currentProject.designResult.os.map((d) => d.od || d.sequence || d.genomicDonor || "")
+    : currentProject.designResult.donors?.length
+      ? currentProject.designResult.donors.map((d) => typeof d === "string" ? d : (d.sequence || d.od || ""))
+      : currentProject.designResult.donor
+        ? [currentProject.designResult.donor]
+        : [];
+  const validDonors = donorList.filter(Boolean);
   const primerCount = (currentProject.designResult.ps || []).length;
 
   return (
@@ -115,7 +122,9 @@ export function OrderView({ currentProject, onProceedToQc }) {
           <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "#f0f6fc", border: "1px solid var(--border-color)" }}>
             <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Repair Donor Template</div>
             <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-main)" }}>
-              {donorSeq ? `1 ssODN (${donorSeq.length} nt)` : "None (Knockout / Excision)"}
+              {validDonors.length > 0
+                ? `${validDonors.length} ssODN${validDonors.length === 1 ? "" : "s"} (${validDonors.map((d) => `${d.length} nt`).join(", ")})`
+                : "None (Knockout / Excision)"}
             </div>
           </div>
           <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "#f0f6fc", border: "1px solid var(--border-color)" }}>

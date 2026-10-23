@@ -80,12 +80,14 @@ export function readDesignForForm(text, { needsDonor = false, isJunction = false
   const d = readDesign(text);
   if (d.kind === "none") throw new Error("The file is empty.");
   if (d.kind === "spec") return { kind: "spec", spec: d.spec, label: d.label, note: "" };
-  const donor = d.donors.find((x) => x.recommended) || d.donors[0] || null;
+  const chosenDonors = d.donors.filter((x) => x.recommended);
+  const donorList = chosenDonors.length ? chosenDonors : d.donors;
+  const donor = donorList[0] || null;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const notes = [`Read ${plural(d.guides.length, "guide")} and ${plural(d.donors.length, "donor")} from the design report "${d.label}"${d.designs.length > 1 ? ` (the file holds ${d.designs.length} designs; the first was used)` : ""}.`];
   if (needsDonor && !donor) notes.push("The report has no ssODN donor (a long knock-in donor is not read from a report): paste it below.");
   if (isJunction) notes.push("The junction check needs the .json design file; a report gives only guides and donors.");
-  return { kind: "report", guides: d.guides.join(", "), donor: donor ? donor.sequence : "", label: d.label, protein: d.protein || [], note: notes.join(" ") };
+  return { kind: "report", guides: d.guides.join(", "), donor: donorList.map((x) => x.sequence).join("\n"), donors: donorList, label: d.label, protein: d.protein || [], note: notes.join(" ") };
 }
 
 export function inferWorkflow(spec) {
@@ -94,9 +96,9 @@ export function inferWorkflow(spec) {
   return spec.guides.length > 1 ? "deletion" : "knockout";
 }
 
-/** The donors of a design report that are used together: all the ones recommended to order (ssODNs matched to each guide), else the first; one donor stays a plain sequence. */
+/** The donors of a design report that are used together: all the ones recommended to order (ssODNs matched to each guide), else all parsed donors; one donor stays a plain sequence. */
 export function reportDonors(donors) {
-  const chosen = donors.filter((d) => d.recommended); const list = chosen.length ? chosen : donors.slice(0, 1);
+  const chosen = donors.filter((d) => d.recommended); const list = chosen.length ? chosen : donors;
   if (list.length <= 1) return list[0] ? list[0].sequence : "";
   return list.map((d) => ({ name: d.name, sequence: d.sequence }));
 }

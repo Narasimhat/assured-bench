@@ -155,22 +155,64 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
   const guides = guidesText.split(/[,;\s]+/).map(cleanDna).filter(Boolean);
   const lowCount = pairs.filter((p) => p.confidence === "low").length;
 
-  const designGuides = useMemo(() => {
-    if (design.kind === "report") return design.guides || [];
-    if (design.kind === "spec") return (design.spec?.guides || []).map((g) => g.spacer || g.sequence || "");
+  const designGuideItems = useMemo(() => {
+    if (design.kind === "report") {
+      return (design.chosen?.guides || []).map((g, i) => ({
+        name: g.name || `Guide ${i + 1}`,
+        sequence: g.sequence || "",
+      }));
+    }
+    if (design.kind === "spec") {
+      return (design.spec?.guides || []).map((g, i) => ({
+        name: g.name || `Guide ${i + 1}`,
+        sequence: g.spacer || g.sequence || "",
+        pam: g.pam || "",
+        strand: g.strand || "",
+      }));
+    }
     return [];
   }, [design]);
 
-  const designDonors = useMemo(() => {
-    if (design.kind === "report") return design.donors || [];
-    if (design.kind === "spec") return design.spec?.donors || [];
-    return [];
+  const designGuides = useMemo(() => designGuideItems.map((g) => g.sequence).filter(Boolean), [designGuideItems]);
+
+  const designDonorItems = useMemo(() => {
+    const raw = design.kind === "report" ? (design.donors || []) : design.kind === "spec" ? (design.spec?.donors || []) : [];
+    return raw
+      .map((d, i) => {
+        if (typeof d === "string") return { name: `ssODN ${i + 1}`, sequence: d };
+        const seq = d?.orderSequence || d?.sequence || "";
+        return { name: d?.name || `ssODN ${i + 1}`, sequence: seq, genomicSequence: d?.sequence || seq };
+      })
+      .filter((d) => d.sequence);
   }, [design]);
+
+  const manualDonors = useMemo(() => {
+    const raw = String(donorText || "").trim();
+    if (!raw) return [];
+    if (/^>/m.test(raw)) {
+      return raw
+        .split(/^>/m)
+        .map((block) => block.trim())
+        .filter(Boolean)
+        .map((block, i) => {
+          const lines = block.split(/\r?\n/);
+          const name = lines[0].trim() || `ssODN ${i + 1}`;
+          const sequence = cleanDna(lines.slice(1).join(""));
+          return { name, sequence };
+        })
+        .filter((d) => d.sequence);
+    }
+    return raw
+      .split(/[,;\r\n]+/)
+      .map((part, i) => ({ name: `ssODN ${i + 1}`, sequence: cleanDna(part.replace(/\d+/g, "")) }))
+      .filter((d) => d.sequence);
+  }, [donorText]);
 
   const handlePopulateFromDesign = () => {
     if (designGuides.length) setGuidesText(designGuides.join(", "));
-    const dSeq = typeof designDonors[0] === "string" ? designDonors[0] : (designDonors[0]?.sequence || "");
-    if (dSeq) setDonorText(dSeq);
+    if (designDonorItems.length) {
+      setDonorText(designDonorItems.map((d) => d.sequence).join("\n"));
+    }
     setCustomSequenceMode(true);
   };
 
@@ -189,7 +231,9 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       const coding = geneText ? parseCodingFields({ regionsText, epitopeText }) : { options: {}, problems: [] };
       if (coding.problems.length) { setError(coding.problems.join(" ")); setRunning(false); return; }
       const effectiveDesign = customSequenceMode || !designName ? { kind: "none" } : design;
-      const cleanDonor = cleanDna(donorText.replace(/^>.*$/gm, "").replace(/\d+/g, ""));
+      const cleanDonor = manualDonors.length > 1
+        ? manualDonors
+        : (manualDonors[0]?.sequence || "");
       const { tasks, problems } = planTasks({ pairs, getTrace, design: effectiveDesign, guides, donor: cleanDonor, nuclease, sampleType: typeOverride, goal, genbank: geneText, codingOptions: coding.options });
       if (!tasks.length) { setError(problems.join(" ") || "Nothing to analyse."); setRunning(false); return; }
       setProgress({ done: 0, total: tasks.length });
@@ -431,13 +475,9 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
         <p><b>{design.error ? "Design needs attention:" : "Design loaded & parsed:"}</b> {designName} <button type="button" disabled={running} onClick={() => designPicker.current.click()}>Replace design</button> <button type="button" disabled={running} onClick={() => { setDesignName(""); setDesignText(""); setDesignIndex(0); setOutcome(null); setError(""); }}>Remove design</button></p>
         {design.error ? <p className="error">{design.error} Replace or remove this file to continue.</p> : design.kind === "report" ? <>
           {design.designs.length > 1 && <><label htmlFor="q-design-choice">Design in this report</label><select id="q-design-choice" disabled={running} value={designIndex} onChange={(e) => { setDesignIndex(Number(e.target.value)); setOutcome(null); }}>{design.designs.map((d, i) => <option key={i} value={i}>{d.title}</option>)}</select></>}
-          <p>Imported {design.label}: {design.guides.length} guides, {design.donors.length} donors.{design.donors.filter((d) => d.recommended).length > 1 ? ` The ${design.donors.filter((d) => d.recommended).length} recommended donors are used together.` : ""}</p>
-          <ul>{design.chosen.guides.map((g) => <li key={g.sequence}>{g.name}: <code>{g.sequence}</code></li>)}</ul>
-          {!traceNames.length && <p className="note" style={{ color: "var(--success)", fontWeight: 500, margin: "0.5rem 0" }}>✓ Design ready. Now please provide your matching parental control (e.g. Ctrl.ab1) and edited clone sample .ab1 files above.</p>}
+          {!traceNames.length && <p className="note" style={{ color: "var(--success)", fontWeight: 500, margin: "0.5rem 0" }}>✓ Design ready ({designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}). Now provide your parental control and edited clone .ab1 files above.</p>}
         </> : design.kind === "spec" ? <>
-          <p><b>Imported design:</b> {design.spec?.design?.gene ? `${design.spec.design.gene} — ` : ""}{design.label} ({design.spec?.guides?.length || 0} guide{design.spec?.guides?.length === 1 ? "" : "s"}{design.spec?.donors?.length ? `, ${design.spec.donors.length} donor${design.spec.donors.length === 1 ? "" : "s"}` : ""}).</p>
-          {design.spec?.guides?.length > 0 && <ul>{design.spec.guides.map((g, gi) => <li key={g.spacer || gi}><strong>{g.name || `Guide ${gi + 1}`}</strong>: <code>{g.spacer}</code> (PAM: {g.pam || "NGG"}{g.strand ? `, strand ${g.strand}` : ""})</li>)}</ul>}
-          {!traceNames.length && <p className="note" style={{ color: "var(--success)", fontWeight: 500, margin: "0.5rem 0" }}>✓ Design ready. Now please provide your matching parental control (e.g. Ctrl.ab1) and edited clone sample .ab1 files above.</p>}
+          {!traceNames.length && <p className="note" style={{ color: "var(--success)", fontWeight: 500, margin: "0.5rem 0" }}>✓ Design ready ({design.spec?.design?.gene ? `${design.spec.design.gene} — ` : ""}{design.label}: {designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}). Now provide your parental control and edited clone .ab1 files above.</p>}
         </> : <p className="note">The design is empty or could not be read. Replace or remove it to continue.</p>}
       </div>}
 
@@ -449,7 +489,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               <span>🧬 CRISPR Sequences: gRNA &amp; Donor</span>
             </h3>
             <p className="muted" style={{ margin: "2px 0 0", fontSize: "12px" }}>
-              Specify gRNA spacer sequences (for cut site determination) and donor ssODN (for knock-in / point-mutation calling).
+              Specify gRNA spacer sequences (for cut site determination) and donor ssODN templates (for knock-in / point-mutation calling).
             </p>
           </div>
           {designName && (
@@ -479,30 +519,46 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
 
         {designName && !customSequenceMode ? (
           <div style={{ padding: "10px 14px", background: "var(--success-bg)", borderRadius: "8px", border: "1px solid var(--success-border)", fontSize: "13px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-              <span style={{ fontWeight: 600, color: "var(--success)" }}>✓ Using sequences from design: {designName}</span>
-              <span className="muted" style={{ fontSize: "11px" }}>Click &quot;Customize / Override&quot; to test alternate gRNAs or donors</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
+              <span style={{ fontWeight: 600, color: "var(--success)" }}>
+                ✓ Using sequences from design: {designName} ({designGuideItems.length} gRNA{designGuideItems.length === 1 ? "" : "s"}, {designDonorItems.length} donor{designDonorItems.length === 1 ? "" : "s"})
+              </span>
+              <span className="muted" style={{ fontSize: "11px" }}>Click &quot;Customize / Override&quot; to edit gRNAs or ssODNs</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
               <div>
-                <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>gRNA Spacers:</strong>
-                {designGuides.length > 0 ? (
-                  <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
-                    {designGuides.map((g, idx) => (
+                <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  gRNA Spacers ({designGuideItems.length}):
+                </strong>
+                {designGuideItems.length > 0 ? (
+                  <ul style={{ margin: "6px 0 0 16px", padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {designGuideItems.map((g, idx) => (
                       <li key={idx} style={{ fontFamily: "monospace", fontSize: "12px" }}>
-                        <strong>Guide {idx + 1}:</strong> <code>{g}</code> ({g.length} nt)
+                        <strong>{g.name || `Guide ${idx + 1}`}:</strong> <code>{g.sequence}</code> ({g.sequence.length} nt{g.pam ? `, PAM: ${g.pam}` : ""})
                       </li>
                     ))}
                   </ul>
                 ) : <span className="muted"> (none specified; cut site will be inferred)</span>}
               </div>
               <div>
-                <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>Donor (ssODN):</strong>
-                {designDonors.length > 0 && (typeof designDonors[0] === "string" ? designDonors[0] : designDonors[0]?.sequence) ? (
-                  <div style={{ marginTop: "4px", fontFamily: "monospace", fontSize: "12px", wordBreak: "break-all", background: "var(--bg-input)", color: "var(--text-main)", border: "1px solid var(--border-color)", padding: "4px 8px", borderRadius: "4px", maxHeight: "60px", overflowY: "auto" }}>
-                    {typeof designDonors[0] === "string" ? designDonors[0] : designDonors[0].sequence} ({((typeof designDonors[0] === "string" ? designDonors[0] : designDonors[0].sequence) || "").length} nt)
+                <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  Donor Templates ({designDonorItems.length} ssODN{designDonorItems.length === 1 ? "" : "s"}):
+                </strong>
+                {designDonorItems.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
+                    {designDonorItems.map((d, idx) => (
+                      <div key={idx} style={{ background: "var(--bg-input)", color: "var(--text-main)", border: "1px solid var(--border-color)", padding: "5px 8px", borderRadius: "4px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", marginBottom: "2px", display: "flex", justifyContent: "space-between" }}>
+                          <span>{d.name || `ssODN ${idx + 1}`}</span>
+                          <span>{d.sequence.length} nt</span>
+                        </div>
+                        <div style={{ fontFamily: "monospace", fontSize: "11.5px", wordBreak: "break-all", maxHeight: "54px", overflowY: "auto" }}>
+                          {d.sequence}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : <div className="muted" style={{ fontSize: "12px", marginTop: "2px" }}>No donor (knockout / deletion workflow)</div>}
+                ) : <div className="muted" style={{ fontSize: "12px", marginTop: "4px" }}>No donor (knockout / deletion workflow)</div>}
               </div>
             </div>
           </div>
@@ -530,7 +586,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                   type="text"
                   value={guidesText}
                   onChange={(e) => setGuidesText(e.target.value.toUpperCase())}
-                  placeholder="e.g. AACCAGTTGCAGGCGCCCCA (comma-separate multiple)"
+                  placeholder="e.g. ACACTGCCAGGCGCTTCTGC, CCCCGGCCTGGTACACTGCC"
                   style={{ fontFamily: "monospace", letterSpacing: "0.5px" }}
                 />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px", alignItems: "center" }}>
@@ -563,22 +619,42 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               <div style={{ flex: "1 1 320px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
                   <label htmlFor="q-donor-main" style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-main)" }}>
-                    Donor Sequence (ssODN, ≤ 300 nt)
+                    Donor Sequence(s) (ssODN, one per line)
                   </label>
-                  <span style={{ fontSize: "11px", fontWeight: 600, color: cleanDna(donorText).length > 300 ? "#f87171" : "var(--text-muted)" }}>
-                    {cleanDna(donorText).length} / 300 nt
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted)" }}>
+                    {manualDonors.length > 0 ? `${manualDonors.length} ssODN${manualDonors.length === 1 ? "" : "s"} (${manualDonors.map((d) => `${d.sequence.length} nt`).join(", ")})` : "0 ssODNs"}
                   </span>
                 </div>
                 <textarea
                   id="q-donor-main"
                   value={donorText}
                   onChange={(e) => setDonorText(e.target.value.toUpperCase())}
-                  placeholder="Paste single-stranded donor sequence (ssODN) with intended edit and silent blocking mutations..."
+                  placeholder="Paste 1 or more single-stranded donor sequences (ssODNs), one per line..."
                   style={{ fontFamily: "monospace", minHeight: "68px", resize: "vertical", fontSize: "12px" }}
                 />
+                {manualDonors.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px", alignItems: "center" }}>
+                    {manualDonors.map((d, di) => (
+                      <span
+                        key={di}
+                        style={{
+                          fontSize: "11px",
+                          fontFamily: "monospace",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          background: "#ecfdf5",
+                          color: "#047857",
+                          border: "1px solid #a7f3d0",
+                        }}
+                      >
+                        {d.name}: {d.sequence.length} nt ✓
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
                   <span className="muted" style={{ fontSize: "11px" }}>
-                    Required for SNP corrections &amp; small tag knock-ins with ≥15 nt homology arms.
+                    Put each matched ssODN on a new line (supports 1–3 donors with ≥15 nt homology arms).
                   </span>
                   {(guidesText || donorText) && (
                     <button
@@ -602,12 +678,15 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                 className="link"
                 style={{ fontSize: "11px", padding: "2px 8px", margin: 0 }}
                 onClick={() => {
-                  setGuidesText("GACCGTAGCTACGTACGTAG");
-                  setDonorText("TGCAGGCGCCCCACGTACCGGACCGTAGCTACGTACGTAGTTCTACCGGAACGTCCGGTACGTAGCTACGTACGTAGACCGT");
+                  setGuidesText("ACACTGCCAGGCGCTTCTGC, CCCCGGCCTGGTACACTGCC");
+                  setDonorText([
+                    "TCGGCCAGAGCACCGAGGAGCTGCGGGTGCGCCTCGCCTCCCACCTGCGCAAGCTGCGTAAGCGGCTCCTCCGCGATGCCGATGACCTCCAAAAGTGCCTGGCTGTCTACCAGGCCGGGGCCCGCGA",
+                    "CCGAGGAGCTGCGGGTGCGCCTCGCCTCCCACCTGCGCAAGCTGCGTAAGCGGCTCCTCCGCGATGCCGATGACCTCCAAAAGTGCCTGGCTGTCTACCAGGCCGGGGCCCGCGAGGGCGCCGAGCG"
+                  ].join("\n"));
                   setCustomSequenceMode(true);
                 }}
               >
-                APOE R176C ssODN Example
+                APOE R176C (2 gRNAs + 2 ssODNs)
               </button>
               <button
                 type="button"
