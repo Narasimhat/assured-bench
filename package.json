@@ -1,0 +1,24 @@
+{
+  "name": "assured-bench",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ASSURED Bench: Unified In-Silico CRISPR Design & Sanger Trace QC Workbench for Genome Engineering Scientists",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "lucide-react": "^1.16.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.3"
+  }
+}

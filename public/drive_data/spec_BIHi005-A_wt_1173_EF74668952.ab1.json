@@ -1,0 +1,42 @@
+{
+  "schema": "assured-qc-design/1",
+  "design": {
+    "type": "manual",
+    "editKind": "deletion",
+    "gene": "MYD88",
+    "label": "Manual entry",
+    "tag": "",
+    "codingStrand": "+"
+  },
+  "reference": {
+    "sequence": "GGGGGGACTACTGGAGAATAGGCTGAGTGCAATTTGGTCTGGAAGTCACATTCCTTGCTCTGCAGGTAATCATCAGAGACAACCACCACCATCCGGCGGCACCTAGGGGAGAGTGGGCAGGCTGCAGGTCCTGTGGCAACTTAGTTCAGCATATCCCCTGGGAATAGCTTCAGGAAGGGCCCACTGTGCCCAGGCTGGACAGTGCACAGCTAGGAGGAGATGCCCAGTATCTGGACCCCAGGGCAGGGCTTCATGCATCCACGCACCCACCCCGTGGCCTTCTAGCCAACCTCTTTTCGATGAGCTCACTAGCAATAGACCAGACACAGGTGCCAGGCAGGACATCGCGGTCAGACACACACAACTTCAGTCGATAGTTTGTCTGTTCCAGTTGCCGGATCATCTCCTGCACAAACTGGATGTCGCTGGGGCAATAGCAGATGAAGGCATCGAAACGCCAAGGGGGCATATGAA",
+    "offset": 0,
+    "convention": "0-based index into the control read"
+  },
+  "guides": [
+    {
+      "name": "MYD88_g1",
+      "spacer": "AGGTGCCAGGCAGGACATCG",
+      "pam": "CGG",
+      "strand": "+",
+      "cut": 344,
+      "protospacerStart": 327,
+      "protospacerEnd": 347,
+      "index": 1
+    },
+    {
+      "name": "MYD88_g2",
+      "spacer": "AAGGCCACGGGGTGGGTGCG",
+      "pam": "TGG",
+      "strand": "-",
+      "cut": 264,
+      "protospacerStart": 261,
+      "protospacerEnd": 281,
+      "index": 2
+    }
+  ],
+  "donors": [],
+  "markers": [],
+  "primers": [],
+  "amplicons": []
+}

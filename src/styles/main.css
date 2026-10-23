@@ -1,0 +1,531 @@
+/* Institutional White & Blue Theme for Assured Genome Studio */
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  
+  /* Canvas & Card Surfaces (Clean Laboratory White) */
+  --bg-app: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f0f6fc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f4f8fd;
+  --bg-input: #ffffff;
+  
+  /* Structural Borders (Subtle academic blue borders) */
+  --border-color: #dbeafe;
+  --border-light: #bfdbfe;
+  --border-strong: #3b82f6;
+  
+  /* Institutional Blue Letters / Typography (WCAG AAA > 15:1 contrast on white) */
+  --text-main: #002244;
+  --text-muted: #1e3a5f;
+  --text-dim: #3b5a7a;
+  
+  /* Biotech Sapphire / Institutional Blue Primary */
+  --primary: #0055aa;
+  --primary-hover: #004080;
+  --primary-glow: rgba(0, 85, 170, 0.2);
+  --primary-bg: #eef5fc;
+  
+  /* Institutional Blue Banner Gradient Tokens */
+  --banner-blue-start: #002244;
+  --banner-blue-mid: #003366;
+  --banner-blue-end: #004080;
+  
+  /* Semantics */
+  --success: #059669;
+  --success-bg: #ecfdf5;
+  --success-border: #a7f3d0;
+  
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+
+  --accent-purple: #6d28d9;
+  --accent-blue: #0055aa;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+h1, h2, h3, h4 {
+  color: #003366;
+  font-weight: 700;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.15s ease;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Header Banner & Navigation (Institutional Blue Banner) */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 2rem;
+  background: linear-gradient(90deg, #002244 0%, #003366 50%, #004080 100%);
+  border-bottom: 2px solid #001a33;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 8px rgba(0, 34, 68, 0.2);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.brand-icon {
+  width: 34px;
+  height: 34px;
+  background: #ffffff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #003366;
+  font-weight: 800;
+  font-size: 1.15rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.brand-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+}
+
+.brand-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  color: #ffffff;
+  font-weight: 600;
+  margin-left: 0.4rem;
+}
+
+/* Header Project Name Input Pill */
+.header-project-pill {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 20, 48, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  padding: 0.25rem 0.65rem;
+  gap: 0.5rem;
+}
+
+.header-project-pill label {
+  color: #93c5fd;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.header-project-pill input {
+  background: #ffffff;
+  color: #003366;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 5px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  width: 190px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.header-project-pill input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.35);
+}
+
+/* Pipeline Stepper inside Blue Banner */
+.stepper-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 20, 48, 0.45);
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.step-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.step-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.step-btn.active {
+  background-color: #ffffff;
+  color: #003366;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.step-btn.completed {
+  color: #ffffff;
+}
+
+.step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.step-btn.active .step-num {
+  background: #003366;
+  color: #ffffff;
+}
+
+.step-btn.completed .step-num {
+  background: #10b981;
+  color: #ffffff;
+}
+
+/* Layout */
+.app-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 34, 68, 0.05), 0 1px 2px rgba(0, 34, 68, 0.03);
+}
+
+.card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #003366;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Status Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge-ready, .badge-success {
+  background-color: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success);
+}
+
+.badge-review, .badge-warning {
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning);
+}
+
+.badge-blocked, .badge-danger {
+  background-color: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+}
+
+/* Institutional Blue Banners */
+.banner-blue {
+  background: linear-gradient(90deg, #eef5fc 0%, #f4f8fd 100%);
+  border: 1px solid #c8dcf4;
+  border-left: 4px solid #0055aa;
+  border-radius: 8px;
+  padding: 0.85rem 1.25rem;
+  color: var(--text-main);
+}
+
+.banner-blue-solid {
+  background: linear-gradient(90deg, #002244 0%, #003366 50%, #004080 100%);
+  border: 1px solid #001a33;
+  border-radius: 8px;
+  padding: 0.85rem 1.25rem;
+  color: #ffffff;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  box-shadow: 0 2px 8px var(--primary-glow);
+}
+
+.btn-secondary {
+  background-color: #f0f6fc;
+  color: #003366;
+  border: 1px solid #c8dcf4;
+  font-weight: 600;
+}
+
+.btn-secondary:hover {
+  background-color: #e2eefb;
+  border-color: #93c5fd;
+  color: #002244;
+}
+
+/* Header buttons on top of institutional blue banner */
+.app-header .btn-secondary {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  font-weight: 600;
+}
+
+.app-header .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.28);
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.65);
+}
+
+.btn-success {
+  background-color: var(--success);
+  color: #ffffff;
+}
+
+/* Grid & Layout Helpers */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+th {
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #003366;
+  background-color: #f0f6fc;
+  border-bottom: 2px solid #b9d5f5;
+  font-weight: 700;
+}
+
+td {
+  padding: 0.85rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+tr:hover td {
+  background-color: #f8fbfe;
+}
+
+/* Dropzone */
+.dropzone {
+  border: 2px dashed #b9d5f5;
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  background: #f8fbfe;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.dropzone:hover, .dropzone.active {
+  border-color: var(--primary);
+  background: var(--primary-bg);
+}
+
+/* Plate Grid (96-well) */
+.plate-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 6px;
+  padding: 1rem;
+  background: #f0f6fc;
+  border-radius: 10px;
+  border: 1px solid #bfdbfe;
+}
+
+.well {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.well:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.well-accept {
+  background-color: var(--success);
+  color: #fff;
+}
+
+.well-hold {
+  background-color: var(--warning);
+  color: #fff;
+}
+
+.well-reject {
+  background-color: #94a3b8;
+  color: #ffffff;
+}
+
+.well-empty {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+}
+
+.project-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.app-header {
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.project-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.project-context input { flex: 1; min-width: 220px; }
+.project-context span { flex-basis: 100%; }
+.stepper-container { flex-wrap: wrap; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+.quick-start summary { cursor: pointer; font-weight: 600; color: var(--primary); }
+.quick-start summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.quick-start-steps { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; padding: 0; }
+.quick-start-steps li { border: 1px solid var(--border-color); border-radius: 10px; padding: 1rem; background: var(--bg-surface); }
+.quick-start-number { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--primary-bg); color: var(--primary); border: 1px solid var(--border-color); margin-bottom: 0.5rem; font-weight: 700; }
+.quick-start h3 { font-size: 0.95rem; margin-bottom: 0.5rem; }
+.quick-start h3 button { color: #003366; font-size: inherit; font-weight: 700; text-align: left; }
+.quick-start p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+.quick-start-paths { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem; }
+@media (max-width: 1000px) { .quick-start-steps { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .quick-start-steps, .quick-start-paths { grid-template-columns: 1fr; } }
+
+.quick-start-example { border-top: 1px solid var(--border-color); padding: 1rem 0; }
+.quick-start-example ol { padding-left: 1.25rem; margin: 0.75rem 0; color: var(--text-muted); font-size: 0.85rem; }
+.quick-start-example li { margin-bottom: 0.5rem; }

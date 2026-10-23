@@ -1,0 +1,10 @@
+{
+  "sourceUrl": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NG_017013.2&rettype=gbwithparts&retmode=text",
+  "accession": "NG_017013.2",
+  "transcriptId": "NM_000546.5",
+  "proteinId": "NP_000537.3",
+  "retrievedAt": "2026-10-15T19:55:45.878Z",
+  "originalSha256": "c970910b87b97b723e3b40e076838e39c6f15653d66544b9ec96ad2c925094d2",
+  "derivedSha256": "cab4514e797fd7cb7971ba8f7fc996d33b56ed4a374c5e87ded18651e5272637",
+  "transformation": "Keep source, TP53 gene, variant 1 mRNA/CDS and matching exons; retain original sequence and coordinates."
+}

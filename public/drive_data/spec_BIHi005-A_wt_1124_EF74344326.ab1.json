@@ -1,0 +1,156 @@
+{
+  "schema": "assured-qc-design/1",
+  "design": {
+    "type": "manual",
+    "editKind": "snp",
+    "gene": "APOE",
+    "label": "2 donors with 3 substitutions (1 carried by every donor)",
+    "tag": "",
+    "codingStrand": "+"
+  },
+  "reference": {
+    "sequence": "GGGGCGGGGCGAGAACGCGGGCACGGCTGTCCAAGGAGCTGCAGGCGGCGCAGGCCCGGCTGGGCGCGGACATGGAGGACGTGTGCGGCCGCCTGGTGCAGTACCGCGGCGAGGTGCAGGCCATGCTCGGCCAGAGCACCGAGGAGCTGCGGGTGCGCCTCGCCTCCCACCTGCGCAAGCTGCGTAAGCGGCTCCTCCGCGATGCCGATGACCTGCAGAAGCGCCTGGCAGTGTACCAGGCCGGGGCCCGCGAGGGCGCCGAGCGCGGCCTCAGCGCCATCCGCGAGCGCCTGGGGCCCCTGGTGGAACAGGGCCGCGTGCGGGCCGCCACTGTGGGCTCCCTGGCCGGCCAGCCGCTACAGGAGCGGGCCCAGGCCTGGGGCGAGCGGCTGCGCGCGCGGATGGAGGAGATGGGCAGCCGGACCCGCGACCGCCTGGACGAGGTGAAGGAGCAGGTGGCGGAGGTGCGCGCCAAGCTGGAGGACAAGGGGCCCCAGCCATA",
+    "offset": 0,
+    "convention": "0-based index into the control read"
+  },
+  "guides": [
+    {
+      "name": "APOE_g1",
+      "spacer": "CGATGACCTGCAGAAGCGCC",
+      "pam": "TGG",
+      "strand": "+",
+      "cut": 222,
+      "protospacerStart": 205,
+      "protospacerEnd": 225,
+      "index": 1
+    },
+    {
+      "name": "APOE_g2",
+      "spacer": "ACACTGCCAGGCGCTTCTGC",
+      "pam": "AGG",
+      "strand": "-",
+      "cut": 217,
+      "protospacerStart": 214,
+      "protospacerEnd": 234,
+      "index": 2
+    }
+  ],
+  "donors": [
+    {
+      "name": "ssODN1 (- strand target)",
+      "format": "ssodn",
+      "sequence": "AGCGGCTCCTCCGCGATGCCGATGACCTGCAGAAGTGCCTAGCAGTGTACCAGGCCGGGGCCCGCGAGGGCGCCGAGCGCGGCCTCAGCGCCATCCGCGAGCGCCTGGGGCCCCTGGTGGAACAGGG",
+      "refStart": 186,
+      "refEnd": 313,
+      "insertBp": 0,
+      "replacedBp": 0,
+      "arm5": null,
+      "arm3": null,
+      "insertStart": null,
+      "guide": null,
+      "orientation": "reverse complement of the entered sequence",
+      "carriesMarkers": [
+        221,
+        226
+      ]
+    },
+    {
+      "name": "ssODN2 (+ strand target)",
+      "format": "ssodn",
+      "sequence": "TCGGCCAGAGCACCGAGGAGCTGCGGGTGCGCCTCGCCTCCCACCTGCGCAAGCTGCGTAAGCGGCTCCTCCGCGATGCCGATGATCTGCAGAAGTGCCTGGCAGTGTACCAGGCCGGGGCCCGCGA",
+      "refStart": 126,
+      "refEnd": 253,
+      "insertBp": 0,
+      "replacedBp": 0,
+      "arm5": null,
+      "arm3": null,
+      "insertStart": null,
+      "guide": null,
+      "orientation": "as entered",
+      "carriesMarkers": [
+        211,
+        221
+      ]
+    }
+  ],
+  "markers": [
+    {
+      "pos": 211,
+      "ref": "C",
+      "alt": "T",
+      "role": "blocking",
+      "guide": null,
+      "label": "blocking change",
+      "change": "C>T",
+      "protein": {
+        "residue": 172,
+        "from": "D",
+        "to": "D",
+        "codonFrom": "GAC",
+        "codonTo": "GAT",
+        "silent": true,
+        "label": "D172D"
+      }
+    },
+    {
+      "pos": 221,
+      "ref": "C",
+      "alt": "T",
+      "role": "intended",
+      "guide": null,
+      "label": "intended change",
+      "change": "C>T",
+      "protein": {
+        "residue": 176,
+        "from": "R",
+        "to": "C",
+        "codonFrom": "CGC",
+        "codonTo": "TGC",
+        "silent": false,
+        "label": "R176C"
+      }
+    },
+    {
+      "pos": 226,
+      "ref": "G",
+      "alt": "A",
+      "role": "blocking",
+      "guide": null,
+      "label": "blocking change",
+      "change": "G>A",
+      "protein": {
+        "residue": 177,
+        "from": "L",
+        "to": "L",
+        "codonFrom": "CTG",
+        "codonTo": "CTA",
+        "silent": true,
+        "label": "L177L"
+      }
+    }
+  ],
+  "primers": [],
+  "amplicons": [],
+  "protein": {
+    "strand": "+",
+    "frame": 2,
+    "offset": 103,
+    "cdsEnd": null,
+    "notes": [
+      {
+        "residue": 177,
+        "from": "L",
+        "to": "L",
+        "codonFrom": "CTG",
+        "codonTo": "CTA"
+      },
+      {
+        "residue": 172,
+        "from": "D",
+        "to": "D",
+        "codonFrom": "GAC",
+        "codonTo": "GAT"
+      }
+    ]
+  }
+}
