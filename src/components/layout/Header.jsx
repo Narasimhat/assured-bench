@@ -1,5 +1,5 @@
 import React from "react";
-import { Dna, Save, FolderOpen, Download, Upload, Plus } from "lucide-react";
+import { Dna, Save, FolderOpen, Download, Upload, Plus, FlaskConical, Check } from "lucide-react";
 
 export function Header({
   activeStep,
@@ -13,43 +13,35 @@ export function Header({
   onExportBundle,
   onImportBundle
 }) {
+  const hasDesign = Boolean(currentProject?.designResult);
+  const qcCount = currentProject?.qcResults?.length || 0;
+  const acceptedCount = (currentProject?.qcResults || []).filter(
+    r => (r.decision?.decision || r.decision?.verdict) === "accept"
+  ).length;
+
   const steps = [
-    { id: "design", label: "1. Design" },
-    { id: "order", label: "2. Order" },
-    { id: "qc", label: "3. Trace Analysis" },
-    { id: "decision", label: "4. Reports" }
+    { id: "design", label: "Design", done: hasDesign },
+    { id: "order", label: "Order", done: hasDesign },
+    { id: "qc", label: "Trace Analysis", done: qcCount > 0, badge: qcCount > 0 ? qcCount : null },
+    { id: "decision", label: "Reports", done: qcCount > 0, badge: acceptedCount > 0 ? `${acceptedCount}✓` : null }
   ];
 
   return (
     <header className="app-header">
-      <div className="brand" style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+      <div className="brand" style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
           <div className="brand-icon">
             <Dna size={20} />
           </div>
           <div>
-            <a className="brand-title" href="/" title="ASSURED home" style={{ textDecoration: "none" }}>ASSURED Bench</a>
-            <span className="brand-badge">v1.0</span>
+            <a className="brand-title" href="/" title="ASSURED Bench Home" style={{ textDecoration: "none" }}>ASSURED Bench</a>
+            <span className="brand-badge">v1.1</span>
           </div>
         </div>
 
         {/* Inline Project Identity */}
-        <div className="header-project-pill" style={{
-          display: "flex",
-          alignItems: "center",
-          background: "rgba(0, 20, 48, 0.55)",
-          border: "1px solid rgba(255, 255, 255, 0.25)",
-          borderRadius: "8px",
-          padding: "0.2rem 0.6rem",
-          gap: "0.5rem"
-        }}>
-          <label htmlFor="experiment-name" style={{
-            color: "#93c5fd",
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            letterSpacing: "0.02em",
-            textTransform: "uppercase"
-          }}>
+        <div className="header-project-pill">
+          <label htmlFor="experiment-name">
             Project:
           </label>
           <input
@@ -59,17 +51,6 @@ export function Header({
             onChange={e => onUpdateProject && onUpdateProject({ name: e.target.value })}
             placeholder="Untitled Experiment"
             aria-label="Experiment name"
-            style={{
-              background: "#ffffff",
-              color: "#003366",
-              border: "1px solid rgba(255, 255, 255, 0.6)",
-              borderRadius: "5px",
-              padding: "0.25rem 0.55rem",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              width: "180px",
-              outline: "none"
-            }}
           />
         </div>
       </div>
@@ -81,16 +62,42 @@ export function Header({
             key={s.id}
             aria-current={activeStep === s.id ? "step" : undefined}
             onClick={() => setActiveStep(s.id)}
-            className={`step-btn ${activeStep === s.id ? "active" : ""}`}
+            className={`step-btn ${activeStep === s.id ? "active" : ""} ${s.done && activeStep !== s.id ? "completed" : ""}`}
           >
-            <span className="step-num">{idx + 1}</span>
-            <span>{s.label.split(". ")[1]}</span>
+            <span className="step-num">
+              {s.done && activeStep !== s.id ? <Check size={13} /> : idx + 1}
+            </span>
+            <span>{s.label}</span>
+            {s.badge && (
+              <span style={{
+                fontSize: "0.7rem",
+                padding: "0.05rem 0.4rem",
+                borderRadius: "999px",
+                background: activeStep === s.id ? "#e0f2fe" : "rgba(255,255,255,0.22)",
+                color: activeStep === s.id ? "#0369a1" : "#ffffff",
+                fontWeight: 700
+              }}>
+                {s.badge}
+              </span>
+            )}
           </button>
         ))}
       </nav>
 
       {/* Project Controls */}
       <div className="project-controls">
+        {onOpenProtocol && (
+          <button
+            className="btn btn-secondary"
+            onClick={onOpenProtocol}
+            title="Open ASSURED wet-lab protocol & RNP molarity calculator"
+            style={{ padding: "0.45rem 0.85rem", fontSize: "0.85rem" }}
+          >
+            <FlaskConical size={16} />
+            <span>Protocol</span>
+          </button>
+        )}
+
         <button
           className="btn btn-secondary"
           onClick={onNewProject}

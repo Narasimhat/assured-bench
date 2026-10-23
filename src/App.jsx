@@ -4,9 +4,12 @@ import { DesignView } from "./components/design/DesignView.jsx";
 import { OrderView } from "./components/order/OrderView.jsx";
 import { QcView } from "./components/qc/QcView.jsx";
 import { DecisionView } from "./components/qc/DecisionView.jsx";
+import { QuickStart } from "./components/common/QuickStart.jsx";
 import { saveProject, listProjects, deleteProject, exportProjectBundle } from "./services/storage.js";
 import { ProtocolModal } from "./components/common/ProtocolModal.jsx";
 import { createProject, updateProject, parseProject } from "./services/projectState.js";
+import { runDesign, summarizeProcurementReadiness } from "./engine/design/designEngine.js";
+import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "./engine/design/designScheme.js";
 import { X, Trash2, FolderOpen } from "lucide-react";
 
 export function App() {
@@ -25,7 +28,7 @@ export function App() {
 
   const showToast = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 3500);
   };
 
   const loadProjects = async () => {
@@ -57,7 +60,7 @@ export function App() {
     showToast("Started fresh experiment.");
   };
 
-  const handleDesignExample = async () => {
+  const handleLoadPreset = async (presetKey = "tp53_flag") => {
     setIsLoadingExample(true);
     try {
       const base = import.meta.env.BASE_URL;
@@ -65,22 +68,88 @@ export function App() {
       if (!response.ok) throw new Error(`Reference download failed (HTTP ${response.status}).`);
       const raw = await response.text();
       if (!raw.includes("VERSION     NG_017013.2") || !raw.includes("ORIGIN")) throw new Error("The example reference is invalid.");
-      // Keep the current work available in Projects before starting the example.
-      await saveProject(currentProject);
-      await loadProjects();
-      setCurrentProject({ ...createProject(), name: "Example: TP53 C-terminal FLAG", gene: "TP53", editType: "ct", tag: "FLAG",
-        genbankRaw: raw, geneMeta: { geneSymbol: "TP53", transcriptId: "NM_000546.5", source: "Bundled NCBI RefSeqGene",
+      // Keep the current work available in Projects if it has a gene or design
+      if (currentProject.gene || currentProject.designResult) {
+        await saveProject(currentProject);
+        await loadProjects();
+      }
+
+      const presetConfigs = {
+        tp53_flag: {
+          name: "Preset: TP53 C-terminal FLAG Knock-in",
+          gene: "TP53",
+          editType: "ct",
+          mutation: "",
+          tag: "FLAG",
+          homologyArmLength: 400
+        },
+        tp53_pm: {
+          name: "Preset: TP53 R175H Hotspot Point Mutation",
+          gene: "TP53",
+          editType: "pm",
+          mutation: "R175H",
+          tag: "FLAG",
+          homologyArmLength: 400
+        },
+        tp53_ko: {
+          name: "Preset: TP53 Dual-Guide Knockout",
+          gene: "TP53",
+          editType: "ko",
+          mutation: "",
+          tag: "FLAG",
+          homologyArmLength: 400
+        }
+      };
+
+      const cfg = presetConfigs[presetKey] || presetConfigs.tp53_flag;
+      const options = {
+        deliveryMethod: "rnp",
+        maxBlockingChanges: 3,
+        coDeliveryBlocking: false,
+        expectedGene: "TP53",
+        ensureGuidePair: true,
+        allowNonCodingBlockers: true
+      };
+
+      const result = runDesign(cfg.editType, raw, cfg.mutation, cfg.tag, cfg.homologyArmLength, options);
+      if (result.err) throw new Error(result.err);
+      result.procurement = summarizeProcurementReadiness(result);
+      const svgScheme = buildDesignSchemeSvg(result);
+      const caption = buildDesignSchemeCaption(result);
+
+      setCurrentProject({
+        ...createProject(),
+        name: cfg.name,
+        gene: cfg.gene,
+        editType: cfg.editType,
+        mutation: cfg.mutation,
+        tag: cfg.tag,
+        homologyArmLength: cfg.homologyArmLength,
+        options,
+        genbankRaw: raw,
+        geneMeta: {
+          geneSymbol: "TP53",
+          transcriptId: "NM_000546.5",
+          source: "Bundled NCBI RefSeqGene",
           sourceUrl: "https://www.ncbi.nlm.nih.gov/nuccore/NG_017013.2",
-          warning: "Design example: NCBI RefSeqGene NG_017013.2, TP53 variant 1. Coordinates are relative to this reference record.",
-          genbankText: raw } });
+          warning: "Bundled reference: NCBI RefSeqGene NG_017013.2, TP53 variant 1.",
+          genbankText: raw
+        },
+        designResult: result,
+        svgScheme,
+        caption,
+        status: result.procurement?.status || "review"
+      });
       setActiveStep("design");
-      showToast("Example loaded. Your previous experiment is saved in Projects. Click Generate design.");
+      showToast(`Loaded & computed ${cfg.name}!`);
     } catch (error) {
-      showToast("Could not load design example: " + error.message);
+      showToast("Could not load design preset: " + error.message);
     } finally {
       setIsLoadingExample(false);
     }
   };
+
+  const handleDesignExample = () => handleLoadPreset("tp53_flag");
 
   const handleSelectProject = (proj, targetStep = "design") => {
     setCurrentProject(proj);
@@ -160,6 +229,12 @@ export function App() {
       )}
 
       <main className="app-container">
+        <QuickStart
+          onNavigate={setActiveStep}
+          onDesignExample={handleDesignExample}
+          isLoadingExample={isLoadingExample}
+        />
+
         {activeStep === "design" && (
           <DesignView
             key={currentProject.id}
@@ -168,6 +243,7 @@ export function App() {
             onProceedToOrder={() => setActiveStep("order")}
             onProceedToQc={() => setActiveStep("qc")}
             onOpenProtocol={() => setShowProtocolModal(true)}
+            onLoadPreset={handleLoadPreset}
           />
         )}
 
@@ -184,11 +260,15 @@ export function App() {
             key={currentProject.id}
             currentProject={currentProject}
             onUpdateProject={handleUpdateProject}
+            onProceedToDecision={() => setActiveStep("decision")}
           />
         </div>
 
         {activeStep === "decision" && (
-          <DecisionView currentProject={currentProject} />
+          <DecisionView
+            currentProject={currentProject}
+            onBackToQc={() => setActiveStep("qc")}
+          />
         )}
       </main>
 

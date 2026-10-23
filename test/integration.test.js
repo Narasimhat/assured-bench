@@ -86,3 +86,40 @@ test("Assured Studio: In-silico point mutation design with CFD blocking", () => 
   assert.strictEqual(qcSpec.schema, "assured-qc-design/1");
   assert.ok(qcSpec.markers?.length >= 1, "Must carry target and synonymous markers");
 });
+
+import {
+  generateIdtOrderRows,
+  generateSynthegoOrderRows,
+  formatBulkPasteTsv,
+  formatOligosFasta
+} from "../src/services/vendorExport.js";
+
+test("Assured Bench: Vendor ordering exports complete guides, donors, primers, TSV, and FASTA", () => {
+  const apoeGbPath = fileURLToPath(new URL("./fixtures/apoe-r154s.gb", import.meta.url));
+  const apoeGb = fs.readFileSync(apoeGbPath, "utf8");
+
+  const result = runDesign("pm", apoeGb, "R154S", "", 400, {
+    deliveryMethod: "rnp",
+    maxBlockingChanges: 3,
+    expectedGene: "APOE"
+  });
+
+  const payload = { input: { gene: "APOE" }, result };
+  const idtRows = generateIdtOrderRows(payload);
+  const synthegoRows = generateSynthegoOrderRows(payload);
+
+  assert.ok(idtRows.some(r => r.itemType === "crRNA"), "IDT rows must include crRNA");
+  assert.ok(idtRows.some(r => r.itemType === "Donor (ssODN)"), "IDT rows must include ssODN donor");
+  assert.ok(idtRows.some(r => r.itemType.includes("Primer")), "IDT rows must include flanking PCR primers");
+
+  assert.ok(synthegoRows.some(r => r.itemType === "sgRNA"), "Synthego rows must include modified sgRNA");
+  assert.ok(synthegoRows.some(r => r.itemType === "Donor (ssODN)"), "Synthego rows must include ssODN donor");
+  assert.ok(synthegoRows.some(r => r.itemType.includes("Primer")), "Synthego rows must include flanking PCR primers");
+
+  const tsv = formatBulkPasteTsv(idtRows);
+  assert.ok(tsv.includes("\t"), "Bulk TSV must be tab-delimited");
+  assert.strictEqual(tsv.split("\n").length, idtRows.length, "Bulk TSV must have one line per reagent");
+
+  const fasta = formatOligosFasta(idtRows);
+  assert.ok(fasta.startsWith(">"), "FASTA export must start with header");
+});

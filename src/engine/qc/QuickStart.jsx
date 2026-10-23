@@ -78,6 +78,32 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
     } catch (e) { setImportStatus(""); setError(`Could not read the selected file. Try copying it from the network drive to a local folder and selecting it again. ${e.message || ""}`); }
   };
 
+  const loadSampleBundle = async (bundleKey) => {
+    if (running) return;
+    setError("");
+    setImportStatus("Loading bundled benchmark traces…");
+    try {
+      const base = import.meta.env?.BASE_URL || "./";
+      const relPath = bundleKey === "myd88"
+        ? "drive_data/myd88/myd88_clones.assured.zip"
+        : "demo_traces/apoe_qc_practice.zip";
+      const fileName = bundleKey === "myd88" ? "myd88_clones.assured.zip" : "apoe_qc_practice.zip";
+      const response = await fetch(`${base}${relPath}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const file = new File([blob], fileName, { type: "application/zip" });
+      files.current.clear();
+      buffers.current.clear();
+      setTraceNames([]);
+      setPairsEdit({});
+      setOutcome(null);
+      await addFiles([file]);
+    } catch (e) {
+      setImportStatus("");
+      setError(`Could not load sample trace bundle: ${e.message || e}`);
+    }
+  };
+
   const built = useMemo(() => (traceNames.length ? buildPairs({ traceNames, sheetText }) : { pairs: [], problems: [] }), [traceNames, sheetText]);
   const design = useMemo(() => { try { return { ...readDesign(designText, { designIndex }), error: "" }; } catch (e) { return { kind: "none", error: e.message }; } }, [designText, designIndex]);
   const pairs = built.pairs.map((p, i) => ({ ...p, ...(pairsEdit[i] || {}) }));
@@ -172,8 +198,28 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
             </button>
           </div>
         </div>
-        <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-          <span>Traces and design files stay loaded. Add folders or files one at a time.</span>
+        <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "8px", marginTop: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+            <strong style={{ color: "var(--text-muted)" }}>Try 1-click benchmark trace sets:</strong>
+            <button
+              type="button"
+              className="link"
+              disabled={running}
+              onClick={() => loadSampleBundle("apoe")}
+              style={{ fontSize: "11px", padding: "3px 8px", margin: 0, fontWeight: 600 }}
+            >
+              Load APOE R176C SNP Practice (4 traces)
+            </button>
+            <button
+              type="button"
+              className="link"
+              disabled={running}
+              onClick={() => loadSampleBundle("myd88")}
+              style={{ fontSize: "11px", padding: "3px 8px", margin: 0, fontWeight: 600 }}
+            >
+              Load MYD88 KO hiPSC Cohort (11 traces)
+            </button>
+          </div>
           <span>🔒 Files are processed 100% locally in your browser; never uploaded.</span>
         </div>
       </div>

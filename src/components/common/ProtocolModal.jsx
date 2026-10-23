@@ -2,12 +2,20 @@ import React, { useState, useMemo } from "react";
 import { X, Printer, CheckSquare, Square, FlaskConical, Beaker, Clock, Thermometer, ShieldCheck } from "lucide-react";
 
 const CELL_PLATFORMS = {
+  ipsc_assured: {
+    name: "Human iPSCs — ASSURED / CRISPR-MiX Pipeline (Hypoxic 5% O₂)",
+    nucleofectionSolution: "Neon R Buffer (10 µL tip) or P3 Primary Cell Solution",
+    program: "Neon: 1,200 V, 20 ms, 1 pulse (or 4D: CA-137 / B-016)",
+    cellCount: "250,000 cells / rxn (70–80% confluent log phase)",
+    medium: "StemFlex or StemMACS PSC-Brew XF + CloneR2 (1:10) on Geltrex (1:12 pre-chilled -20°C)",
+    coldShock: "Hypoxic incubator (37°C, 5% CO₂, 5% O₂); optional 32°C 24h transient cold shock for refractory HDR loci"
+  },
   ipsc: {
-    name: "Human Induced Pluripotent Stem Cells (iPSC)",
+    name: "Human iPSCs — Standard Feeder-Free Nucleofection",
     nucleofectionSolution: "P3 Primary Cell Solution",
     program: "B-016 or CA-137 (Lonza 4D)",
     cellCount: "200,000 cells / rxn",
-    medium: "mTeSR Plus / Essential 8 + CloneR or RevitaCell (10 µM)",
+    medium: "mTeSR Plus / Essential 8 + CloneR2 (1:10)",
     coldShock: "32°C transient incubation for 24h (boosts HDR knock-in up to 2-fold)"
   },
   hek293: {
@@ -37,15 +45,16 @@ const CELL_PLATFORMS = {
 };
 
 export function ProtocolModal({ isOpen, onClose, currentProject }) {
-  const [platformKey, setPlatformKey] = useState("ipsc");
+  const [platformKey, setPlatformKey] = useState("ipsc_assured");
   const [numReactions, setNumReactions] = useState(2); // e.g. test + control
   const [checkedSteps, setCheckedSteps] = useState(new Set());
 
-  const platform = CELL_PLATFORMS[platformKey] || CELL_PLATFORMS.ipsc;
+  const platform = CELL_PLATFORMS[platformKey] || CELL_PLATFORMS.ipsc_assured;
   const editType = currentProject?.editType || "ko";
   const gene = currentProject?.gene || "Target Gene";
+  const designGuides = currentProject?.designResult?.gs || currentProject?.designResult?.guides || [];
 
-  // Reagent calculations with 1.1x excess for pipette dead volume
+  // Reagent calculations with 1.15x excess for pipette dead volume
   const rxnCount = Math.max(1, parseInt(numReactions, 10) || 1);
   const excessFactor = 1.15;
   const totalVolumeMultiplier = rxnCount * excessFactor;
@@ -53,51 +62,53 @@ export function ProtocolModal({ isOpen, onClose, currentProject }) {
   const rnpRecipe = useMemo(() => {
     const isKnockin = editType === "pm" || editType === "ct" || editType === "nt" || editType === "it";
     const isDualKo = editType === "ko";
+    const g1Name = designGuides[0]?.n || `${gene}_gRNA1`;
+    const g2Name = designGuides[1]?.n || `${gene}_gRNA2`;
 
     const items = [
       {
-        reagent: "Cas9 Nuclease (61 µM / 10 mg/mL)",
-        stock: "61 µM (10 µg/µL)",
-        singleRxnVol: 0.8, // ~50 pmol
-        finalAmount: "50 pmol (8 µg)"
+        reagent: "Alt-R S.p. HiFi Cas9 Nuclease V3",
+        stock: "61 µM (10 µg/µL in 2 µL single-use aliquots)",
+        singleRxnVol: 0.5,
+        finalAmount: "20–30 pmol (avoid freeze-thaw cycles)"
       }
     ];
 
     if (isDualKo) {
       items.push(
         {
-          reagent: "gRNA 1 (Synthetic sgRNA)",
-          stock: "100 µM",
+          reagent: `Guide 1: ${g1Name} (Synthetic sgRNA)`,
+          stock: "100 µM in IDTE pH 7.5",
           singleRxnVol: 0.6,
-          finalAmount: "60 pmol"
+          finalAmount: "60 pmol (3:1 sgRNA:Cas9 molar ratio)"
         },
         {
-          reagent: "gRNA 2 (Synthetic sgRNA)",
-          stock: "100 µM",
+          reagent: `Guide 2: ${g2Name} (Synthetic sgRNA)`,
+          stock: "100 µM in IDTE pH 7.5",
           singleRxnVol: 0.6,
-          finalAmount: "60 pmol"
+          finalAmount: "60 pmol (3:1 sgRNA:Cas9 molar ratio)"
         }
       );
     } else {
       items.push({
-        reagent: "Guide RNA (Synthetic sgRNA)",
-        stock: "100 µM",
-        singleRxnVol: 1.2,
-        finalAmount: "120 pmol (2.4x molar ratio)"
+        reagent: `Guide RNA: ${g1Name} (Synthetic sgRNA)`,
+        stock: "100 µM in IDTE pH 7.5",
+        singleRxnVol: 0.6,
+        finalAmount: "60 pmol (3:1 sgRNA:Cas9 molar ratio)"
       });
     }
 
     if (isKnockin) {
       items.push({
-        reagent: "ssODN Donor Repair Template",
+        reagent: `${gene} ssODN Donor Template (Single or CRISPR-MiX Pool)`,
         stock: "100 µM",
-        singleRxnVol: 1.0,
-        finalAmount: "100 pmol"
+        singleRxnVol: 1.2,
+        finalAmount: "100–120 pmol (contains silent PAM/seed blocker)"
       });
     }
 
     return items;
-  }, [editType]);
+  }, [editType, gene, designGuides]);
 
   const toggleStep = (stepId) => {
     setCheckedSteps(prev => {
@@ -174,7 +185,8 @@ export function ProtocolModal({ isOpen, onClose, currentProject }) {
               onChange={(e) => setPlatformKey(e.target.value)}
               style={{ padding: "0.35rem 0.6rem", fontSize: "0.85rem" }}
             >
-              <option value="ipsc">Human iPSCs (Stem Cells)</option>
+              <option value="ipsc_assured">Human iPSCs — ASSURED / CRISPR-MiX (Hypoxic 5% O₂)</option>
+              <option value="ipsc">Human iPSCs — Standard Feeder-Free</option>
               <option value="hek293">HEK293T (Immortalized)</option>
               <option value="tcells">Primary Human T-Cells</option>
               <option value="k562">K562 (Hematopoietic)</option>

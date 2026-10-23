@@ -5,9 +5,31 @@ import { fetchGeneGenbank } from "../../services/ensembl.js";
 import { downloadReportHtml, downloadDesignJson, downloadSchemeSvg } from "../../services/designExport.js";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
 import { GelSimulator } from "./GelSimulator.jsx";
-import { Search, Play, CheckCircle, AlertTriangle, XCircle, ArrowRight, Upload, Download, FileText, FlaskConical } from "lucide-react";
+import {
+  Search,
+  Play,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  ArrowRight,
+  Upload,
+  Download,
+  FileText,
+  FlaskConical,
+  Copy,
+  Check,
+  Sparkles,
+  Shield
+} from "lucide-react";
 
-export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, onProceedToQc, onOpenProtocol }) {
+export function DesignView({
+  currentProject,
+  onUpdateProject,
+  onProceedToOrder,
+  onProceedToQc,
+  onOpenProtocol,
+  onLoadPreset
+}) {
   const geneInput = currentProject.gene ?? "";
   const editType = currentProject.editType ?? "ko";
   const mutation = currentProject.mutation ?? "";
@@ -22,10 +44,19 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
   const setEditType = editType => onUpdateProject({ editType });
   const setMutation = mutation => onUpdateProject({ mutation });
   const setTag = tag => onUpdateProject({ tag });
+  const setHomologyArmLength = len => onUpdateProject({ homologyArmLength: len });
   const setOption = fields => onUpdateProject({ options: { ...currentProject.options, ...fields } });
   const [isLoadingGene, setIsLoadingGene] = useState(false);
   const [isDesigning, setIsDesigning] = useState(false);
   const [error, setError] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  const handleCopy = (text, key) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
 
   // Active design result
   const designResult = currentProject?.designResult || null;
@@ -66,8 +97,8 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
     reader.readAsText(file);
   };
 
-  // Generate design
-  const handleRunDesign = async () => {
+  // Generate design (with optional customGuides override)
+  const executeDesign = async (customGuides = null) => {
     if (!genbankRaw) {
       setError("Please fetch a gene from Ensembl or upload a GenBank reference file first.");
       return;
@@ -81,7 +112,8 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
         coDeliveryBlocking: coDelivery,
         expectedGene: geneMeta?.geneSymbol || geneInput.trim(),
         ensureGuidePair: true,
-        allowNonCodingBlockers: true
+        allowNonCodingBlockers: true,
+        ...(customGuides ? { customGuides } : {})
       };
 
       const result = runDesign(
@@ -120,6 +152,13 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
     }
   };
 
+  const handleRunDesign = () => executeDesign(null);
+
+  const handleSelectAlternativeGuide = (spacer) => {
+    if (!spacer) return;
+    executeDesign([spacer]);
+  };
+
   const getStatusBadge = (status) => {
     if (status === "ready") {
       return <span className="badge badge-ready"><CheckCircle size={14} /> READY FOR PROCUREMENT</span>;
@@ -133,11 +172,49 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
     <div>
       {/* Parameter Input Card */}
       <div className="card">
-        <div className="card-title">
-          <span>1. Design your edit</span>
-          <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal" }}>
-            Choose a target, load its reference, then generate a design.
-          </span>
+        <div className="card-title" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
+          <div>
+            <span>1. Design your edit</span>
+            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal", marginTop: "0.15rem" }}>
+              Choose a target gene, load its genomic reference, or launch a validated preset below.
+            </div>
+          </div>
+
+          {onLoadPreset && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                <Sparkles size={14} style={{ color: "var(--primary)" }} />
+                Instant Presets:
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: "0.3rem 0.65rem", fontSize: "0.78rem" }}
+                onClick={() => onLoadPreset("tp53_flag")}
+                title="Load TP53 C-terminal FLAG knock-in and auto-compute design"
+              >
+                TP53 C-term FLAG
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: "0.3rem 0.65rem", fontSize: "0.78rem" }}
+                onClick={() => onLoadPreset("tp53_pm")}
+                title="Load TP53 R175H point mutation knock-in with silent PAM blocking"
+              >
+                TP53 R175H (SNP KI)
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ padding: "0.3rem 0.65rem", fontSize: "0.78rem" }}
+                onClick={() => onLoadPreset("tp53_ko")}
+                title="Load TP53 dual-guide constitutive knockout"
+              >
+                TP53 Dual-Guide KO
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="grid-2">
@@ -153,6 +230,7 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
                 disabled={isLoadingGene}
                 aria-label="Target gene"
                 onChange={(e) => setGeneInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === "Enter" && geneInput.trim()) handleFetchEnsembl(); }}
                 placeholder="e.g. SCN5A, APOE, TP53"
                 style={{ flex: 1 }}
               />
@@ -186,7 +264,7 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
           </div>
         </div>
 
-        {geneMeta?.warning && <p role="status" style={{ marginTop: "0.75rem", color: "var(--warning)" }}>{geneMeta.warning} <a href={geneMeta.sourceUrl} target="_blank" rel="noreferrer">Reference record</a></p>}
+        {geneMeta?.warning && <p role="status" style={{ marginTop: "0.75rem", color: "var(--warning)", fontSize: "0.85rem" }}>{geneMeta.warning} {geneMeta.sourceUrl && <a href={geneMeta.sourceUrl} target="_blank" rel="noreferrer">Reference record</a>}</p>}
 
         {/* Edit Configuration */}
         <div className="grid-3" style={{ marginTop: "1.25rem" }}>
@@ -203,16 +281,16 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
             </select>
           </div>
 
-          {editType === "pm" && (
+          {(editType === "pm" || editType === "it") && (
             <div>
               <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 500, fontSize: "0.9rem" }}>
-                Amino Acid Substitution
+                {editType === "it" ? "Insertion Residue Position" : "Amino Acid Substitution"}
               </label>
               <input
                 type="text"
                 value={mutation}
-                onChange={(e) => setMutation(e.target.value)}
-                placeholder="e.g. R154S, E342K"
+                onChange={(e) => setMutation(e.target.value.toUpperCase())}
+                placeholder={editType === "it" ? "e.g. P155" : "e.g. R175H, R154S, E342K"}
                 style={{ width: "100%" }}
               />
             </div>
@@ -224,7 +302,7 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
                 Tag Cassette
               </label>
               <select value={tag} onChange={(e) => setTag(e.target.value)} style={{ width: "100%" }}>
-                <option value="SD40-V5">SD40-V5 (Split-GFP & V5)</option>
+                <option value="SD40-V5">SD40-V5 (Split-GFP &amp; V5)</option>
                 <option value="FLAG">FLAG (DYKDDDDK)</option>
                 <option value="HA">HA (YPYDVPDYA)</option>
                 <option value="Myc">Myc (EQKLISEEDL)</option>
@@ -247,7 +325,7 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
         </div>
 
         {/* Advanced Options Bar */}
-        <div style={{ display: "flex", gap: "2rem", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
+        <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Max Silent Blocking Changes:</span>
             <select
@@ -260,6 +338,21 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
               <option value={3}>3 mutations (Recommended)</option>
             </select>
           </div>
+
+          {(editType === "ct" || editType === "nt") && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Homology Arm (bp):</span>
+              <select
+                value={homologyArmLength}
+                onChange={(e) => setHomologyArmLength(Number(e.target.value))}
+                style={{ padding: "0.3rem 0.5rem", fontSize: "0.85rem" }}
+              >
+                <option value={60}>60 bp (ssODN Ultramer)</option>
+                <option value={200}>200 bp (ssDNA / dsDNA)</option>
+                <option value={400}>400 bp (Standard HDR Arm)</option>
+              </select>
+            </div>
+          )}
 
           <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer" }}>
             <input
@@ -281,7 +374,7 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
           </button>
         </div>
 
-        {!genbankRaw && <p style={{ marginTop: "1rem", color: "var(--text-muted)" }}>Fetch a gene or upload a GenBank reference to enable design.</p>}
+        {!genbankRaw && <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>Fetch a gene, upload a GenBank reference, or click one of the Instant Presets above to enable design.</p>}
         {error && (
           <div role="alert" style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "8px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger)", fontSize: "0.9rem", fontWeight: 600 }}>
             {error}
@@ -293,7 +386,7 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
       {designResult && (
         <>
           {/* Release State Banner */}
-          <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--warning)" }}>
+          <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--warning)" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.3rem" }}>
                 <span style={{ fontSize: "1.1rem", fontWeight: 700 }}>Design Status:</span>
@@ -345,8 +438,8 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
           {(designResult.procurement?.blockers?.length > 0 || designResult.procurement?.warnings?.length > 0 || designResult.procurement?.standingRequirements?.length > 0) && (
             <div className="card">
               <h3>Before ordering</h3>
-              <ul style={{ paddingLeft: "1.25rem" }}>
-                {[...(designResult.procurement.blockers || []), ...(designResult.procurement.warnings || []), ...(designResult.procurement.standingRequirements || [])].map((note, i) => <li key={i}>{note}</li>)}
+              <ul style={{ paddingLeft: "1.25rem", marginTop: "0.5rem", fontSize: "0.9rem", color: "var(--text-muted)" }}>
+                {[...(designResult.procurement.blockers || []), ...(designResult.procurement.warnings || []), ...(designResult.procurement.standingRequirements || [])].map((note, i) => <li key={i} style={{ marginBottom: "0.25rem" }}>{note}</li>)}
               </ul>
             </div>
           )}
@@ -390,40 +483,94 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
               <div className="card-title">
                 <span>Selected Guide RNAs (20 nt Protospacer)</span>
               </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Guide Name</th>
-                    <th>Spacer (5' → 3')</th>
-                    <th>PAM</th>
-                    <th>GC %</th>
-                    <th>Cut distance</th>
-                    <th>Protection</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(designResult.guides || designResult.gs || []).map((g, idx) => (
-                    <tr key={idx}>
-                      <td><strong>{idx === 0 ? "Primary" : "Selected alternative"} gRNA {idx + 1}</strong></td>
-                      <td className="mono" style={{ color: "var(--primary)" }}>{g.spacer || g.sp || g.sequence || g.seq}</td>
-                      <td className="mono" style={{ color: "var(--warning)" }}>{g.pam || g.pm || "Not assessed"}</td>
-                      <td>{g.gc ?? "—"}%</td>
-                      <td>{Number.isFinite(g.d) ? `${Math.abs(g.d)} bp ${g.d < 0 ? "upstream" : g.d > 0 ? "downstream" : "at insertion"}` : "Not assessed"}</td>
-                      <td>
-                        <span title={designResult.guideProtection?.[idx]?.reason || ""}>
-                          {designResult.guideProtection?.[idx]?.tier || (Number.isFinite(g.cfdResidual) ? `CFD ${g.cfdResidual.toFixed(4)}` : "Not assessed")}
-                        </span>
-                      </td>
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Guide Name</th>
+                      <th>Spacer (5&prime; &rarr; 3&prime;)</th>
+                      <th>PAM</th>
+                      <th>GC %</th>
+                      <th>Cut distance</th>
+                      <th>Protection</th>
+                      <th>Copy</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(designResult.guides || designResult.gs || []).map((g, idx) => {
+                      const seq = g.spacer || g.sp || g.sequence || g.seq;
+                      return (
+                        <tr key={idx}>
+                          <td><strong>{g.n || `${idx === 0 ? "Primary" : "Selected alternative"} gRNA ${idx + 1}`}</strong></td>
+                          <td className="mono" style={{ color: "var(--primary)", fontWeight: 600 }}>{seq}</td>
+                          <td className="mono" style={{ color: "var(--warning)" }}>{g.pam || g.pm || "NGG"}</td>
+                          <td>{g.gc ?? "\u2014"}%</td>
+                          <td>{Number.isFinite(g.d) ? `${Math.abs(g.d)} bp ${g.d < 0 ? "upstream" : g.d > 0 ? "downstream" : "at insertion"}` : "Exonic cut"}</td>
+                          <td>
+                            <span title={designResult.guideProtection?.[idx]?.reason || ""}>
+                              {designResult.guideProtection?.[idx]?.tier || (Number.isFinite(g.cfdResidual) ? `CFD ${g.cfdResidual.toFixed(4)}` : "Assessed")}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => handleCopy(seq, `g-${idx}`)}
+                              style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
+                            >
+                              {copiedKey === `g-${idx}` ? <Check size={13} style={{ color: "var(--success)" }} /> : <Copy size={13} />}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Silent PAM/Protospacer Blocking Substitutions Summary */}
+              {designResult.ss && designResult.ss.length > 0 && (
+                <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", background: "var(--success-bg)", border: "1px solid var(--success-border)", fontSize: "0.82rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontWeight: 700, color: "var(--success)", marginBottom: "0.35rem" }}>
+                    <Shield size={15} />
+                    <span>Silent Re-Cut Blocking Substitutions ({designResult.ss.length})</span>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {designResult.ss.map((s, si) => (
+                      <span
+                        key={si}
+                        className="mono"
+                        style={{ background: "#ffffff", padding: "0.2rem 0.55rem", borderRadius: "5px", border: "1px solid var(--success-border)", color: "var(--text-main)", fontSize: "0.78rem" }}
+                        title={s.blockingReason || "Synonymous blocking substitution prevents Cas9 re-cleavage after HDR"}
+                      >
+                        {s.ob || ""}&rarr;{s.nb || ""} {s.oc && s.nc ? `(${s.oc}\u2192${s.nc}, ${s.aa || "synonymous"})` : `pos ${s.gp ?? si + 1}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Donor Repair Template Card */}
             <div className="card">
               <div className="card-title">
                 <span>Donor Repair Template (ssODN)</span>
+                {(() => {
+                  const donor = designResult.donors?.[0] || designResult.os?.[0] || designResult.donor || designResult.ssodn;
+                  const seq = typeof donor === "string" ? donor : (donor?.od || donor?.sequence || donor?.genomicDonor || donor?.donorSense);
+                  if (!seq) return null;
+                  return (
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleCopy(seq, "donor")}
+                      style={{ padding: "0.3rem 0.65rem", fontSize: "0.8rem" }}
+                    >
+                      {copiedKey === "donor" ? <Check size={14} style={{ color: "var(--success)" }} /> : <Copy size={14} />}
+                      <span>{copiedKey === "donor" ? "Copied Donor" : "Copy Donor"}</span>
+                    </button>
+                  );
+                })()}
               </div>
               {(() => {
                 const donor = designResult.donors?.[0] || designResult.os?.[0] || designResult.donor || designResult.ssodn;
@@ -441,16 +588,21 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
                           padding: "0.85rem",
                           borderRadius: "8px",
                           wordBreak: "break-all",
-                          fontSize: "0.85rem",
+                          fontSize: "0.82rem",
                           lineHeight: "1.6",
-                          border: "1px solid var(--border-color)"
+                          border: "1px solid var(--border-color)",
+                          maxHeight: "160px",
+                          overflowY: "auto"
                         }}
                       >
                         {seq}
                       </div>
-                      <div style={{ marginTop: "0.75rem", display: "flex", gap: "1.5rem", fontSize: "0.85rem" }}>
+                      <div style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "1.25rem", fontSize: "0.85rem" }}>
                         <span>Length: <strong>{seq.length} nt</strong></span>
-                        <span>Format: <strong>Single-Stranded Oligo (ssODN)</strong></span>
+                        {designResult.h5l && designResult.h3l && (
+                          <span>Homology Arms: <strong>5&prime; {designResult.h5l} nt / 3&prime; {designResult.h3l} nt</strong></span>
+                        )}
+                        <span>Format: <strong>{seq.length <= 200 ? "Single-Stranded Oligo (ssODN)" : "Long ssDNA / Megamer"}</strong></span>
                       </div>
                     </div>
                   );
@@ -460,13 +612,77 @@ export function DesignView({ currentProject, onUpdateProject, onProceedToOrder, 
             </div>
           </div>
 
+          {/* Flanking PCR & Sanger Sequencing Verification Primers Card */}
+          {designResult.ps && designResult.ps.length > 0 && (
+            <div className="card">
+              <div className="card-title" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+                <div>
+                  <span>Flanking PCR &amp; Sanger Sequencing Primers</span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal", marginLeft: "0.75rem" }}>
+                    {designResult.amp ? `Expected Amplicon: ${designResult.amp}` : "Outside homology arms to prevent episomal donor amplification"}
+                  </span>
+                </div>
+                {designResult.primerStrategy && (
+                  <span className="badge badge-ready" style={{ fontSize: "0.75rem" }}>
+                    {designResult.primerStrategy}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Primer Name</th>
+                      <th>Sequence (5&prime; &rarr; 3&prime;)</th>
+                      <th>Length</th>
+                      <th>Tm (&deg;C)</th>
+                      <th>GC %</th>
+                      <th>Copy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {designResult.ps.map((p, idx) => (
+                      <tr key={idx}>
+                        <td><strong>{p.n || `Primer ${idx + 1}`}</strong></td>
+                        <td className="mono" style={{ color: "var(--primary)", fontWeight: 600 }}>{p.s}</td>
+                        <td>{p.s ? `${p.s.length} nt` : "\u2014"}</td>
+                        <td>{p.tm ? `${p.tm}\u00B0C` : "\u2014"}</td>
+                        <td>{p.gc ? `${p.gc}%` : "\u2014"}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => handleCopy(p.s, `p-${idx}`)}
+                            style={{ padding: "0.25rem 0.55rem", fontSize: "0.75rem" }}
+                          >
+                            {copiedKey === `p-${idx}` ? <Check size={13} style={{ color: "var(--success)" }} /> : <Copy size={13} />}
+                            <span>{copiedKey === `p-${idx}` ? "Copied" : "Copy"}</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {designResult.primerWarning && (
+                <p style={{ marginTop: "0.6rem", fontSize: "0.82rem", color: "var(--warning)" }}>
+                  Note: {designResult.primerWarning}
+                </p>
+              )}
+            </div>
+          )}
+
           {designResult.guideAlternatives && (
             <details className="card" style={{ marginTop: "1rem" }}>
               <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-                Advanced: Guide Alternatives &amp; Off-Target Rankings
+                Advanced: Guide Alternatives &amp; Off-Target Rankings ({designResult.guideAlternatives.candidates?.length || 0} nearby candidates)
               </summary>
               <div style={{ marginTop: "1rem" }}>
-                <GuideAlternatives result={designResult} />
+                <GuideAlternatives
+                  result={designResult}
+                  onSelectAlternative={handleSelectAlternativeGuide}
+                />
               </div>
             </details>
           )}
