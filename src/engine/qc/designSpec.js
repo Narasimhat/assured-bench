@@ -2,7 +2,7 @@
 // before any trace is analysed: a spec that disagrees with its own reference would give confident but
 // wrong allele calls.
 
-import { getEnzyme, pamRegex } from "../design/enzymeConfig.js";
+import { expectedGuideGeometry, specNuclease } from "./nucleases.js";
 import { isDna, reverseComplement } from "./seq.js";
 
 export const QC_SPEC_SCHEMA = "assured-qc-design/1";
@@ -17,6 +17,7 @@ export function validateDesignSpec(spec) {
   const reference = String(spec.reference?.sequence || "").toUpperCase();
   if (!isDna(reference)) fail("reference.sequence must be A, C, G and T only.");
   const length = reference.length;
+  try { specNuclease(spec); } catch (error) { fail(error.message); }
   if (!EDIT_KINDS.includes(spec.design?.editKind)) fail(`design.editKind must be one of ${EDIT_KINDS.join(", ")}.`);
   const inside = (value, label, upper = length) => {
     if (!Number.isInteger(value) || value < 0 || value > upper) fail(`${label} (${value}) lies outside the reference window (0-${upper}).`);
@@ -25,33 +26,30 @@ export function validateDesignSpec(spec) {
   (spec.guides || []).forEach((guide, index) => {
     const label = `Guide ${index + 1} (${guide.name || "unnamed"})`;
     inside(guide.cut, `${label} cut`);
+    if (!["+", "-"].includes(guide.strand)) fail(`${label}: strand must be + or -.`);
     const spacer = String(guide.spacer || "").toUpperCase();
     if (!isDna(spacer) || spacer.length < 17 || spacer.length > 24) fail(`${label}: spacer must be 17-24 nt of DNA.`);
     if (guide.protospacerStart !== null && guide.protospacerStart !== undefined) {
       const site = reference.slice(guide.protospacerStart, guide.protospacerEnd);
       const expected = guide.strand === "+" ? spacer : reverseComplement(spacer);
       if (site !== expected) fail(`${label}: the spacer does not match the reference at ${guide.protospacerStart}-${guide.protospacerEnd} on the ${guide.strand} strand.`);
-      const enzymeId = guide.enzyme?.id || guide.enzyme || spec.design?.enzyme?.id || spec.design?.enzyme || "spcas9";
-      let enzyme;
-      try { enzyme = getEnzyme(enzymeId); } catch { fail(`${label}: unknown enzyme ${enzymeId}.`); return; }
-      const fivePrime = enzyme.pam_side === "5prime";
-      const offset = enzyme.cut_offsets.target;
-      const cut = guide.strand === "+" ? guide.protospacerStart + offset : guide.protospacerEnd - offset;
-      if (cut !== guide.cut) fail(`${label}: cut index ${guide.cut} disagrees with ${enzyme.name} geometry (expected ${cut}).`);
-      const pamLength = enzyme.pam_pattern.length;
-      const pamStart = guide.strand === "+"
-        ? (fivePrime ? guide.protospacerStart - pamLength : guide.protospacerEnd)
-        : (fivePrime ? guide.protospacerEnd : guide.protospacerStart - pamLength);
-      const rawPam = reference.slice(pamStart, pamStart + pamLength);
+      let geometry;
+      try { geometry = expectedGuideGeometry(guide, spec); } catch (error) { fail(`${label}: ${error.message}`); return; }
+      const { cut, nuclease, name, pamStart, pamEnd } = geometry;
+      if (cut !== guide.cut) fail(name === "SpCas9"
+        ? `${label}: cut index ${guide.cut} is not 3 bp from the PAM (expected ${cut}).`
+        : `${label}: cut index ${guide.cut} disagrees with ${name} geometry (expected ${cut}).`);
+      const rawPam = reference.slice(pamStart, pamEnd);
       const pamSite = guide.strand === "+" ? rawPam : reverseComplement(rawPam);
-      if (pamStart < 0 || !pamRegex(enzyme.pam_pattern).test(pamSite)) warnings.push(`${label}: PAM ${pamSite} is not ${enzyme.pam_pattern} on the reference (it may be changed on purpose by a blocking edit).`);
-      if (guide.cuts) {
-        for (const [strand, strandOffset] of Object.entries(enzyme.cut_offsets)) {
-          const expected = guide.strand === "+" ? guide.protospacerStart + strandOffset : guide.protospacerEnd - strandOffset;
-          inside(guide.cuts[strand], `${label} ${strand} cut`);
-          if (guide.cuts[strand] !== expected) fail(`${label}: ${strand} cut disagrees with ${enzyme.name} geometry.`);
+      if (pamStart < 0 || !nuclease.pam.test(pamSite)) warnings.push(`${label}: PAM ${pamSite} is not compatible with ${name} on the reference (it may be changed on purpose by a blocking edit).`);
+      if (guide.pamStart != null && (guide.pamStart !== pamStart || guide.pamEnd !== pamEnd)) fail(`${label}: PAM coordinates disagree with ${name} geometry.`);
+      if (geometry.cuts) {
+        for (const [strand, expectedCut] of Object.entries(geometry.cuts)) {
+          inside(expectedCut, `${label} predicted ${strand} cut`);
+          if (guide.cuts && guide.cuts[strand] !== expectedCut) fail(`${label}: ${strand} cut disagrees with ${name} geometry.`);
         }
-      }
+        if (!guide.cuts) warnings.push(`${label}: strand cuts will be derived from the nominal ${name} configuration.`);
+      } else if (guide.cuts && Object.values(guide.cuts).some(value => value !== cut)) fail(`${label}: strand cuts disagree with ${name} geometry.`);
     } else warnings.push(`${label}: protospacer position not given; the cut index is taken as stated.`);
   });
 
@@ -144,7 +142,8 @@ export function reverseSpec(spec) {
     guides: (spec.guides || []).map((guide) => ({
       ...guide, strand: flip(guide.strand), cut: boundary(guide.cut),
       protospacerStart: boundary(guide.protospacerEnd), protospacerEnd: boundary(guide.protospacerStart),
-      ...(guide.cuts ? { cuts: Object.fromEntries(Object.entries(guide.cuts).map(([key, value]) => [key, boundary(value)])), pamStart: boundary(guide.pamEnd), pamEnd: boundary(guide.pamStart) } : {}),
+      ...(guide.cuts ? { cuts: Object.fromEntries(Object.entries(guide.cuts).map(([key, value]) => [key, boundary(value)])) } : {}),
+      ...(guide.pamStart != null ? { pamStart: boundary(guide.pamEnd), pamEnd: boundary(guide.pamStart) } : {}),
     })),
     donors: (spec.donors || []).map((donor) => {
       const replaced = donor.replacedBp || 0;

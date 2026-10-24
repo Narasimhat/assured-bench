@@ -54,7 +54,7 @@ export function runJobs(input, onProgress = () => {}) {
     onProgress({ done: samples.length, total: samples.length, name: "" });
     return {
       ok: true, source: plan.source, notes, results,
-      design: { type: plan.spec.design?.type, editKind: plan.spec.design?.editKind, gene: plan.spec.design?.gene, label: plan.spec.design?.label, guides: plan.spec.guides.map((g) => ({ name: g.name, spacer: g.spacer, strand: g.strand, pam: g.pam })), donors: (plan.spec.donors || []).map((d) => ({ name: d.name, format: d.format, length: d.sequence.length, insertBp: d.insertBp || 0 })), markers: (plan.spec.markers || []).length },
+      design: { nuclease: plan.spec.design?.nuclease, type: plan.spec.design?.type, editKind: plan.spec.design?.editKind, gene: plan.spec.design?.gene, label: plan.spec.design?.label, guides: plan.spec.guides.map((g) => ({ name: g.name, spacer: g.spacer, strand: g.strand, pam: g.pam, cut: g.cut, cuts: g.cuts })), donors: (plan.spec.donors || []).map((d) => ({ name: d.name, format: d.format, length: d.sequence.length, insertBp: d.insertBp || 0 })), markers: (plan.spec.markers || []).length },
     };
   } catch (error) {
     return { ok: false, error: error.message };

@@ -92,7 +92,7 @@ function cloneChips(view, F, y) {
 
 function guideLines(view, F, top, bottom) {
   const bands = view.markers.map((m) => `<rect x="${fmt(F.xl(m.at))}" y="${top}" width="${fmt(F.step)}" height="${bottom - top}" fill="${MARKER_COLOR(m.role)}" fill-opacity="0.13"/>`).join("");
-  const cuts = view.guides.map((g) => `<line x1="${fmt(F.xl(g.cut))}" x2="${fmt(F.xl(g.cut))}" y1="${top}" y2="${bottom}" stroke="${CUT}" stroke-width="0.9" stroke-dasharray="3 2"/>`).join("");
+  const cuts = view.guides.flatMap((g) => [...new Set(Object.values(g.cuts || {}).length ? Object.values(g.cuts) : [g.cut])].map(cut => `<line x1="${fmt(F.xl(cut))}" x2="${fmt(F.xl(cut))}" y1="${top}" y2="${bottom}" stroke="${CUT}" stroke-width="0.9" stroke-dasharray="3 2"/>`)).join("");
   return { bands, cuts };
 }
 

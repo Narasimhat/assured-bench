@@ -1,3 +1,5 @@
+import { hydrateCutGeometry } from "./nucleases.js";
+import { cutBoundaries, enzymeAnalysisNotes } from "./cutGeometry.js";
 // Prepares a control/edited pair for decomposition:
 //   1. orient the control read against the design reference (forward or reverse primer);
 //   2. map every control base to a reference index and place the cuts on the read;
@@ -69,6 +71,7 @@ function bestOffset(control, edited, range) {
 export function prepareSample({ control, edited, spec, options = {} }) {
   const opt = { ...DEFAULTS, ...options };
   const warnings = [];
+  try { spec = hydrateCutGeometry(spec); } catch (error) { return { ok: false, error: error.message, warnings }; }
   if (!spec.guides?.length) return { ok: false, error: "The design has no guides, so there is no cut site to analyse around.", warnings };
   const controlModel0 = buildComposition(control);
   const editedModel0 = buildComposition(edited);
@@ -108,8 +111,20 @@ export function prepareSample({ control, edited, spec, options = {} }) {
     if (j < 0) return { ok: false, error: `The read does not cover the cut site of ${guide.name}.`, warnings };
     cuts.push({ guide, readIndex: j, refIndex: guide.cut });
   }
-  const firstCut = Math.min(...cuts.map((cut) => cut.readIndex));
-  const lastCut = Math.max(...cuts.map((cut) => cut.readIndex));
+  const spanIndices = [];
+  for (const item of cuts) {
+    item.strandCuts = {};
+    if (!item.guide.cuts) { spanIndices.push(item.readIndex); continue; }
+    for (const boundary of cutBoundaries(item.guide)) {
+      const at = refToRead.get(boundary) ?? (refToRead.has(boundary - 1) ? refToRead.get(boundary - 1) + 1 : null);
+      if (at === null) return { ok: false, error: `The read does not cover both strand cuts of ${item.guide.name}.`, warnings };
+      spanIndices.push(at);
+      for (const [name, value] of Object.entries(item.guide.cuts || {})) if (value === boundary) item.strandCuts[name] = at;
+    }
+  }
+  warnings.push(...enzymeAnalysisNotes(designSpec));
+  const firstCut = Math.min(...spanIndices);
+  const lastCut = Math.max(...spanIndices);
 
   // alignment window upstream of the first cut
   const upstream = longestGoodRun(controlModel.quality, 0, Math.max(0, firstCut - opt.alignGapBeforeCut), opt.qualityCutoff, opt.qualityWindow);

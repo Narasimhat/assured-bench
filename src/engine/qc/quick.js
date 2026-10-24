@@ -3,6 +3,7 @@
 import { autoPair, parseSampleSheet, resolveSheet, directionOf, looksLikePool } from "./sheet.js";
 import { parseDesignReport } from "./designReport.js";
 import { planDesign } from "./batch.js";
+import { specNuclease, nucleaseOrDefault } from "./nucleases.js";
 import { wellOf } from "./decision.js";
 
 const ext = (name) => String(name).toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
@@ -66,7 +67,7 @@ export function buildPairs({ traceNames, sheetText = "", explicitControls = [] }
   }
   if (sheetText.trim()) {
     const sheet = parseSampleSheet(sheetText); const resolved = resolveSheet(sheet.rows, traceNames);
-    return { pairs: resolved.jobs.filter((j) => j.ok).map((j) => ({ sample: j.sample, edited: j.edited, control: j.control, type: j.type, confidence: "sheet", reason: "from the sample sheet", guides: j.guides, donor: j.donor, workflow: j.workflow })), problems: [...sheet.errors, ...resolved.problems], source: "sheet" };
+    return { pairs: resolved.jobs.filter((j) => j.ok).map((j) => ({ sample: j.sample, edited: j.edited, control: j.control, type: j.type, confidence: "sheet", reason: "from the sample sheet", guides: j.guides, donor: j.donor, workflow: j.workflow, nuclease: j.nuclease })), problems: [...sheet.errors, ...resolved.problems], source: "sheet" };
   }
   const paired = autoPair(traceNames);
   return { pairs: paired.pairs, problems: [...paired.unpaired.map((u) => `${u.name}: ${u.reason}`), ...paired.problems.map((p) => `Check: ${p}`)], source: "names" };
@@ -85,7 +86,7 @@ export function readDesign(text, { designIndex = 0 } = {}) {
     return { kind: "spec", spec, label: spec.design?.label || spec.design?.gene || raw?.title || "design file" };
   }
   const designs = parseDesignReport(text); const chosen = designs[Math.min(designIndex, designs.length - 1)];
-  return { kind: "report", designs, chosen, guides: chosen.guides.map((g) => g.sequence), donors: chosen.donors, label: chosen.title, protein: chosen.protein || [] };
+  return { kind: "report", nuclease: chosen.nuclease, designs, chosen, guides: chosen.guides.map((g) => g.sequence), donors: chosen.donors, label: chosen.title, protein: chosen.protein || [] };
 }
 
 /**
@@ -95,7 +96,7 @@ export function readDesign(text, { designIndex = 0 } = {}) {
 export function readDesignForForm(text, { needsDonor = false, isJunction = false } = {}) {
   const d = readDesign(text);
   if (d.kind === "none") throw new Error("The file is empty.");
-  if (d.kind === "spec") return { kind: "spec", spec: d.spec, label: d.label, note: "" };
+  if (d.kind === "spec") return { kind: "spec", nuclease: specNuclease(d.spec), spec: d.spec, label: d.label, note: "" };
   const chosenDonors = d.donors.filter((x) => x.recommended);
   const donorList = chosenDonors.length ? chosenDonors : d.donors;
   const donor = donorList[0] || null;
@@ -103,7 +104,7 @@ export function readDesignForForm(text, { needsDonor = false, isJunction = false
   const notes = [`Read ${plural(d.guides.length, "guide")} and ${plural(d.donors.length, "donor")} from the design report "${d.label}"${d.designs.length > 1 ? ` (the file holds ${d.designs.length} designs; the first was used)` : ""}.`];
   if (needsDonor && !donor) notes.push("The report has no ssODN donor (a long knock-in donor is not read from a report): paste it below.");
   if (isJunction) notes.push("The junction check needs the .json design file; a report gives only guides and donors.");
-  return { kind: "report", guides: d.guides.join(", "), donor: donorList.map((x) => x.sequence).join("\n"), donors: donorList, label: d.label, protein: d.protein || [], note: notes.join(" ") };
+  return { kind: "report", nuclease: d.nuclease, guides: d.guides.join(", "), donor: donorList.map((x) => x.sequence).join("\n"), donors: donorList, label: d.label, protein: d.protein || [], note: notes.join(" ") };
 }
 
 export function inferWorkflow(spec) {
@@ -124,16 +125,21 @@ export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides =
   const cache = new Map(); const tasks = []; const problems = [];
   const designGuides = design.kind === "report" ? design.guides : []; const designDonor = design.kind === "report" ? reportDonors(design.donors) : "";
   pairs.forEach((pair, index) => {
+    if (design.kind === "report" && pair.nuclease) {
+      try {
+        if (nucleaseOrDefault(pair.nuclease) !== nucleaseOrDefault(design.nuclease)) { problems.push(`${pair.sample}: sample-sheet enzyme conflicts with the imported design report.`); return; }
+      } catch (error) { problems.push(`${pair.sample}: ${error.message}`); return; }
+    }
     const g = pair.guides?.length ? pair.guides : (guides.length ? guides : designGuides); const d = pair.donor || donor || designDonor;
-    const key = JSON.stringify([pair.control[0], g, d, design.kind === "spec" ? "spec" : "", pair.nuclease || nuclease]);
+    const key = JSON.stringify([pair.control[0], g, d, design.kind === "spec" ? "spec" : "", pair.nuclease || (design.kind === "report" ? design.nuclease : null) || nuclease]);
     if (!cache.has(key)) {
       const control = getTrace(pair.control[0]);
       const sameControl = pairs.filter((p) => p.control[0] === pair.control[0]).slice(0, 6);
-      cache.set(key, planDesign({ designSpec: design.kind === "spec" ? design.spec : null, control, guides: g, donor: d, protein: design.kind === "report" ? design.protein : undefined, gene: "sample", nuclease: pair.nuclease || nuclease, baseEditor, genbank, codingOptions, editedForCut: g.length || design.kind === "spec" ? [] : sameControl.map((p) => { try { return getTrace(p.edited[0]); } catch { return null; } }).filter(Boolean) }));
+      cache.set(key, planDesign({ designSpec: design.kind === "spec" ? design.spec : null, control, guides: g, donor: d, protein: design.kind === "report" ? design.protein : undefined, gene: "sample", nuclease: pair.nuclease || (design.kind === "report" ? design.nuclease : null) || nuclease, baseEditor, genbank, codingOptions, editedForCut: g.length || design.kind === "spec" ? [] : sameControl.map((p) => { try { return getTrace(p.edited[0]); } catch { return null; } }).filter(Boolean) }));
     }
     const plan = cache.get(key);
     if (plan.error) { problems.push(`${pair.sample}: ${plan.error}`); return; }
-    tasks.push({ index: tasks.length, name: pair.sample, nuclease: plan.spec.nuclease || plan.spec.design?.nuclease || pair.nuclease || nuclease, spec: plan.spec, workflow: workflow !== "auto" ? workflow : baseEditor ? "base_edit" : (pair.workflow || inferWorkflow(plan.spec)), sampleType: sampleType || pair.type || "clone", controls: pair.control, edited: pair.edited, decisionOptions: { goal }, options: plan.codingInput ? { codingInput: plan.codingInput } : {}, planNotes: plan.warnings || [], pairing: { confidence: pair.confidence, reason: pair.reason }, well: wellOf(pair.edited[0]) });
+    tasks.push({ index: tasks.length, name: pair.sample, nuclease: plan.spec.nuclease || plan.spec.design?.nuclease || pair.nuclease || (design.kind === "report" ? design.nuclease : null) || nuclease, spec: plan.spec, workflow: workflow !== "auto" ? workflow : baseEditor ? "base_edit" : (pair.workflow || inferWorkflow(plan.spec)), sampleType: sampleType || pair.type || "clone", controls: pair.control, edited: pair.edited, decisionOptions: { goal }, options: plan.codingInput ? { codingInput: plan.codingInput } : {}, planNotes: plan.warnings || [], pairing: { confidence: pair.confidence, reason: pair.reason }, well: wellOf(pair.edited[0]) });
   });
   return { tasks, problems };
 }

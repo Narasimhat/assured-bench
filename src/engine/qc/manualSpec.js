@@ -81,6 +81,7 @@ export function specFromControl(input) {
 }
 
 function specFromControlOne({ control, guides, donor = "", gene = "sample", minArm = 15, nuclease = "SpCas9", cutIndices = [] }) {
+  try { nuclease = nucleaseOrDefault(nuclease); } catch (error) { return { error: error.message }; }
   const reference = fillReference(control);
   const warnings = [];
   const guideList = (Array.isArray(guides) ? guides : String(guides || "").split(/[,\s;]+/)).filter(Boolean);
@@ -96,9 +97,9 @@ function specFromControlOne({ control, guides, donor = "", gene = "sample", minA
   // cut sites inferred from the traces stand in for guides of unknown sequence
   cutIndices.forEach((cut) => placed.push({ spacer: "", strand: "+", start: cut - 17, end: cut + 3, cut, pam: "", inferred: true }));
   const spec = {
-    schema: QC_SPEC_SCHEMA, design: { type: "manual", editKind: "knockout", gene, label: "Manual entry", tag: "", codingStrand: "+" },
+    schema: QC_SPEC_SCHEMA, design: { nuclease, type: "manual", editKind: "knockout", gene, label: "Manual entry", tag: "", codingStrand: "+" },
     reference: { sequence: reference, offset: 0, convention: "0-based index into the control read" },
-    guides: placed.map((g, index) => ({ name: g.inferred ? `${gene}_cut${index + 1}` : `${gene}_g${index + 1}`, spacer: g.spacer, pam: g.pam, strand: g.strand, cut: g.cut, protospacerStart: g.start, protospacerEnd: g.end, index: index + 1 })),
+    guides: placed.map((g, index) => ({ name: g.inferred ? `${gene}_cut${index + 1}` : `${gene}_g${index + 1}`, spacer: g.spacer, pam: g.pam, strand: g.strand, cut: g.cut, ...(g.cuts ? { cuts: g.cuts, pamStart: g.pamStart, pamEnd: g.pamEnd } : {}), ...(g.enzyme ? { enzyme: g.enzyme, configVersion: g.configVersion } : {}), protospacerStart: g.start, protospacerEnd: g.end, index: index + 1 })),
     donors: [], markers: [], primers: [], amplicons: [],
   };
   const donorSeq = cleanDna(donor);

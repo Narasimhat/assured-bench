@@ -6,7 +6,7 @@ import { cloneAlignedFigure, alignedGroups, clonesAlignedFigure, clonesAlignment
 import { cloneSelectionFigure } from "./selectionFigure.js";
 import { panelOf } from "./recommend.js";
 
-export const QC_VERSION = "0.5.2";
+export const QC_VERSION = "0.6.0";
 const esc = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const pct = (value) => (value === null || value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`);
 
@@ -44,7 +44,7 @@ function contributionRows(r) {
 
 function sampleSection(workflow, r, { chromatogram = true } = {}) {
   const hdr = workflow === "snp" || workflow === "tag_small"; const intendedWord = hdr ? "HDR score (intended edit)" : "Intended edit";
-  const head = `<div class="sample"><h3>${esc(r.name)}: <span class="${statusClass(r)}">${esc(headline(workflow, r))}</span></h3>`;
+  const head = `<div class="sample">${r.nuclease ? `<p class="muted">Enzyme: ${esc(r.nuclease)}${r.enzymeConfigVersion ? ` (config ${esc(r.enzymeConfigVersion)}, ${esc(r.analysisModel)})` : ""}${r.cutSites?.length ? `; predicted strand cuts (0-based interbase): ${r.cutSites.map(g => `${esc(g.name)} ${g.cuts ? Object.entries(g.cuts).map(([key, value]) => `${esc(key)} ${value}`).join(" / ") : g.cut}`).join("; ")}` : ""}.</p>` : ""}<h3>${esc(r.name)}: <span class="${statusClass(r)}">${esc(headline(workflow, r))}</span></h3>`;
   if (!r.ok) return `${head}<p>${esc(r.error)}</p></div>`;
   if (r.kind === "junction") {
     const events = r.events.length ? `<table><tr><th>Difference</th><th>Region</th><th>Allele position</th><th>Detail</th><th>Quality</th></tr>${r.events.map((e) => `<tr><td>${esc(e.type)}${e.expectedChange ? " (designed change)" : ""}</td><td>${esc(e.region)}</td><td>${e.alleleIndex}</td><td>${esc(e.detail)}</td><td>${e.quality}</td></tr>`).join("")}</table>` : "<p>No differences from the expected knock-in sequence in the aligned stretch.</p>";
@@ -181,12 +181,12 @@ ${selSec || alnSec ? `<details style="margin-top:18px"><summary style="cursor:po
 const csvCell = (value) => { const text = String(value ?? ""); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
 
 export function buildResultsCsv(workflow, results) {
-  const header = ["sample", "well", "decision", "decision_reason", "status", "result", "wild_type_pct", "edited_pct", "edited_lo", "edited_hi", "indel_pct", "between_cuts_pct", "intended_edit_pct", "intended_lo", "intended_hi", "blocking_only_pct", "ko_score_pct", "ko_lo", "ko_hi", "functional_ko_pct", "functional_ko_lo", "functional_ko_hi", "functional_call", "unexplained_pct", "confidence", "clone_call", "reads_used", "reads_agree", "junction_verdict", "fit_r2", "unplanned_changes", "notes", "knockout_support", "priority_rank", "recommendation"];
+  const header = ["sample", "well", "decision", "decision_reason", "status", "result", "wild_type_pct", "edited_pct", "edited_lo", "edited_hi", "indel_pct", "between_cuts_pct", "intended_edit_pct", "intended_lo", "intended_hi", "blocking_only_pct", "ko_score_pct", "ko_lo", "ko_hi", "functional_ko_pct", "functional_ko_lo", "functional_ko_hi", "functional_call", "unexplained_pct", "confidence", "clone_call", "reads_used", "reads_agree", "junction_verdict", "fit_r2", "unplanned_changes", "notes", "nuclease", "predicted_cuts", "enzyme_config_version", "analysis_model", "knockout_support", "priority_rank", "recommendation"];
   const lines = [header.join(",")];
   results.forEach((r) => {
     const s = r.summary || {};
     const iv = r.intervals || {};
-    lines.push([r.name, r.well || "", r.decision?.decision || "", (r.decision?.reasons || []).join(" "), r.ok ? "analysed" : "failed", headline(workflow, r), s.wtPct, s.editedPct, iv.editedPct?.[0] ?? "", iv.editedPct?.[1] ?? "", s.indelPct, s.betweenCutsPct, s.intendedEditPct, iv.intendedEditPct?.[0] ?? "", iv.intendedEditPct?.[1] ?? "", s.partialConversionPct, s.koScorePct, iv.koScorePct?.[0] ?? "", iv.koScorePct?.[1] ?? "", s.functionalKoPct ?? "", iv.functionalKoPct?.[0] ?? "", iv.functionalKoPct?.[1] ?? "", r.functional?.call?.status || "", s.unexplainedPct ?? "", r.confidence?.tier || "", r.genotype?.category || "", r.reads ? r.reads.length : (r.ok && r.kind !== "junction" ? 1 : ""), r.agreement ? r.agreement.agree : "", r.verdict?.status || "", r.quality?.r2 ?? "", (r.unplanned || []).map((h) => `${h.relative}:${h.change}(${Math.round(h.fraction * 100)}%)`).join(" "), (r.warnings || []).concat(r.ok ? [] : [r.error]).join(" | "), r.recommendation?.score ?? "", r.recommendation?.rank ?? "", r.recommendation?.action || ""].map(csvCell).join(","));
+    lines.push([r.name, r.well || "", r.decision?.decision || "", (r.decision?.reasons || []).join(" "), r.ok ? "analysed" : "failed", headline(workflow, r), s.wtPct, s.editedPct, iv.editedPct?.[0] ?? "", iv.editedPct?.[1] ?? "", s.indelPct, s.betweenCutsPct, s.intendedEditPct, iv.intendedEditPct?.[0] ?? "", iv.intendedEditPct?.[1] ?? "", s.partialConversionPct, s.koScorePct, iv.koScorePct?.[0] ?? "", iv.koScorePct?.[1] ?? "", s.functionalKoPct ?? "", iv.functionalKoPct?.[0] ?? "", iv.functionalKoPct?.[1] ?? "", r.functional?.call?.status || "", s.unexplainedPct ?? "", r.confidence?.tier || "", r.genotype?.category || "", r.reads ? r.reads.length : (r.ok && r.kind !== "junction" ? 1 : ""), r.agreement ? r.agreement.agree : "", r.verdict?.status || "", r.quality?.r2 ?? "", (r.unplanned || []).map((h) => `${h.relative}:${h.change}(${Math.round(h.fraction * 100)}%)`).join(" "), (r.warnings || []).concat(r.ok ? [] : [r.error]).join(" | "), r.nuclease || "", JSON.stringify(r.cutSites || []), r.enzymeConfigVersion || "", r.analysisModel || "", r.recommendation?.score ?? "", r.recommendation?.rank ?? "", r.recommendation?.action || ""].map(csvCell).join(","));
   });
   return `${lines.join("\n")}\n`;
 }

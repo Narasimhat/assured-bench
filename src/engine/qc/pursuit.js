@@ -1,3 +1,4 @@
+import { cutAnchors } from "./cutGeometry.js";
 // Adaptive library growth ("pursuit"). The base library lists every small indel exhaustively; larger events cannot be listed
 // (a deletion of up to 250 bases anchored at either side of each cut is tens of thousands of alleles). After the first fit,
 // every large candidate is scored by how much of the remaining residual it would explain, and only candidates that clear a
@@ -61,16 +62,21 @@ export function proposeAlleles({ prepared, internals, alleles, options = {} }) {
     if (gain > 0) found.push({ gain, s, e, guide, between });
   };
   guides.forEach((guide, g) => {
-    for (let size = opt.minLargeDeletion; size <= opt.maxLargeDeletion; size += 1) for (let left = 0; left <= size; left += 1) addDeletion(guide.cut - left, guide.cut - left + size, g, false);
+    const anchors = cutAnchors(guide), lo = Math.min(...anchors), hi = Math.max(...anchors);
+    for (let size = opt.minLargeDeletion; size <= opt.maxLargeDeletion; size += 1) for (let left = 0; left <= size + hi - lo; left += 1) addDeletion(hi - left, hi - left + size, g, false);
   });
   for (let i = 0; i < guides.length; i += 1) for (let j = i + 1; j < guides.length; j += 1) {
-    const a = Math.min(guides[i].cut, guides[j].cut); const b = Math.max(guides[i].cut, guides[j].cut);
-    for (let s = a - opt.spanExtension; s <= a + 3; s += 1) for (let e = b - 3; e <= b + opt.spanExtension; e += 1) if (e - s > 33) addDeletion(s, e, i, true);
+    const [lg, rg] = guides[i].cut <= guides[j].cut ? [guides[i], guides[j]] : [guides[j], guides[i]];
+    const la = cutAnchors(lg), ra = cutAnchors(rg);
+    const a = Math.min(...la), b = Math.max(...ra);
+    for (let s = a - opt.spanExtension; s <= Math.max(...la) + 3; s += 1) for (let e = Math.min(...ra) - 3; e <= b + opt.spanExtension; e += 1) if (e - s > 33) addDeletion(s, e, i, true);
   }
   const sequenceCandidates = []; // a two-cut deletion with a few extra bases at its junction
   for (let i = 0; i < guides.length; i += 1) for (let j = i + 1; j < guides.length; j += 1) {
-    const a = Math.min(guides[i].cut, guides[j].cut); const b = Math.max(guides[i].cut, guides[j].cut);
-    for (let da = -3; da <= 3; da += 1) for (let db = -3; db <= 3; db += 1) for (let n = 1; n <= 2; n += 1) {
+    const [lg, rg] = guides[i].cut <= guides[j].cut ? [guides[i], guides[j]] : [guides[j], guides[i]];
+    const la = cutAnchors(lg), ra = cutAnchors(rg);
+    const a = Math.min(...la), b = Math.max(...ra);
+    for (let da = -3; da <= Math.max(...la) - a + 3; da += 1) for (let db = Math.min(...ra) - b - 3; db <= 3; db += 1) for (let n = 1; n <= 2; n += 1) {
       const s = a + da; const e = b + db; if (e <= s + 2) continue;
       sequenceCandidates.push({ sequence: reference.slice(0, s) + "N".repeat(n) + reference.slice(e), kind: "deletion_between_cuts", label: `Deletion between cuts (${e - s} bp) with +${n} at the junction`, size: n - (e - s), guide: i + 1, between: true });
     }

@@ -1,3 +1,4 @@
+import { expectedGuideGeometry } from "./nucleases.js";
 // The edited trace laid onto the control, base by base, for the figures of the report: where the guides, PAMs, cuts and designed changes lie, the
 // base calls of both reads, and the chromatogram curves resampled so that every control base is one unit wide. The edited read is mapped to the
 // control with the offset the analysis used; only where a different mapping with gaps explains the edited calls clearly better (a clean deletion or
@@ -72,12 +73,16 @@ export function buildTraceView({ prepared, control, edited }) {
   const near = (r) => { for (let d = 0; d <= 3; d += 1) { if (refToRead.has(r + d)) return refToRead.get(r + d) - d; if (refToRead.has(r - d)) return refToRead.get(r - d) + d; } return null; };
   const guides = []; const points = [];
   for (const cut of prepared.cuts) {
-    const g = cut.guide; const item = { name: g.name, strand: g.strand, cut: cut.readIndex };
+    const g = cut.guide; const item = { name: g.name, strand: g.strand, cut: cut.readIndex, cuts: cut.strandCuts };
     points.push(cut.readIndex);
     if (g.protospacerStart !== null && g.protospacerStart !== undefined) {
       const a = near(g.protospacerStart); const b = near(g.protospacerEnd - 1);
       if (a !== null && b !== null && b > a) {
-        item.spacer = [a, b]; item.pam = g.strand === "-" ? [a - 3, a - 1] : [b + 1, b + 3]; points.push(a, b, item.pam[0], item.pam[1]);
+        item.spacer = [a, b];
+        const geometry = expectedGuideGeometry(g, prepared.spec);
+        const pamFirst = near(geometry.pamStart), pamLast = near(geometry.pamEnd - 1);
+        item.pam = pamFirst !== null && pamLast !== null ? [pamFirst, pamLast] : null;
+        points.push(a, b, ...Object.values(item.cuts || {}), ...(item.pam || []));
       }
     }
     guides.push(item);
@@ -120,7 +125,7 @@ export function buildTraceView({ prepared, control, edited }) {
   const ctrlIdx = []; for (let i = 0; i < len; i += 1) ctrlIdx.push(from + i);
   return {
     v: 1, from, length: len, points: VIEW_POINTS, mode, orientation: prepared.orientation,
-    guides: guides.map((g) => ({ name: g.name, strand: g.strand, cut: g.cut - from, spacer: g.spacer ? g.spacer.map((x) => x - from) : null, pam: g.pam ? g.pam.map((x) => x - from) : null })),
+    guides: guides.map((g) => ({ name: g.name, strand: g.strand, cut: g.cut - from, ...(Object.keys(g.cuts || {}).length ? { cuts: Object.fromEntries(Object.entries(g.cuts).map(([key, value]) => [key, value - from])) } : {}), spacer: g.spacer ? g.spacer.map((x) => x - from) : null, pam: g.pam ? g.pam.map((x) => x - from) : null })),
     markers: markers.map((m) => ({ ...m, at: m.at - from, ...(m.protein ? { protein: { ...m.protein, cols: m.protein.cols.map((x) => x - from) } } : {}) })),
     ...(codons.length ? { protein: { strand: P.strand, codons } } : {}),
     control: { calls: ctrlCalls, curves: curves(control, ctrlIdx) },

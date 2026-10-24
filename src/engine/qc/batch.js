@@ -1,3 +1,6 @@
+import { ENZYME_CONFIG_VERSION } from "./enzymeConfig.js";
+import { expectedGuideGeometry, specNuclease, hydrateCutGeometry } from "./nucleases.js";
+import { enzymeAnalysisNotes } from "./cutGeometry.js";
 // Orchestration shared by the app, its worker and the tests: choose the design, analyse one sample, return plain data.
 import { analysePair, analyseReads } from "./analyze.js";
 import { annotateSpecProtein } from "./protein.js";
@@ -25,7 +28,13 @@ function planDesignCore({ designSpec, control, guides, donor, gene, nuclease, ba
     const unwrappedSpec = (designSpec.schema === "assured-studio/1" && designSpec.qcSpec) ? designSpec.qcSpec : designSpec;
     const check = validateDesignSpec(unwrappedSpec);
     if (!check.ok) return { error: `The design file is not usable: ${check.errors[0]}${check.errors.length > 1 ? ` (and ${check.errors.length - 1} more)` : ""}`, warnings: check.warnings };
-    return { spec: annotateSpecProtein(unwrappedSpec, protein), warnings: check.warnings, source: "design" };
+    const hydrated = { ...unwrappedSpec, design: { ...unwrappedSpec.design, nuclease: specNuclease(unwrappedSpec) },
+      guides: (unwrappedSpec.guides || []).map(g => {
+        if (g.protospacerStart == null) return g;
+        const geometry = expectedGuideGeometry(g, unwrappedSpec);
+        return { ...g, ...(geometry.cuts ? { cuts: geometry.cuts } : {}), pamStart: geometry.pamStart, pamEnd: geometry.pamEnd };
+      }) };
+    return { spec: annotateSpecProtein(hydrated, protein), warnings: [...check.warnings, ...enzymeAnalysisNotes(hydrated)], source: "design" };
   }
   if (!control) return { error: "Add the control trace, or a design file." };
   const guideList = (Array.isArray(guides) ? guides : String(guides || "").split(/[,\s;]+/)).filter(Boolean);
@@ -47,7 +56,7 @@ function planDesignCore({ designSpec, control, guides, donor, gene, nuclease, ba
     if (!markers.markers.length) return { error: `No ${baseEditor.editor === "CBE" ? "C" : "A"} lies in positions ${(baseEditor.window || [4, 8]).join("-")} of this protospacer, so a ${baseEditor.editor || "ABE"} would not edit it.`, warnings: [] };
     built.spec.markers = markers.markers; built.spec.design.editKind = "base_edit"; built.spec.baseEditor = { editor: baseEditor.editor || "ABE", window: baseEditor.window || [4, 8], target: baseEditor.target ?? null };
   }
-  return { spec: annotateSpecProtein(built.spec, protein), warnings: [...notes, ...(built.warnings || [])], source: guideList.length ? "manual" : "inferred cut" };
+  return { spec: annotateSpecProtein(built.spec, protein), warnings: [...notes, ...(built.warnings || []), ...enzymeAnalysisNotes(built.spec)], source: guideList.length ? "manual" : "inferred cut" };
 }
 
 const codingCache = new Map();
@@ -90,7 +99,7 @@ function traceViewOf(result, control, edited, options) {
 }
 
 export function analyseSample({ name, spec, control, edited, extraReads = [], sampleType = "pool", options = {} }) {
-  spec = annotateSpecProtein(spec); // the protein consequence of the designed changes (a design planned with planDesign has it already); estimates do not use it
+  spec = annotateSpecProtein(hydrateCutGeometry(spec)); // the protein consequence of the designed changes (a design planned with planDesign has it already); estimates do not use it
   // Coding context (a gene record supplied with the design): turns the frameshift proxy into a functional knockout assessment.
   const codingResult = codingFor(options.codingInput, spec); const coding = codingResult && codingResult.ok ? codingResult.context : null;
   const { codingInput, ...engineOptions } = options;
@@ -101,7 +110,7 @@ export function analyseSample({ name, spec, control, edited, extraReads = [], sa
   if (!result.ok) return { name, kind: "trace-pair", ok: false, error: result.error, warnings: result.warnings || [] };
   const decomposition = result.decomposition;
   return {
-    name, kind: "trace-pair", ok: true, sampleType, warnings: result.warnings, orientation: result.prepared.orientation,
+    name, kind: "trace-pair", ok: true, sampleType, enzymeConfigVersion: ENZYME_CONFIG_VERSION, analysisModel: enzymeAnalysisNotes(spec).length ? "staggered-break-span/1" : "single-cut/1", nuclease: specNuclease(spec), cutSites: spec.guides.map(g => ({ name: g.name, strand: g.strand, cut: g.cut, ...(g.cuts ? { cuts: g.cuts } : {}) })), warnings: result.warnings, orientation: result.prepared.orientation,
     summary: result.summary, intervals: result.intervals || null, confidence: result.confidence || null, reads: result.reads || null, agreement: result.agreement || null,
     genotype: result.genotype ? { category: result.genotype.category, call: result.genotype.call, summary: result.genotype.summary, flags: result.genotype.flags, alleles: result.genotype.alleles.map((a) => ({ label: a.label, kind: a.kind, size: a.size, fraction: round(a.fraction) })) } : null,
     contributions: decomposition.contributions.slice(0, 14).map((c) => ({ label: c.label, kind: c.kind, size: c.size, fraction: round(c.fraction, 4), indistinguishable: c.indistinguishable, alsoConsistentWith: c.alsoConsistentWith })),
@@ -119,7 +128,7 @@ export function analyseJunction({ name, spec, trace, donorName }) {
   const result = analyseJunctionRead({ trace, spec, donorName });
   if (!result.ok) return { name, kind: "junction", ok: false, error: result.error, looksWildType: Boolean(result.looksWildType), warnings: [] };
   return {
-    name, kind: "junction", ok: true, orientation: result.orientation, identity: round(result.identity, 4), alignedBases: result.alignedBases,
+    name, kind: "junction", ok: true, nuclease: specNuclease(spec), cutSites: (spec.guides || []).map(g => ({ name: g.name, strand: g.strand, cut: g.cut, cuts: g.cuts })), orientation: result.orientation, identity: round(result.identity, 4), alignedBases: result.alignedBases,
     verdict: result.verdict, spans: result.spans, wildTypeIdentity: round(result.wildTypeIdentity, 4),
     events: result.events.slice(0, 20).map((e) => ({ type: e.type, region: e.region, alleleIndex: e.alleleIndex, quality: e.quality, detail: e.type === "mismatch" ? `${e.expected}>${e.read}` : e.type === "deletion" ? `${e.length} bp` : e.bases || "", expectedChange: Boolean(e.expectedChange) })),
     markers: result.markers.map((m) => ({ position: m.marker.pos, change: `${m.marker.ref}>${m.marker.alt}`, label: m.marker.label || "", covered: m.covered, present: Boolean(m.present), base: m.base || "" })),
