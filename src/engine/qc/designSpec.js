@@ -28,7 +28,8 @@ export function validateDesignSpec(spec) {
     inside(guide.cut, `${label} cut`);
     if (!["+", "-"].includes(guide.strand)) fail(`${label}: strand must be + or -.`);
     const spacer = String(guide.spacer || "").toUpperCase();
-    if (!isDna(spacer) || spacer.length < 17 || spacer.length > 24) fail(`${label}: spacer must be 17-24 nt of DNA.`);
+    const inferred = guide.inferred === true && !spacer && guide.protospacerStart == null && guide.protospacerEnd == null && !guide.cuts;
+    if (!inferred && (!isDna(spacer) || spacer.length < 17 || spacer.length > 24)) fail(`${label}: spacer must be 17-24 nt of DNA.`);
     if (guide.protospacerStart !== null && guide.protospacerStart !== undefined) {
       const site = reference.slice(guide.protospacerStart, guide.protospacerEnd);
       const expected = guide.strand === "+" ? spacer : reverseComplement(spacer);

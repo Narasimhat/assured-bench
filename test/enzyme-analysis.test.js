@@ -115,3 +115,17 @@ test('opposite-strand two-guide deletion uses the outer strand boundaries rather
   const result = analysePair({ control: traceOf(seq), edited: traceOf(edit), spec, options: { intervals: false } });
   assert.ok(result.ok, result.error); near(result.summary.betweenCutsPct, 100);
 });
+
+test('trace-inferred cuts remain usable with every enzyme without fabricating a guide or staggered boundaries', () => {
+  const cut = 242, edited = reference.slice(0, cut) + reference.slice(cut + 1);
+  for (const nuclease of ['SpCas9', 'Mad7', 'AsCas12a', 'LbCas12a']) {
+    const plan = planDesign({ control: traceOf(reference), guides: [], nuclease, editedForCut: [traceOf(edited)] });
+    assert.ok(!plan.error, plan.error);
+    assert.equal(plan.spec.guides[0].inferred, true);
+    assert.equal(plan.spec.guides[0].protospacerStart, null);
+    assert.equal(plan.spec.guides[0].cuts, undefined);
+    assert.deepEqual(validateDesignSpec(plan.spec).errors, []);
+    const result = analysePair({ control: traceOf(reference), edited: traceOf(edited), spec: plan.spec, options: { intervals: false } });
+    assert.ok(result.ok, result.error); near(result.summary.editedPct, 100);
+  }
+});
