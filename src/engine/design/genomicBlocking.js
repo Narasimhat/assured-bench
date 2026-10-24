@@ -1,4 +1,5 @@
 import { findBlockingSet, keepsCodonsSynonymous, mkODN, assessGuideAgainstPointMutationDonor } from './designEngine.js';
+import { guideGeometry } from './enzymeModelGuides.js';
 
 export const BLOCKING_POLICIES = Object.freeze({
   none: 'Requested edit only',
@@ -56,11 +57,12 @@ export function buildBlockingComparison(model, guide, gp, alt, policy, maxChange
   const variants=[{id:'requested-only',changes:[],donor:baselineDonor,protection:baselineProtection}];
   // No CDS means "outside CDS" is unknown, not proven noncoding.
   if(policy!=='none' && model.cdsSegments?.length && baselineProtection.tier!=='strong') {
-    const pamStart=guide.str==='+'?guide.ps+20:guide.ps;
+    const geometry=guideGeometry(guide);
+    const pamStart=geometry.pamStart;
     for(const pamOnly of [true,false]) {
       const changes=findBlockingSet(editedModel,guide,new Set([gp]),{
         allowNonCoding:policy==='noncoding',maxChanges,
-        isPositionAllowed:p=>allowed(p) && (!pamOnly || (p>=pamStart && p<pamStart+3)),
+        isPositionAllowed:p=>allowed(p) && (!pamOnly || (p>=pamStart && p<geometry.pamEnd)),
       });
       if(!changes.length || variants.some(v=>JSON.stringify(v.changes.map(m=>[m.gp,m.nb]))===JSON.stringify(changes.map(m=>[m.gp,m.nb]))))continue;
       // Validate the combined changes relative to the requested-edit allele, including codon interactions.
@@ -69,7 +71,7 @@ export function buildBlockingComparison(model, guide, gp, alt, policy, maxChange
       const expected=new Map([[gp,alt],...changes.map(m=>[m.gp,m.nb])]);
       if(!donor || [...donor.genomicDonor].some((b,i)=>b!==(expected.get(donor.donorStart+i)??seq[donor.donorStart+i])))throw Error('Blocking donor validation failed.');
       const protection=assessGuideAgainstPointMutationDonor(guide,donor);
-      if(Number.isFinite(protection.cfd) && protection.cfd < baselineProtection.cfd)variants.push({id:pamOnly?'pam-blocking':'pam-seed-blocking',changes,donor,protection});
+      if((guide.enzyme && guide.enzyme!=='spcas9' ? protection.tier==='strong' && baselineProtection.tier!=='strong' : Number.isFinite(protection.cfd) && protection.cfd < baselineProtection.cfd))variants.push({id:pamOnly?'pam-blocking':'pam-seed-blocking',changes,donor,protection});
     }
   }
   for(const v of variants)v.splice=screenSpliceChanges(model,edited,v.changes);

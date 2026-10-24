@@ -46,7 +46,8 @@ export const PM_EDIT_COLORS = {
 };
 
 /** HTML rendering of a spacer + PAM. App.jsx keeps the JSX equivalent for on-screen use. */
-function renderGuideSequenceHtml(spacer, pam) {
+function renderGuideSequenceHtml(spacer, pam, enzyme = null) {
+  if (enzyme?.pam_side === "5prime") return `<span style="background:#FEF3C7;color:#92400E;font-family:Consolas,monospace;font-weight:800;">${pam}</span> <span style="font-family:Consolas,monospace;font-weight:700;">${spacer}</span>`;
   return `<span style="font-family:Consolas,monospace;font-weight:700;color:#111827;">${spacer}</span> <span style="display:inline-block;padding:1px 6px;border-radius:999px;background:#FEF3C7;color:#92400E;font-family:Consolas,monospace;font-weight:800;">${pam}</span>`;
 }
 
@@ -121,6 +122,7 @@ function buildGeneInfoRows(meta, result, fileName) {
   if (!result) return [];
   return [
     ["Gene", meta.gene || result.gene],
+    ...(result.enzyme ? [["Enzyme", `${result.enzyme.name} · ${result.enzyme.pam_pattern} (${result.enzyme.pam_side === "5prime" ? "5′" : "3′"} PAM) · config ${result.enzyme.version}`]] : []),
     ["Design class", result.type === "genomic-snv" ? "Genomic SNP" : getProjectTypeMeta(meta.projectType).label],
     ["Target", buildDisplayedEditLabel(meta, result)],
     ["Cell line", meta.cellLine || "n/a"],
@@ -190,6 +192,7 @@ export function normalizeGeneToken(value) {
 }
 
 export function getBrunelloReferenceGuideSet(result, brunelloLookup) {
+  if (result?.enzyme && result.enzyme.id !== "spcas9") return null;
   if (!brunelloLookup?.guides?.length) return null;
   return {
     requestedGene: brunelloLookup.requestedGene || normalizeGeneToken(result?.gene),
@@ -259,7 +262,7 @@ export function buildPmStrandModels(donor) {
       pamEnd: length - genomicGuide.pamStart,
     };
   };
-  return [
+  const strands = [
     {
       key: "ordered",
       title: orderedLabel,
@@ -287,6 +290,18 @@ export function buildPmStrandModels(donor) {
       guide: mapGuide(donor.guideStrand !== "+"),
     },
   ];
+  if (donor.enzyme && donor.enzyme !== "spcas9") {
+    const reversed = donor.orderStrand === "antisense";
+    strands[0].title = `${reversed ? "-" : "+"} strand donor (input reference)`;
+    strands[1].title = `${reversed ? "+" : "-"} strand donor (input reference)`;
+    strands[0].note = donor.strand_note || "Selected donor strand; validate enzyme-specific delivery experimentally.";
+    strands[1].note = "Opposite strand for reference.";
+    strands[0].guide = mapGuide(reversed); strands[1].guide = mapGuide(!reversed);
+    const region = reversed ? donor.armRegions.map(item => ({ ...item, start: length - item.end, end: length - item.start })) : donor.armRegions;
+    strands[0].regions = region;
+    strands[1].regions = region.map(item => ({ ...item, start: length - item.end, end: length - item.start }));
+  }
+  return strands;
 }
 
 function splitFramedSequence(sequence) {
@@ -1034,6 +1049,7 @@ function buildKnockoutFactsHtml(result) {
   const outcome = result.deletionOutcome;
   if (outcome) {
     rows.push({ label: "Expected deletion", value: `${outcome.deletionSize} bp (mod 3 = ${outcome.deletionMod3}; ${outcome.frameshiftPredicted ? "frameshift predicted" : "in-frame"})` });
+    if (outcome.cutBoundaryRange) rows.push({ label: "Staggered cut boundaries", value: `${outcome.cutBoundaryRange[0]}–${outcome.cutBoundaryRange[1]} bp between strand-cut combinations. End processing can change the final junction; confirm by sequencing.` });
     if (outcome.spliceDonorRemoved) rows.push({ label: "Splice donor", value: `Removed: exon skipping is plausible; exon length ${outcome.exonLength} bp (mod 3 = ${outcome.exonSkippingMod3}).` });
   }
   if (result.strat) rows.push({ label: "Strategy", value: result.strat });
@@ -1128,7 +1144,7 @@ export function buildInternalStrandModels(donor) {
   const reverseIndexes = (indexes, length) => (indexes || []).map((index) => length - 1 - index).sort((left, right) => left - right);
   const orderedLabel = donor.guideStrand === "+" ? "- strand donor" : "+ strand donor";
   const oppositeLabel = donor.guideStrand === "+" ? "+ strand donor" : "- strand donor";
-  return [
+  const strands = [
     {
       key: "ordered",
       title: orderedLabel,
@@ -1158,6 +1174,13 @@ export function buildInternalStrandModels(donor) {
       wtGuidePamIndexes: reverseIndexes(projectWtIndexes(orderedGuidePam, orderedWt.length), orderedWt.length),
     },
   ];
+  if (donor.enzyme && donor.enzyme !== "spcas9") {
+    const reversed = donor.orderStrand === "antisense";
+    strands[0].title = `${reversed ? "-" : "+"} strand donor (input reference)`;
+    strands[1].title = `${reversed ? "+" : "-"} strand donor (input reference)`;
+    strands[0].note = donor.strand_note; strands[1].note = "Opposite strand for reference.";
+  }
+  return strands;
 }
 
 function buildInternalSequenceHtml(label, sequence, guideSiteIndexes = [], guidePamIndexes = [], silentIndexes = [], annotations = [], mode = "donor") {
@@ -1330,7 +1353,7 @@ export function buildReportHtml(meta, result, fileName, historicalContext, revie
     ["IRIS ID", meta.irisId || "[to be assigned]"],
   ];
   const geneInfoItems = buildGeneInfoItems(meta, result, fileName);
-  const guideRows = (result?.gs || []).map((guide) => [guide.n, renderGuideSequenceHtml(guide.sp, guide.pm), `${guide.str} strand`, `${guide.gc}%`, guide.arm || guide.note || ""]);
+  const guideRows = (result?.gs || []).map((guide) => [guide.n, renderGuideSequenceHtml(guide.sp, guide.pm, result.enzyme), `${guide.str} strand`, `${guide.gc}%`, [guide.arm || guide.note || "", ...(guide.cuts ? [`Predicted target/non-target cut boundaries: ${guide.cuts.target}/${guide.cuts.non_target}.`] : [])].join(" ")]);
   const primerCandidateRows = buildPrimerCandidateRows(result);
   const ssOdnNotes = buildSsOdnNotes(result);
   const sectionTitle = ["pm", "genomic-snv"].includes(result.type) ? "ssODN Donor Templates" : result.type === "ko" ? "Knockout Design" : "Donor Design";

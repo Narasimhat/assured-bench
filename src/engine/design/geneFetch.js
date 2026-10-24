@@ -49,7 +49,12 @@ const defaultFetch = (...args) => globalThis.fetch(...args);
 async function request(url, { fetchImpl = defaultFetch, sleep = defaultSleep } = {}, what, asText = false) {
   let res = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    try { res = await fetchImpl(url); } catch { throw new GeneFetchError(`Could not reach ${what}. Check the connection and try again.`); }
+    try { res = await fetchImpl(url, { signal: AbortSignal.timeout(15000) }); } catch {
+      if (attempt < 2) { await sleep(500 * (attempt + 1)); continue; }
+      const error = new GeneFetchError(`Could not reach ${what}. Check the connection and try again.`);
+      error.transient = true;
+      throw error;
+    }
     if ([429, 500, 502, 503, 504].includes(res.status) && attempt < 2) {
       const wait = Math.min(Number(res.headers?.get?.("retry-after")) || 1, 5);
       await sleep(wait * 1000 * (attempt + 1));
@@ -64,7 +69,12 @@ async function request(url, { fetchImpl = defaultFetch, sleep = defaultSleep } =
     error.status = res.status;
     throw error;
   }
-  return asText ? res.text() : res.json();
+  try { return await (asText ? res.text() : res.json()); }
+  catch {
+    const error = new GeneFetchError(`${what} returned an unreadable response. Try again later.`);
+    error.transient = true;
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------- queries
@@ -352,6 +362,7 @@ export function buildGenBank(spec, { date = new Date() } = {}) {
     `Transcript: ${label} (${idBare})`,
     ...(spec.transcript.mane ? [`MANE Select: ${spec.transcript.mane}`] : []),
     `Retrieved from ${spec.provenance} on ${date.toISOString().slice(0, 10)} by Assured CRISPR Design; gene span plus ${spec.flank} bp on each side.`,
+    ...(spec.fallback ? [`Source recovery: ${spec.fallback.requested_source} unavailable; used ${spec.fallback.resolved_source}. ${spec.fallback.reason}`] : []),
   ];
   comment.forEach((text, i) => lines.push(`${i === 0 ? "COMMENT     " : " ".repeat(12)}${text}`));
   lines.push("FEATURES             Location/Qualifiers");
@@ -422,6 +433,7 @@ function summarise(spec, built, warnings) {
     proteinLength: built.protein.length,
     text: `${spec.gene.symbol} · ${spec.transcript.name} (${spec.transcript.id})${spec.transcript.mane ? " · MANE Select" : spec.transcript.canonical ? " · canonical" : ""} · ${spec.assembly} chr${spec.chromosome}:${spec.regionStart.toLocaleString("en-US")}–${spec.regionEnd.toLocaleString("en-US")} (${strand}) · ${built.exonCount} exons · ${built.protein.length} aa`,
     warnings: [...warnings, ...built.issues],
+    ...(spec.fallback ? { fallback: spec.fallback } : {}),
   };
 }
 
@@ -429,24 +441,35 @@ const fileNameFor = (spec) => `${spec.gene.symbol}_${stripVersion(spec.transcrip
 
 /**
  * Fetches a gene, transcript or RefSeq accession and returns the GenBank reference text plus a short summary.
- * Ensembl IDs are always answered by Ensembl and RefSeq accessions or NCBI Gene IDs by NCBI; a gene symbol uses `source`.
+ * Ensembl IDs are always answered by Ensembl and RefSeq accessions or NCBI Gene IDs by NCBI.
+ * A gene symbol tries `source` first, then the other provider on a transient outage.
  */
 export async function fetchGeneReference({ query, source = "ensembl", species = "human", flank = DEFAULT_FLANK, fetchImpl = defaultFetch, sleep = defaultSleep, date = new Date() } = {}) {
   const parsed = parseGeneQuery(query);
   const ctx = { fetchImpl, sleep };
   const useNcbi = parsed.kind === "refseq-transcript" || parsed.kind === "ncbi-gene-id" || ((parsed.kind === "symbol" || parsed.kind === "transcript-name") && source === "ncbi");
   if (parsed.kind === "transcript-name" && useNcbi) throw new GeneFetchError("Transcript names such as PTPRO-201 are Ensembl names. Use an NM_ accession for NCBI, or switch the source to Ensembl.");
-  try {
-    const spec = useNcbi ? await ncbiSpec(parsed, species, flank, ctx) : await ensemblSpec(parsed, species, flank, ctx);
+  const preferred = useNcbi ? "ncbi" : "ensembl";
+  const load = async (provider, fallback = null) => {
+    const spec = provider === "ncbi" ? await ncbiSpec(parsed, species, flank, ctx) : await ensemblSpec(parsed, species, flank, ctx);
+    if (fallback) spec.fallback = fallback;
     const warnings = await fillRegion(spec);
+    if (fallback) warnings.unshift(`${fallback.requested_source === "ensembl" ? "Ensembl" : "NCBI"} is unavailable. The reference was fetched automatically from ${provider === "ncbi" ? "NCBI" : "Ensembl"} instead. Review the selected transcript and assembly before designing.`);
     const built = buildGenBank(spec, { date });
     return { genbank: built.text, fileName: fileNameFor(spec), summary: summarise(spec, built, warnings), spec: { ...spec, seq: undefined } };
+  };
+  try {
+    return await load(preferred);
   } catch (error) {
-    // Public services have outages; for a gene symbol the other service can answer the same question.
-    const down = error instanceof GeneFetchError && (error.status >= 500 || /^Could not reach/.test(error.message));
+    const down = error instanceof GeneFetchError && (error.transient || error.status >= 500 || error.status === 429);
     if (down && parsed.kind === "symbol") {
-      error.message += ` ${useNcbi ? "Ensembl" : "NCBI"} can resolve gene symbols too: switch the source and try again.`;
+      const alternate = preferred === "ensembl" ? "ncbi" : "ensembl";
+      try { return await load(alternate, { requested_source: preferred, resolved_source: alternate, reason: error.message }); }
+      catch (fallbackError) {
+        throw new GeneFetchError(`${error.message} ${alternate === "ncbi" ? "NCBI" : "Ensembl"} fallback also failed: ${fallbackError.message} Retry later or upload a GenBank reference for the intended transcript.`);
+      }
     }
+    if (down && /^(ensembl-|transcript-name)/.test(parsed.kind)) error.message += " This identifier specifies an Ensembl gene or transcript, so NCBI cannot be substituted automatically. Retry later or upload its GenBank reference.";
     throw error;
   }
 }

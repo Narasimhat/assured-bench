@@ -8,7 +8,7 @@ export function createProject() {
     mutation: "",
     tag: "FLAG",
     homologyArmLength: 400,
-    options: { deliveryMethod: "rnp", maxBlockingChanges: 3, coDeliveryBlocking: false },
+    options: { enzyme: "spcas9", deliveryMethod: "rnp", maxBlockingChanges: 3, coDeliveryBlocking: false },
     geneMeta: null,
     genbankRaw: "",
     designResult: null,

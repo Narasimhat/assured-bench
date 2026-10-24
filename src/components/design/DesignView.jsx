@@ -16,6 +16,7 @@ import {
   searchClinVar,
   SPECIES
 } from "../../engine/design/geneFetch.js";
+import { ENZYMES, getEnzyme } from "../../engine/design/enzymeConfig.js";
 import { DONOR_FORMATS } from "../../engine/design/donorFormat.js";
 import GenomicSnpTool from "../../engine/design/GenomicSnpTool.jsx";
 import { indexOfGenomic } from "../../engine/design/genomicCoords.js";
@@ -225,6 +226,8 @@ export function DesignView({
   const mutation = currentProject.mutation ?? "";
   const tag = currentProject.tag ?? "FLAG";
   const homologyArmLength = currentProject.homologyArmLength ?? 400;
+  const enzyme = currentProject.options?.enzyme || "spcas9";
+  const enzymeConfig = getEnzyme(enzyme);
   const deliveryMethod = currentProject.options?.deliveryMethod ?? "rnp";
   const maxBlockingChanges = currentProject.options?.maxBlockingChanges ?? 3;
   const coDelivery = currentProject.options?.coDeliveryBlocking ?? currentProject.options?.coDelivery ?? false;
@@ -436,6 +439,8 @@ export function DesignView({
           : tag;
 
       const options = {
+        ...currentProject.options,
+        enzyme,
         deliveryMethod,
         maxBlockingChanges: Number(maxBlockingChanges),
         coDeliveryBlocking: coDelivery,
@@ -451,7 +456,7 @@ export function DesignView({
         genbankRaw,
         mutation,
         resolvedTag,
-        Number(homologyArmLength),
+        editType === "ct" || editType === "nt" ? Number(homologyArmLength) : "",
         options
       );
 
@@ -750,6 +755,14 @@ export function DesignView({
 
             {/* Edit Configuration */}
             <div className="grid-3" style={{ marginTop: "1.25rem" }}>
+              <label>Enzyme
+                <select aria-label="Enzyme" value={enzyme} onChange={event => {
+                  const config = getEnzyme(event.target.value);
+                  setOption({ enzyme: config.id, spacerLength: config.spacer_len.default, directRepeat: config.direct_repeat || "", repeatSource: "", repeatVerified: false });
+                }} style={{ width: "100%" }}>
+                  {Object.values(ENZYMES).map(config => <option key={config.id} value={config.id}>{config.name}</option>)}
+                </select>
+              </label>
               {editType === "pm" && (
                 <div>
                   <label style={{ display: "block", marginBottom: "0.4rem", fontWeight: 500, fontSize: "0.9rem" }}>
@@ -846,7 +859,7 @@ export function DesignView({
                   Delivery Platform
                 </label>
                 <select value={deliveryMethod} onChange={(e) => setOption({ deliveryMethod: e.target.value })} style={{ width: "100%" }}>
-                  <option value="rnp">Synthetic sgRNA + Cas9 RNP (Cleanest)</option>
+                  <option value="rnp">Synthetic guide + Cas RNP</option>
                   <option value="u6">U6 Plasmid / Lentivirus</option>
                 </select>
               </div>
@@ -857,6 +870,17 @@ export function DesignView({
                 {constructSelection.group.help} Resolved cassette: <code className="mono">{constructSelection.cassette}</code>
               </p>
             )}
+
+            {enzyme !== "spcas9" && <details style={{ marginTop: "1rem" }}>
+              <summary>{enzymeConfig.name} guide settings</summary>
+              <p>{enzymeConfig.license_note || enzymeConfig.repeat_note}</p>
+              <div className="grid-3">
+                <label>Spacer length<input aria-label="Spacer length" type="number" min={enzymeConfig.spacer_len.min} max={enzymeConfig.spacer_len.max} value={currentProject.options?.spacerLength || enzymeConfig.spacer_len.default} onChange={event => setOption({ spacerLength: Number(event.target.value) })}/></label>
+                <label>5′ direct repeat<input aria-label="Direct repeat" value={currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat ?? ""} onChange={event => setOption({ directRepeat: event.target.value, repeatVerified: false })}/></label>
+                <label>Repeat documentation<input aria-label="Repeat documentation" value={currentProject.options?.repeatSource || ""} onChange={event => setOption({ repeatSource: event.target.value, repeatVerified: false })}/></label>
+              </div>
+              <label><input type="checkbox" checked={!!currentProject.options?.repeatVerified} disabled={!currentProject.options?.repeatSource || !(currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat)} onChange={event => setOption({ repeatVerified: event.target.checked })}/> I verified the repeat against the documentation for my nuclease.</label>
+            </details>}
 
             {/* Advanced Options Bar */}
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>

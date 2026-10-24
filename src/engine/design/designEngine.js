@@ -16,10 +16,14 @@ import {
   normalizeRawSequenceToTranscriptModel,
   selectNearbyGuidesForModel,
 } from "./transcriptModel.js";
-import { MINIMUM_ALTERNATIVE_CUT_OFFSET, pickGuidePair, pickPartnerGuide } from "./guideSelection.js";
+import { EDIT_SEARCH_WINDOWS, MINIMUM_ALTERNATIVE_CUT_OFFSET, pickGuidePair, pickPartnerGuide } from "./guideSelection.js";
 import { classifyPosition, inSpliceWindow } from "./spliceZones.js";
 import { buildDonorFormatReport, planDonorArms } from "./donorFormat.js";
 import { describeGuideUse } from "./guideUse.js";
+import { getEnzyme, pamRegex } from "./enzymeConfig.js";
+import { findConfiguredModelGuides, guideGeometry } from "./enzymeModelGuides.js";
+import { findSynonymousPamEdits } from "./enzymeDonors.js";
+import { runConfiguredEnzymeDesign } from "./enzymeWorkflow.js";
 
 const CODON_TABLE = {
   TTT: "F", TTC: "F", TTA: "L", TTG: "L", CTT: "L", CTC: "L", CTA: "L", CTG: "L",
@@ -107,7 +111,7 @@ export const INTERNAL_TAGS = {
   alphaBtx: { seq: "CGATACTATGAAAGCAGTCTAGAGCCTTACCCAGAC", len: 36, aa: "RYYESSLEPYPD" },
 };
 
-const toAA = (codon) => CODON_TABLE[codon] || "?";
+export const toAA = (codon) => CODON_TABLE[codon] || "?";
 const reverseComplement = (sequence) => sequence.split("").reverse().map((base) => DNA_COMPLEMENT[base] || "N").join("");
 
 function sanitizeLabelPart(value, fallback) {
@@ -137,11 +141,11 @@ function buildDesignPrefix(gene, projectType, mutationString = "", tag = "") {
   return `${sanitizeLabelPart(gene, "GENE")}_${buildDesignModifier(projectType, mutationString, tag)}`;
 }
 
-function makeGuideName(gene, projectType, index, mutationString = "", tag = "") {
+export function makeGuideName(gene, projectType, index, mutationString = "", tag = "") {
   return `${buildDesignPrefix(gene, projectType, mutationString, tag)}_gRNA${index + 1}`;
 }
 
-function makePrimerName(gene, projectType, direction, mutationString = "", tag = "") {
+export function makePrimerName(gene, projectType, direction, mutationString = "", tag = "") {
   return `${buildDesignPrefix(gene, projectType, mutationString, tag)}_${direction}`;
 }
 
@@ -207,21 +211,23 @@ export function classifySpCas9PamDisruption(originalPam, mutatedPam) {
   return { acceptable: false, tier: "weak", reason: `${before}->${after} is not treated as a reliably dead SpCas9 PAM.` };
 }
 
-export function assessGuideSequence(spacer, deliveryMethod = "unknown") {
+export function assessGuideSequence(spacer, deliveryMethod = "unknown", enzyme = "spcas9") {
   const sequence = String(spacer || "").toUpperCase();
   const gc = calculatePrimerGcPercent(sequence);
   const polyT = sequence.includes("TTTT");
   const polyG = sequence.includes("GGGG");
   const warnings = [];
   if (!/^[ACGT]+$/.test(sequence)) warnings.push("Guide spacer must contain DNA bases A, C, G, and T only.");
-  if (sequence.length !== 20) warnings.push(`Guide spacer is ${sequence.length} nt; the design engine requires an explicit 20 nt SpCas9 spacer.`);
+  const config = getEnzyme(enzyme);
+  if (enzyme === "spcas9" && sequence.length !== 20) warnings.push(`Guide spacer is ${sequence.length} nt; the design engine requires an explicit 20 nt SpCas9 spacer.`);
+  else if (sequence.length < config.spacer_len.min || sequence.length > config.spacer_len.max) warnings.push(`Guide spacer is ${sequence.length} nt; ${config.name} requires ${config.spacer_len.min}–${config.spacer_len.max} nt.`);
   // Deliberately not phrased as a prediction of failure. GC correlates with SpCas9 activity
   // only weakly and non-monotonically: the extremes are worse on average, but individual
   // guides well outside 40-60% are frequently highly active, and GC alone is a poor
   // predictor next to a trained on-target model. What high GC does more reliably is raise
   // tolerance of off-target mismatches, which is a specificity question, not an activity one.
   if (gc < 40 || gc > 60) {
-    warnings.push(`GC ${gc}% is outside the 40-60% band where SpCas9 activity is highest on average. GC alone does not predict whether a guide cuts; confirm activity empirically or with an on-target model.`);
+    warnings.push(enzyme === "spcas9" ? `GC ${gc}% is outside the 40-60% band where SpCas9 activity is highest on average. GC alone does not predict whether a guide cuts; confirm activity empirically or with an on-target model.` : `GC ${gc}% is outside the 40-60% composition band. This is an observation, not a rejection; confirm ${config.name} activity empirically or with a suitable model.`);
   }
   if (polyG) warnings.push("Guide contains GGGG, which may reduce synthesis or activity reliability.");
   if (polyT && deliveryMethod === "u6") warnings.push("Guide contains TTTT, a Pol III termination risk for U6-driven expression.");
@@ -230,6 +236,19 @@ export function assessGuideSequence(spacer, deliveryMethod = "unknown") {
 }
 
 function assessOrientedGuideSite(guide, rawSite) {
+  if (guide.enzyme && guide.enzyme !== "spcas9") {
+    const config = getEnzyme(guide.enzyme);
+    const site = guide.str === "+" ? rawSite : reverseComplement(rawSite);
+    if (!/^[ACGT]+$/.test(site) || site.length !== guide.sp.length + config.pam_pattern.length) return { tier: "unknown", protected: false, cfd: null, reason: "Incomplete or ambiguous enzyme target." };
+    const donorPam = config.pam_side === "5prime" ? site.slice(0, config.pam_pattern.length) : site.slice(guide.sp.length);
+    const donorSpacer = config.pam_side === "5prime" ? site.slice(config.pam_pattern.length) : site.slice(0, guide.sp.length);
+    const mismatches = [...guide.sp].flatMap((base, index) => base === donorSpacer[index] ? [] : [index + 1]);
+    const removed = !pamRegex(config.pam_pattern).test(donorPam);
+    const tier = removed ? "strong" : mismatches.length ? "weak" : "none";
+    return { tier, protected: removed, donorPam, mismatches, cfd: null, method: "canonical-PAM sequence check",
+      reason: removed ? `${config.name} canonical PAM ${guide.pam}→${donorPam} removed. Noncanonical cleavage is uncalibrated; no CFD assigned.`
+        : mismatches.length ? "Spacer mismatches retain a canonical enzyme PAM; residual activity is unscored." : "The spacer and canonical enzyme PAM remain intact." };
+  }
   const donorSpacer = guide.str === "+" ? rawSite.slice(0, 20) : reverseComplement(rawSite.slice(3));
   const donorPam = guide.str === "+" ? rawSite.slice(20) : reverseComplement(rawSite.slice(0, 3));
   const pamAssessment = classifySpCas9PamDisruption(guide.pam, donorPam);
@@ -264,7 +283,7 @@ function assessOrientedGuideSite(guide, rawSite) {
 
 export function assessGuideAgainstPointMutationDonor(guide, donor) {
   const start = guide.ps;
-  const end = guide.ps + 23;
+  const end = guide.enzyme && guide.enzyme !== "spcas9" ? guideGeometry(guide).end : guide.ps + 23;
   if (!donor?.genomicDonor || start < donor.donorStart || end > donor.donorEnd) {
     return { tier: "unknown", protected: false, reason: "The complete guide target is outside this ssODN window." };
   }
@@ -341,6 +360,15 @@ export const CFD_PROTECTION_THRESHOLDS = Object.freeze({ strong: 0.023, moderate
 /** The 23 nt guide site as the donor leaves it, in guide orientation. */
 export function buildEditedGuideSite(model, guide, mutations = []) {
   const seq = getGenomicSequence(model);
+  if (guide.enzyme && guide.enzyme !== "spcas9") {
+    const bounds = guideGeometry(guide), config = getEnzyme(guide.enzyme);
+    if (bounds.start < 0 || bounds.end > seq.length) return null;
+    const bases = seq.slice(bounds.start, bounds.end).split("");
+    for (const mutation of mutations) if (mutation.gp >= bounds.start && mutation.gp < bounds.end) bases[mutation.gp - bounds.start] = mutation.nb;
+    const site = guide.str === "+" ? bases.join("") : reverseComplement(bases.join(""));
+    return config.pam_side === "5prime" ? { pam: site.slice(0, config.pam_pattern.length), spacer: site.slice(config.pam_pattern.length) }
+      : { spacer: site.slice(0, guide.sp.length), pam: site.slice(guide.sp.length) };
+  }
   const start = guide.ps;
   if (!Number.isFinite(start) || start < 0 || start + 23 > seq.length) return null;
   const bases = seq.slice(start, start + 23).split("");
@@ -356,6 +384,7 @@ export function buildEditedGuideSite(model, guide, mutations = []) {
 
 /** Predicted residual activity of `guide` against its own site after `mutations`. */
 export function scoreResidualActivity(model, guide, mutations = []) {
+  if (guide.enzyme && guide.enzyme !== "spcas9") return null;
   const site = buildEditedGuideSite(model, guide, mutations);
   if (!site) return null;
   return calculateCfd(guide.sp, site.spacer, site.pam);
@@ -583,6 +612,27 @@ export function keepsCodonsSynonymous(model, chosen, candidate) {
 }
 
 export function findBlockingSet(model, guide, blockedPositions = new Set(), options = {}) {
+  if (guide.enzyme && guide.enzyme !== "spcas9") {
+    const config = getEnzyme(guide.enzyme), bounds = guideGeometry(guide);
+    const allowed = pos => !blockedPositions.has(pos) && (!options.isPositionAllowed || options.isPositionAllowed(pos));
+    const changes = findSynonymousPamEdits(model, guide, config, [], { start: 0, end: model.genomicSequence.length }, options.maxChanges || 3, null, allowed);
+    if (changes.length) return changes.map(edit => {
+      const info = getCodonAtAa(model, edit.aa_number, toAA);
+      return { gp: edit.start, nb: edit.sequence, lb: `p.${info.aa}${edit.aa_number}${info.aa}`, oc: info.cod,
+        nc: info.genomicPositions.map(pos => changes.find(change => change.start === pos)?.sequence || model.genomicSequence[pos]).join(""),
+        pur: `${config.name} canonical PAM disruption`, mt: "silent", blockingTier: "strong", blockingReason: "Canonical PAM removed; noncanonical activity uncalibrated." };
+    });
+    if (options.allowNonCoding) for (let pos = bounds.pamStart; pos < bounds.pamEnd; pos++) {
+      if (!allowed(pos) || classifyPosition(model, pos).zone !== "intron-deep") continue;
+      for (const base of "ACGT") {
+        if (base === model.genomicSequence[pos]) continue;
+        const site = buildEditedGuideSite(model, guide, [{ gp: pos, nb: base }]);
+        if (!pamRegex(config.pam_pattern).test(site.pam)) return [{ gp: pos, nb: base, lb: "intronic PAM", oc: model.genomicSequence[pos], nc: base,
+          mt: "noncoding", pur: `${config.name} canonical PAM disruption outside CDS`, blockingTier: "strong", blockingReason: "Intronic canonical PAM removed; splice effects and noncanonical activity require review." }];
+      }
+    }
+    return [];
+  }
   const maxChanges = Number.isFinite(options.maxChanges) ? options.maxChanges : MAX_BLOCKING_CHANGES;
   const candidates = collectSilentCandidates(model, guide, blockedPositions, options);
   if (!candidates.length) return [];
@@ -787,9 +837,10 @@ export function mkODN(model, guide, mutationPositions, mutationBases, silentMuta
     if (donorIndex >= 0 && donorIndex < 127) payload[donorIndex] = mutation.nb;
   });
   const guideSiteStart = guide.ps - donorStart;
-  const guideSiteEnd = guideSiteStart + 23;
-  const guidePamStart = guide.str === "+" ? guideSiteStart + 20 : guideSiteStart;
-  const guidePamEnd = guidePamStart + 3;
+  const bounds = guideGeometry(guide);
+  const guideSiteEnd = guide.enzyme && guide.enzyme !== "spcas9" ? bounds.end - donorStart : guideSiteStart + 23;
+  const guidePamStart = guide.enzyme && guide.enzyme !== "spcas9" ? bounds.pamStart - donorStart : guide.str === "+" ? guideSiteStart + 20 : guideSiteStart;
+  const guidePamEnd = guide.enzyme && guide.enzyme !== "spcas9" ? bounds.pamEnd - donorStart : guidePamStart + 3;
   const ssOdn = guide.str === "+" ? reverseComplement(payload.join("")) : payload.join("");
   const wtOdn = guide.str === "+" ? reverseComplement(wildType) : wildType;
   const { codingWt, codingDonor } = extractCodingDonorWindowFromModel(model, donorStart, donorEnd, payload);
@@ -807,6 +858,9 @@ export function mkODN(model, guide, mutationPositions, mutationBases, silentMuta
   const silentDiffIndexes = silentMutations.map((mutation) => orderedIndex(mutation.gp)).filter((index) => index !== null).sort((left, right) => left - right);
   return {
     od: ssOdn,
+    ...(guide.enzyme && guide.enzyme !== "spcas9" ? { enzyme: guide.enzyme, orderStrand: guide.str === "+" ? "antisense" : "sense",
+      strand_note: "Guide-linked donor strand in input-reference coordinates; validate strand choice for this enzyme.",
+      armRegions: [{ start: 0, end: guide.cut - donorStart, label: "Upstream of cut", color: "#DBEAFE" }, { start: guide.cut - donorStart, end: ssOdn.length, label: "Downstream of cut", color: "#E0E7FF" }] } : {}),
     wo: wtOdn,
     df: diff,
     desiredDiffIndexes,
@@ -1194,7 +1248,7 @@ DONOR_PRESETS.FLAG = {
   ] },
 };
 
-function getInsertPreset(name, orientation) {
+export function getInsertPreset(name, orientation) {
   const preset = DONOR_PRESETS[name];
   if (preset) return { ...preset[orientation], segments: cloneSegments(preset[orientation].segments) };
   if (orientation === "nt" && name.startsWith("N:")) {
@@ -1767,7 +1821,7 @@ export function summarizeProcurementReadiness(result) {
   }
 
   const blockers = [];
-  const warnings = [];
+  const warnings = [...(result.enzymeWarnings || [])];
 
   // Reference validity precedes everything else: if the wrong gene, a partial CDS or an
   // out-of-frame CDS was used, every downstream coordinate and residue number is wrong.
@@ -1779,7 +1833,7 @@ export function summarizeProcurementReadiness(result) {
   const guides = result.gs || [];
   if (!guides.length) blockers.push("No guide sequence is available.");
   guides.forEach((guide) => {
-    const assessment = assessGuideSequence(guide.sp, result.deliveryMethod || "unknown");
+    const assessment = assessGuideSequence(guide.sp, result.deliveryMethod || "unknown", result.enzyme?.id || "spcas9");
     if (assessment.warnings.length) warnings.push(`${guide.n || "Guide"}: ${assessment.warnings.join(" ")}`);
   });
 
@@ -1941,7 +1995,7 @@ function buildFallbackPrimerPair(seq, ampliconStart, ampliconEnd, forwardName = 
   );
 }
 
-function serializePrimerCandidates(pairs = []) {
+export function serializePrimerCandidates(pairs = []) {
   return pairs.map((pair, index) => {
     const ampliconGc = typeof pair.ampliconGc === "number" ? pair.ampliconGc : null;
     return {
@@ -2173,7 +2227,7 @@ export function designOutsideHomologyArmPrimerPairs(seq, homology5Start, homolog
   return [fallback];
 }
 
-function buildOutsideHomologyPrimerWarning(seq, homology5Start, homology3End, primerPairs = []) {
+export function buildOutsideHomologyPrimerWarning(seq, homology5Start, homology3End, primerPairs = []) {
   const sequenceLength = String(seq || "").length;
   if (primerPairs[0]?.score <= -900) return "Only fallback primers could be placed outside the homology arms; review primer QC before ordering.";
   const selected = primerPairs[0];
@@ -2191,7 +2245,7 @@ function buildOutsideHomologyPrimerWarning(seq, homology5Start, homology3End, pr
   return "No validated primer pair could be placed outside both homology arms; review this locus manually.";
 }
 
-function getOutsideHomologyPrimerStrategy(primerPairs = []) {
+export function getOutsideHomologyPrimerStrategy(primerPairs = []) {
   if (!primerPairs.length) return "outside-homology-arms-unavailable";
   if (primerPairs[0]?.score <= -900) return "outside-homology-arms-fallback";
   return "recommended-outside-homology-arms";
@@ -2489,13 +2543,14 @@ function pickDeletionScreenPrimerPair(seq, leftCut, rightCut, flank = KO_DELETIO
   };
 }
 
-function selectKoGuidePair(guides, maxSpacing = 140) {
+export function selectKoGuidePair(guides, maxSpacing = 140) {
   const candidatePairs = [];
   for (let leftIndex = 0; leftIndex < guides.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < guides.length; rightIndex += 1) {
       const leftGuide = guides[leftIndex];
       const rightGuide = guides[rightIndex];
       const spacing = Math.abs(rightGuide.cut - leftGuide.cut);
+      if (spacing === 0) continue;
       if (spacing > maxSpacing) continue;
       candidatePairs.push({
         guides: leftGuide.cut <= rightGuide.cut ? [leftGuide, rightGuide] : [rightGuide, leftGuide],
@@ -2622,7 +2677,7 @@ export function compareGuidesByProtectionThenDistance(left, right) {
 export const PROTECTION_RANK = Object.freeze({ strong: 0, moderate: 1, weak: 2, none: 3 });
 
 function selectInsertGuidesWithFallback(model, targetPos, options = {}) {
-  const windows = [10, 20, 30];
+  const windows = EDIT_SEARCH_WINDOWS;
   const preferBlockable = !!options.preferBlockable;
   for (const window of windows) {
     let guides;
@@ -2893,7 +2948,7 @@ function mkInternalOdn(model, guide, insertionPos, insertSequence, silentMutatio
   };
 }
 
-function buildInternalProteinPreview(model, aaNumber, insertAa) {
+export function buildInternalProteinPreview(model, aaNumber, insertAa) {
   const wtProtein = [];
   for (let index = 1; index <= model.proteinLength; index += 1) {
     const codonInfo = getCodonAtAa(model, index, toAA);
@@ -2912,7 +2967,7 @@ function buildInternalProteinPreview(model, aaNumber, insertAa) {
   };
 }
 
-function buildInternalCodingPreview(model, aaNumber, insertSequence, insertAa) {
+export function buildInternalCodingPreview(model, aaNumber, insertSequence, insertAa) {
   const prefixStart = Math.max(1, aaNumber - 7);
   const suffixEnd = Math.min(model.proteinLength, aaNumber + 8);
   const prefixEntries = [];
@@ -2964,7 +3019,7 @@ function translateDnaToCodonEntries(sequence) {
   return entries;
 }
 
-function buildInsertValidation(expectedSequence, actualSequence, options = {}) {
+export function buildInsertValidation(expectedSequence, actualSequence, options = {}) {
   const allowTerminalStop = !!options.allowTerminalStop;
   const segments = Array.isArray(options.segments) ? options.segments : [];
   const expected = String(expectedSequence || "").toUpperCase();
@@ -3008,7 +3063,7 @@ function buildInsertValidation(expectedSequence, actualSequence, options = {}) {
   };
 }
 
-function buildKnockinProteinPreview(model, orientation, preset) {
+export function buildKnockinProteinPreview(model, orientation, preset) {
   const wtEntries = [];
   for (let index = 1; index <= model.proteinLength; index += 1) {
     const codonInfo = getCodonAtAa(model, index, toAA);
@@ -3055,6 +3110,7 @@ function buildKnockinProteinPreview(model, orientation, preset) {
  * protein together, which the donor check refuses. When that happens to a pair whose second guide was added by completeGuidePair, the lone guide is offered instead of no design.
  */
 export function designPM(gb, mutationString, options = {}) {
+  if (options.enzyme && options.enzyme !== "spcas9") return runConfiguredEnzymeDesign("pm", gb, mutationString, null, null, options);
   const result = designPMCore(gb, mutationString, options);
   if (result?.err && /No donor preserved the intended/.test(result.err) && options.ensureGuidePair !== false && !options.customGuides?.length) {
     const single = designPMCore(gb, mutationString, { ...options, ensureGuidePair: false });
@@ -3234,6 +3290,7 @@ function designPMCore(gb, mutationString, options = {}) {
 }
 
 export function designIT(gb, siteString, tag, options = {}) {
+  if (options.enzyme && options.enzyme !== "spcas9") return runConfiguredEnzymeDesign("it", gb, siteString, tag, null, options);
   const cds = getCdsFromModel(gb);
   if (!cds) return { err: "No CDS annotation found in GenBank file." };
   const site = parseInternalSiteInput(siteString);
@@ -3400,6 +3457,7 @@ export function designIT(gb, siteString, tag, options = {}) {
 }
 
 export function designCT(gb, tag, homologyArmLength, options = {}) {
+  if (options.enzyme && options.enzyme !== "spcas9") return runConfiguredEnzymeDesign("ct", gb, "", tag, homologyArmLength, options);
   const cds = getCdsFromModel(gb);
   if (!cds) return { err: "No CDS annotation found in GenBank file." };
   const seq = getGenomicSequence(gb);
@@ -3544,6 +3602,8 @@ export function designCT(gb, tag, homologyArmLength, options = {}) {
 }
 
 export function designKO(gb, options = {}) {
+  const configured = options.enzyme && options.enzyme !== "spcas9";
+  const enzyme = getEnzyme(options.enzyme || "spcas9");
   const cds = getCdsFromModel(gb);
   if (!cds) return { err: "No CDS annotation found." };
   if (gb.cdsSegments.length < 2) return { err: "Not enough coding exons available for KO design." };
@@ -3553,13 +3613,18 @@ export function designKO(gb, options = {}) {
   let bestLength;
   let exonNumber;
   if (options.customGuides?.length) {
-    const customGuideSelection = resolveCustomGuides(gb, options.customGuides, null, { desiredCount: 2 });
+    const customGuideSelection = configured ? (() => {
+      const available = findConfiguredModelGuides(gb, Math.floor(gb.genomicSequence.length / 2), gb.genomicSequence.length, { enzyme: enzyme.id, spacerLength: options.spacerLength });
+      const guides = options.customGuides.map(spacer => available.find(guide => guide.sp === spacer.toUpperCase().replace(/U/g, "T")));
+      return guides.some(guide => !guide) ? { err: `A custom guide does not map with the ${enzyme.name} PAM.` } : { guides };
+    })() : resolveCustomGuides(gb, options.customGuides, null, { desiredCount: 2 });
     if (customGuideSelection?.err) return { err: customGuideSelection.err };
     if (!customGuideSelection || customGuideSelection.guides.length < 2) return { err: "Paste two custom gRNAs for knockout design." };
     const guides = customGuideSelection.guides
       .slice(0, 2)
       .sort((left, right) => left.cut - right.cut)
       .map((guide) => ({ ...guide, d: null }));
+    if (guides[0].cut === guides[1].cut) return { err: "Custom knockout design requires two distinct cut sites." };
     selectedPair = {
       guides,
       spacing: Math.abs(guides[1].cut - guides[0].cut),
@@ -3572,7 +3637,8 @@ export function designKO(gb, options = {}) {
     exonEnd = exon?.end ?? 0;
     bestLength = exon ? (exon.end - exon.start) : 0;
   } else {
-    const target = findKoDesignTargetFromModel(gb, reverseComplement, selectKoGuidePair);
+    const target = findKoDesignTargetFromModel(gb, reverseComplement, selectKoGuidePair,
+      configured ? (model, rc, target, range) => findConfiguredModelGuides(model, target, range, { enzyme: enzyme.id, spacerLength: options.spacerLength }) : findSpCas9Guides);
     if (!target) return { err: "No gRNA pair found with cut-site spacing up to 140 bp across non-terminal coding exons, preferentially exons 2-4, including exon-intron boundaries." };
     ({ start: exonStart, end: exonEnd, exonLength: bestLength, exonNumber, pair: selectedPair } = target);
   }
@@ -3617,13 +3683,14 @@ export function designKO(gb, options = {}) {
       const context = describeKoGenomicContextFromModel(gb, guide.cut);
       const placement = describeGuidePlacementFromModel(gb, guide);
       return {
+        ...(configured ? guide : {}),
         n: makeGuideName(gb.gene, "ko", index),
         sp: guide.sp,
         pm: guide.pam,
         str: guide.str,
         gc: guide.gc,
         cut: guide.cut,
-        d: guide.d,
+        d: configured ? guide.cut - cutCenter : guide.d,
         note: `Cut at ${guide.cut + 1}, ${context.label} (${context.detail}) | ${placement.label}: ${placement.detail} | pair spacing ${selectedPair.spacing} bp`,
       };
     }),
@@ -3633,7 +3700,7 @@ export function designKO(gb, options = {}) {
     ],
     amp: `WT ~${primerPair.wtAmpliconLength} bp | deletion ~${primerPair.deletionAmpliconLength} bp`,
     deletionOutcome,
-    strat: longDeletion
+    strat: configured ? `NHEJ-mediated disruption using two ${enzyme.name} guides. Nominal deletion ${selectedPair.spacing} bp uses target-strand cut boundaries; staggered ends and end processing can change the repaired junction. Screen WT/deletion PCR products, sequence the junction, and confirm protein loss.` : longDeletion
       ? "NHEJ-mediated deletion using dual Cas9 guides. Screen with flanking junction PCR, then confirm the deletion by sequencing."
       : "NHEJ-mediated frameshift using Cas9 RNP. Screen by Sanger sequencing plus ICE/TIDE, then confirm protein loss.",
     primerStrategy: longDeletion ? "recommended-deletion-screen" : "recommended-centered",
@@ -3642,6 +3709,7 @@ export function designKO(gb, options = {}) {
 }
 
 export function designNT(gb, tag, homologyArmLength, options = {}) {
+  if (options.enzyme && options.enzyme !== "spcas9") return runConfiguredEnzymeDesign("nt", gb, "", tag, homologyArmLength, options);
   const cds = getCdsFromModel(gb);
   if (!cds) return { err: "No CDS annotation found." };
   const seq = getGenomicSequence(gb);
@@ -3799,6 +3867,7 @@ export function runDesignFromTranscriptModel(projectType, model, mutation, tag, 
   if (!projectType) return { err: "Select a project type first." };
   const cds = getCdsFromModel(model);
   if (!cds) return { err: "Transcript model is missing CDS segments." };
+  if (options.enzyme && options.enzyme !== "spcas9") return runConfiguredEnzymeDesign(projectType, model, mutation, tag, homologyArmLength, options);
 
   let designResult;
   if (projectType === "pm") {

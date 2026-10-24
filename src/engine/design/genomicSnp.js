@@ -4,6 +4,8 @@ import { buildReportHtml } from './reportHtml.js';
 import { parseGB, mkODN, assessGuideAgainstPointMutationDonor, assessGuideSequence, designCenteredPrimerPairs, buildPrimerRecord, summarizePrimerPairQuality } from './designEngine.js';
 import { normalizeGenBankToTranscriptModel, findSpCas9Guides } from './transcriptModel.js';
 import { complementBase, genomicAt, genomicSpan, indexOfGenomic, isReverse } from './genomicCoords.js';
+import { getEnzyme } from './enzymeConfig.js';
+import { findConfiguredModelGuides, guideGeometry } from './enzymeModelGuides.js';
 
 const rc = (s) => s.split('').reverse().map(b => ({ A:'T', T:'A', C:'G', G:'C', N:'N' }[b] || 'N')).join('');
 const chromosome = (s) => String(s || '').replace(/^chr/i, '');
@@ -15,6 +17,7 @@ export function readGenomicReferenceMetadata(raw) {
 /** Exact single-nucleotide substitution; no extra blocking edits, codon conversion or inferred assembly. */
 export function designGenomicSnp(raw, input) {
   try {
+    const enzyme=getEnzyme(input.enzyme || 'spcas9');
     const policy=input.blockingPolicy || 'none';
     if(!BLOCKING_POLICIES[policy])throw Error('Unknown blocking-change policy.');
     const maxChanges=Number(input.maxBlockingChanges ?? (isTwoGuidePolicy(policy) ? 3 : 2));
@@ -48,7 +51,7 @@ export function designGenomicSnp(raw, input) {
     if (fatalIssues.length) throw Error(fatalIssues.map(i => i.message).join(' '));
     // Genomic SNVs do not require a CDS. An annotation-free model must not invent one.
     const model = normalized || { genomicSequence:record.seq, cdsSegments:[], exons:[], rawFeatures:record.feats, gene:input.gene || 'Locus' };
-    const guides = findSpCas9Guides(model, rc, gp, 30).sort((a,b) => Math.abs(a.d)-Math.abs(b.d));
+    const guides = (enzyme.id==='spcas9'?findSpCas9Guides(model, rc, gp, 30):findConfiguredModelGuides(model,gp,30,{enzyme:enzyme.id,spacerLength:input.spacerLength})).sort((a,b) => Math.abs(a.d)-Math.abs(b.d));
     const exactCandidates = guides.map((guide,index) => {
       const donor = mkODN(model,guide,[gp],[alt],[],null);
       if (!donor) throw Error('The reference is too short to construct a complete 127-nt donor. Supply more flanking sequence.');
@@ -59,7 +62,7 @@ export function designGenomicSnp(raw, input) {
       const comparison=buildBlockingComparison(model,guide,gp,alt,isTwoGuidePolicy(policy)?'none':policy,maxChanges);
       const chosen=comparison.selected;
       const additionalChanges=chosen.changes.length;
-      return { name:`gRNA${index+1}`, ...guide, interval:(([low,high])=>({ start:low,end:high }))(genomicSpan(frame,guide.ps,guide.ps+22)), qc:assessGuideSequence(guide.sp,input.deliveryMethod || 'rnp'), donor:chosen.donor, protection:chosen.protection, blockingChanges:chosen.changes, comparison, spliceAssessment:chosen.splice, nucleotideValidation:{ valid:true, differences:1+additionalChanges, additionalChanges } };
+      return { name:`gRNA${index+1}`, ...guide, interval:(([low,high])=>({ start:low,end:high }))(genomicSpan(frame,guide.ps,guideGeometry(guide).end-1)), qc:assessGuideSequence(guide.sp,input.deliveryMethod || 'rnp',enzyme.id), donor:chosen.donor, protection:chosen.protection, blockingChanges:chosen.changes, comparison, spliceAssessment:chosen.splice, nucleotideValidation:{ valid:true, differences:1+additionalChanges, additionalChanges } };
     });
     const pair = isTwoGuidePolicy(policy) ? buildPairDesign({ model, seq:record.seq, exactCandidates, gp, ref, alt, start, frame, shared:policy==='pair', maxChanges, pinned:Array.isArray(input.guideSpacers) ? input.guideSpacers : null }) : null;
     const candidates = pair ? pair.candidates : exactCandidates;
@@ -69,6 +72,7 @@ export function designGenomicSnp(raw, input) {
       { label:exon.label || `Exon ${exon.exonNumber || ''}`,edge:'last exon base',distance:gp-(exon.end-1) },
     ]).sort((a,b)=>Math.abs(a.distance)-Math.abs(b.distance));
     const warnings = [
+      ...(enzyme.id!=='spcas9'?[`${enzyme.name}: canonical-PAM sequence checks replace SpCas9 CFD. Residual activity, noncanonical PAMs and mismatch tolerance are uncalibrated; no numeric CFD is assigned.`]:[]),
       ...issues.map(i=>i.message),
       ...(!normalized ? ['No usable CDS annotation. Coding and splice context have not been established.'] : []),
       ...(!meta ? ['Genomic mapping is user-supplied; no Location annotation was available to verify it.'] : []),
@@ -80,10 +84,10 @@ export function designGenomicSnp(raw, input) {
       ...(pair ? pair.warnings.trail : ['Alternative guides and donors are separate candidates; do not pool them.']),
       ...(!input.cellLine ? ['Cell line and parental genotype are unspecified.'] : ['Parental sequence must be confirmed; specifying a cell line is not WGS validation.']),
     ];
-    const blockers = !candidates.length ? ['No SpCas9 NGG guides passed the native sequence filters within 30 bp.']
+    const blockers = !candidates.length ? [`No ${enzyme.name} ${enzyme.pam_pattern} guides passed the native sequence filters within 30 bp.`]
       : pair && pair.feasible ? (pair.pairStrong ? [] : ['The selected guide pair is not strongly protected on the repaired allele.'])
       : candidates.every(c=>c.protection.tier!=='strong') ? [pair ? `No blocking set was found (${pair.blocking.reason}) and no candidate has strong predicted re-cutting protection from the requested edit alone.` : policy==='none'?'No candidate has strong predicted re-cutting protection from the requested edit alone.':'No candidate has strong predicted re-cutting protection under the selected blocking policy.'] : [];
-    return { type:'genomic-snv',status:blockers.length?'BLOCKED':'REVIEW REQUIRED',blockers,warnings,input:{ ...input,blockingPolicy:policy,maxBlockingChanges:maxChanges,ref:forwardRef,alt:forwardAlt,position,referenceStart:start,referenceEnd:end,orientation },...(pair ? { blocking:pair.blocking,splice:pair.splice,recommendation:pair.recommendation } : {}),gb:{genomicSequence:record.seq,exons:model.exons,cdsSegments:model.cdsSegments,transcriptId:model.transcriptId},reference:{ length:record.seq.length,metadata:meta,issues },context:{ before:record.seq.slice(Math.max(0,gp-20),gp),ref,alt,after:record.seq.slice(gp+1,gp+21),nearestExonBoundary:boundaries[0] || null },candidates,primers };
+    return { type:'genomic-snv',...(enzyme.id!=='spcas9'?{enzyme}:{}),status:blockers.length?'BLOCKED':'REVIEW REQUIRED',blockers,warnings,input:{ ...input,blockingPolicy:policy,maxBlockingChanges:maxChanges,ref:forwardRef,alt:forwardAlt,position,referenceStart:start,referenceEnd:end,orientation },...(pair ? { blocking:pair.blocking,splice:pair.splice,recommendation:pair.recommendation } : {}),gb:{genomicSequence:record.seq,exons:model.exons,cdsSegments:model.cdsSegments,transcriptId:model.transcriptId},reference:{ length:record.seq.length,metadata:meta,issues },context:{ before:record.seq.slice(Math.max(0,gp-20),gp),ref,alt,after:record.seq.slice(gp+1,gp+21),nearestExonBoundary:boundaries[0] || null },candidates,primers };
   } catch (error) { return { err:error.message }; }
 }
 
@@ -105,5 +109,5 @@ export function buildGenomicSnpReport(r) {
     guideSequenceQc:safe.candidates.map(c=>({...c.qc,guideName:c.name})),
     extraSectionHtml:pairSectionHtml(r),
   };
-  return buildReportHtml({...safe.input,projectType:'genomic-snv',notes:`${BLOCKING_POLICIES[r.input.blockingPolicy || 'none']}. Guides are listed by cut distance. Residual CFD estimates activity against the repaired allele, not genome-wide specificity or editing probability.`},result,safe.input.fileName,null,safe.warnings.map(text=>({level:'warning',text})));
+  return buildReportHtml({...safe.input,projectType:'genomic-snv',notes:`${BLOCKING_POLICIES[r.input.blockingPolicy || 'none']}. Guides are listed by cut distance. ${r.enzyme ? 'Canonical-PAM checks assess the repaired allele; residual activity is unscored for this enzyme. No SpCas9 CFD is applied.' : 'Residual CFD estimates activity against the repaired allele, not genome-wide specificity or editing probability.'}`},result,safe.input.fileName,null,safe.warnings.map(text=>({level:'warning',text})));
 }

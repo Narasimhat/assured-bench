@@ -14,6 +14,8 @@ Project Setup (Header) ──► 1. Design ──► 2. Order ──► 3. Trace
 
 1. **Step 1: Design & Reagents**
    - Direct target gene lookup via Ensembl REST API or local GenBank (`.gb` / `.gbk`) file upload.
+   - Enzyme selection: SpCas9, AsCas12a, LbCas12a and Mad7 (names only in the dropdown).
+   - Shared guide selection, matched donors, primers, reports and QC exports across enzymes.
    - Dual-guide knockouts (KO) with microdeletion prediction.
    - Point mutation / SNP corrections with silent PAM/protospacer blocking mutations (CFD penalty-minimizing).
    - Epitope and fluorescent tag knock-ins (FLAG, HA, Myc, V5, HiBiT, mEGFP, SD40-V5).
@@ -87,3 +89,21 @@ npm run preview
 ## License
 
 MIT License.
+
+## Enzyme configuration and validation
+
+The design engine is synchronized from Assured_CRISPR_Design PR #24 (commit
+`e056daf8bce6f9f6406a235f5752e965ec0af7eb`), config version 1.1.0.
+Cas9 remains the default. Cas12a/Mad7 use 5′ PAMs, configurable spacer lengths,
+and predicted staggered cut boundaries. Knockouts use the shared two-guide policy;
+point edits use the shared 10/20/30 bp search windows. All modification types use
+the standard donors, primers, figures, HTML reports, ordering and QC handoff.
+
+Cas12a/Mad7 activity scores and CFD are uncalibrated. Canonical-PAM removal is a
+categorical check, not a numerical activity prediction. The UI and reports retain
+review warnings. Full crRNA ordering requires a verified repeat and documentation;
+otherwise vendor rows explicitly contain a spacer only. Vendor product compatibility
+must be checked. Mad7 and LbCas12a repeats are not guessed. Nominal cut offsets,
+licensed Mad7 documentation, reference-tool comparisons and real genome-wide
+specificity runs still require validation. QC preserves both predicted strand cuts;
+it does not establish experimental cutting or repair outcomes.
