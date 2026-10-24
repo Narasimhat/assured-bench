@@ -107,3 +107,15 @@ must be checked. Mad7 and LbCas12a repeats are not guessed. Nominal cut offsets,
 licensed Mad7 documentation, reference-tool comparisons and real genome-wide
 specificity runs still require validation. QC preserves both predicted strand cuts;
 it does not establish experimental cutting or repair outcomes.
+
+## Enzyme-aware trace analysis (QC 0.6.0)
+
+The embedded trace analyser supports Mad7, AsCas12a and LbCas12a through the
+standard design handoff, JSON/HTML imports or manual spacer entry. It models
+indels throughout the staggered cut span, paired deletions and adaptive larger
+events; alignment and figures use both strand boundaries and the configured PAM.
+The same donor/partial-conversion, genotype, clone ranking and report pipeline is
+used. Results and CSV retain enzyme/config/model/cut provenance. Unknown or
+conflicting enzymes fail explicitly. Non-Cas9 designs cannot silently enter the
+verified Cas9-only ICE template. These paths pass generated-signal/AB1 checks;
+Cas12a/Mad7 laboratory calibration and enzyme-specific thresholds are unvalidated.

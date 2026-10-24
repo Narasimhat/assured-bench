@@ -1,3 +1,4 @@
+import { cutAnchors } from "./cutGeometry.js";
 // Expected-allele library: every sequence a clone or pool can plausibly carry at this locus, built from the
 // design hand-off alone. Sequences are full reference-window length (indels change the length), so the
 // analysis can compare any part of a read against them.
@@ -81,32 +82,35 @@ export function buildExpectedAlleles(spec, options = {}) {
   add({ id: "wt", kind: "wt", label: "Wild type", sequence: reference, size: 0 });
 
   (spec.guides || []).forEach((guide, index) => {
-    const tag = `g${index + 1}`;
+    for (const anchor of cutAnchors(guide)) {
+    const tag = `g${index + 1}${guide.cuts ? `@${anchor}` : ""}`;
     for (let size = 1; size <= maxDeletion; size += 1) {
       for (let offset = 0; offset <= size; offset += 1) {
-        const start = guide.cut - offset;
+        const start = anchor - offset;
         if (start < 0 || start + size > reference.length) continue;
-        add({ id: `${tag}:del${size}@${start}`, kind: "indel", label: `${guide.name}: -${size}`, sequence: deletion(reference, guide.cut, size, offset), size: -size, guide: index + 1, cut: guide.cut });
+        add({ id: `${tag}:del${size}@${start}`, kind: "indel", label: `${guide.name}: -${size}`, sequence: deletion(reference, anchor, size, offset), size: -size, guide: index + 1, cut: anchor });
       }
     }
     for (let size = 1; size <= maxInsertion; size += 1) {
-      insertions(reference, guide.cut, size).forEach(({ sequence, bases }) => add({ id: `${tag}:ins${bases}`, kind: "indel", label: `${guide.name}: +${size} (${bases})`, sequence, size, guide: index + 1, cut: guide.cut }));
+      insertions(reference, anchor, size).forEach(({ sequence, bases }) => add({ id: `${tag}:ins${bases}`, kind: "indel", label: `${guide.name}: +${size} (${bases})`, sequence, size, guide: index + 1, cut: anchor }));
     }
     // Longer insertions: the inserted bases are unknown (4^n sequences cannot be listed), so the allele is the reference with a run
     // of N at the cut. The downstream shift is still modelled exactly; at the inserted positions every base is equally likely.
     for (let size = maxInsertion + 1; size <= maxUnknownInsertion; size += 1) {
-      add({ id: `${tag}:insN${size}`, kind: "indel", label: `${guide.name}: +${size} (unknown bases)`, sequence: reference.slice(0, guide.cut) + "N".repeat(size) + reference.slice(guide.cut), size, guide: index + 1, cut: guide.cut });
+      add({ id: `${tag}:insN${size}`, kind: "indel", label: `${guide.name}: +${size} (unknown bases)`, sequence: reference.slice(0, anchor) + "N".repeat(size) + reference.slice(anchor), size, guide: index + 1, cut: anchor });
+    }
     }
   });
 
   const guides = spec.guides || [];
   for (let i = 0; i < guides.length; i += 1) {
     for (let j = i + 1; j < guides.length; j += 1) {
-      const left = Math.min(guides[i].cut, guides[j].cut);
-      const right = Math.max(guides[i].cut, guides[j].cut);
+      const [leftGuide, rightGuide] = guides[i].cut <= guides[j].cut ? [guides[i], guides[j]] : [guides[j], guides[i]];
+      const leftAnchors = cutAnchors(leftGuide), rightAnchors = cutAnchors(rightGuide);
+      const left = leftGuide.cut, right = rightGuide.cut;
       if (right - left < 2) continue;
-      for (let a = -3; a <= 3; a += 1) {
-        for (let b = -3; b <= 3; b += 1) {
+      for (let a = Math.min(...leftAnchors) - left - 3; a <= Math.max(...leftAnchors) - left + 3; a += 1) {
+        for (let b = Math.min(...rightAnchors) - right - 3; b <= Math.max(...rightAnchors) - right + 3; b += 1) {
           const start = left + a; const end = right + b;
           if (start < 1 || end <= start || end > reference.length) continue;
           add({ id: `g${i + 1}g${j + 1}:del@${start}-${end}`, kind: "deletion_between_cuts", label: `Deletion between cuts (${end - start} bp)`, sequence: reference.slice(0, start) + reference.slice(end), size: -(end - start), guides: [i + 1, j + 1] });
@@ -151,11 +155,13 @@ export function buildExpectedAlleles(spec, options = {}) {
     if ((donor.insertBp || 0) > 0 || (donor.replacedBp || 0) > 0) return;
     const edit = completeAllele(spec, donor).sequence; if (edit.length !== reference.length) return;
     (spec.guides || []).forEach((guide) => {
+      for (const anchor of cutAnchors(guide)) {
       for (let size = 1; size <= MAX_DONOR_INDEL; size += 1) for (let offset = 0; offset <= size; offset += 1) {
-        const start = guide.cut - offset; if (start < 0 || start + size > edit.length) continue;
+        const start = anchor - offset; if (start < 0 || start + size > edit.length) continue;
         add({ id: `d${donorIndex + 1}:edit-del${size}@${start}`, kind: "edit_indel", label: `Donor edit with -${size} at ${guide.name}`, sequence: edit.slice(0, start) + edit.slice(start + size), size: -size, guide: donorIndex + 1, donor: donor.name });
       }
-      for (let size = 1; size <= maxInsertion; size += 1) insertions(edit, guide.cut, size).forEach(({ sequence, bases }) => add({ id: `d${donorIndex + 1}:edit-ins${bases}@${guide.cut}`, kind: "edit_indel", label: `Donor edit with +${size} (${bases}) at ${guide.name}`, sequence, size, guide: donorIndex + 1, donor: donor.name }));
+      for (let size = 1; size <= maxInsertion; size += 1) insertions(edit, anchor, size).forEach(({ sequence, bases }) => add({ id: `d${donorIndex + 1}:edit-ins${bases}@${anchor}`, kind: "edit_indel", label: `Donor edit with +${size} (${bases}) at ${guide.name}`, sequence, size, guide: donorIndex + 1, donor: donor.name }));
+      }
     });
   });
   return { alleles, donorAlleles, referenceLength: reference.length };

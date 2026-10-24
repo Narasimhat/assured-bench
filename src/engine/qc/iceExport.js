@@ -1,3 +1,4 @@
+import { specNuclease } from "./nucleases.js";
 // ICE batch template verified at https://ice.editco.bio/misc/ice_example_files.zip, 2026-10-13.
 // One donor per ICE row. Repeated rows are alternative fits, never biological replicates.
 export const ICE_HEADERS = ['Label', 'Control File', 'Experiment File', 'Guide Sequence', 'Donor Sequence'];
@@ -6,7 +7,9 @@ export function planIceExport(tasks, results = []) {
   tasks.forEach((t, index) => {
     const reject = reason => excluded.push({ sample: t.name, reason });
     const guides = (t.spec?.guides || []).map(g => String(g.spacer || '').toUpperCase().replaceAll('U', 'T'));
-    const nuclease = t.nuclease || t.spec?.nuclease || t.spec?.design?.nuclease || 'SpCas9';
+    let nuclease;
+    try { nuclease = specNuclease({ ...t.spec, nuclease: t.spec?.nuclease || t.nuclease }); }
+    catch (error) { return reject(error.message); }
     if (nuclease !== 'SpCas9') return reject(`The verified ICE batch template has no nuclease column. ${nuclease} needs manual setup in ICE.`);
     if (!guides.length || guides.length > 3 || guides.some(g => !/^[ACGT]{17,23}$/.test(g))) return reject('ICE needs 1–3 explicit guide sequences, each 17–23 nt without PAM. Inferred cuts cannot be exported.');
     if (!t.controls?.length || !t.edited?.length) return reject('Missing WT or edited trace.');

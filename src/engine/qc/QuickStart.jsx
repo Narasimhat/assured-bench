@@ -14,7 +14,7 @@ import { runSummaryFigure } from "./summaryFigure.js";
 import { alignedGroups, clonesAlignedFigure, clonesAlignmentFigure } from "./alignedFigure.js";
 import { cloneSelectionFigure } from "./selectionFigure.js";
 import { saveSvg, savePng, savePdf } from "./saveFigure.js";
-import { NUCLEASES } from "./nucleases.js";
+import { NUCLEASES, specNuclease } from "./nucleases.js";
 import { expandImportFiles } from "./importFiles.js";
 import { cleanDna } from "./seq.js";
 import Detail from "./Detail.jsx";
@@ -180,6 +180,12 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
 
   const built = useMemo(() => (traceNames.length ? buildPairs({ traceNames, sheetText, explicitControls }) : { pairs: [], problems: [] }), [traceNames, sheetText, explicitControls]);
   const design = useMemo(() => { try { return { ...readDesign(designText, { designIndex }), error: "" }; } catch (e) { return { kind: "none", error: e.message }; } }, [designText, designIndex]);
+  useEffect(() => {
+    try {
+      if (design.kind === "spec") setNuclease(specNuclease(design.spec));
+      else if (design.kind === "report") setNuclease(design.nuclease);
+    } catch { /* Analysis reports invalid enzyme metadata before running. */ }
+  }, [design]);
   const pairs = built.pairs.map((p, i) => ({ ...p, ...(pairsEdit[i] || {}) }));
   const guides = guidesText.split(/[,;\s]+/).map(cleanDna).filter(Boolean);
   const lowCount = pairs.filter((p) => p.confidence === "low").length;
@@ -639,7 +645,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                     );
                   })}
                   <span className="muted" style={{ fontSize: "11px" }}>
-                    Enter 1–3 spacers without PAM (e.g. 20 nt).
+                    Enter 1–3 spacers without PAM (e.g. 20–24 nt, depending on the enzyme).
                   </span>
                 </div>
               </div>

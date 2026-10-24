@@ -1,3 +1,4 @@
+import { NUCLEASES, nucleaseOrDefault } from "./nucleases.js";
 // Reads guides and donors out of an exported Assured design report (HTML), so that the QC needs no retyping. The report is read as text with a small
 // tokenizer: nothing in it is rendered or executed, and scripts, styles, frames and embedded objects are dropped before anything is read.
 // (Approach and section names follow Assured_TraceEdit's design-import.js; this version has no DOM dependency so that the command line can use it.)
@@ -39,13 +40,22 @@ export function parseDesignReport(html) {
     const index = nodes.indexOf(heading);
     const start = [...headings].reverse().find((n) => nodes.indexOf(n) < index); const end = headings.find((n) => nodes.indexOf(n) > index);
     const stop = end ? nodes.indexOf(end) : nodes.length; const nextSection = sections.find((n) => nodes.indexOf(n) > index); const guideEnd = nextSection ? nodes.indexOf(nextSection) : stop;
+    const metaRows = nodes.slice(start ? nodes.indexOf(start) : 0, index).filter(n => n.tag === "tr");
+    const metaCells = metaRows.flatMap(tr => tr.children.filter(n => n.tag === "td" || n.tag === "th"));
+    const enzymeIndex = metaCells.findIndex((cell, i) => i + 1 < metaCells.length && /^Enzyme$/i.test(text(cell)));
+    const declared = enzymeIndex >= 0 ? text(metaCells[enzymeIndex + 1]).split(/[·;,(]/)[0].trim() : "";
+    const nucleaseName = declared ? nucleaseOrDefault(declared) : "SpCas9";
+    const nuclease = NUCLEASES[nucleaseName];
     const guides = [];
     for (const tr of nodes.slice(index + 1, guideEnd).filter((n) => n.tag === "tr")) {
       const cells = tr.children.filter((n) => n.tag === "td" || n.tag === "th");
       if (cells.length < 2 || /^name$/i.test(text(cells[0]))) continue;
-      const parts = text(cells[1]).toUpperCase().split(/\s+/).filter(Boolean); let sequence = parts[0] || "";
-      if (parts.length === 1 && sequence.length === 23 && /GG$/.test(sequence)) sequence = sequence.slice(0, 20);
-      if (!valid(sequence, 20, 20)) continue;
+      const parts = text(cells[1]).toUpperCase().split(/\s+/).filter(Boolean);
+      let sequence = parts[nuclease.side === "5" && parts.length > 1 ? 1 : 0] || "";
+      if (parts.length === 1 && sequence.length > nuclease.spacer[1]) {
+        sequence = nuclease.side === "5" ? sequence.slice(nuclease.pamLength) : sequence.slice(0, -nuclease.pamLength);
+      } else if (nucleaseName === "SpCas9" && parts.length === 1 && sequence.length === 23 && /GG$/.test(sequence)) sequence = sequence.slice(0, 20);
+      if (!valid(sequence, nuclease.spacer[0], nuclease.spacer[1])) continue;
       if (!guides.some((g) => g.sequence === sequence)) guides.push({ name: text(cells[0]), sequence });
     }
     const donorSection = sections.find((n) => nodes.indexOf(n) > index && nodes.indexOf(n) < stop && /(?:ssODN\s+Donor\s+Templates|Donor\s+Design)/i.test(text(n)));
@@ -77,7 +87,7 @@ export function parseDesignReport(html) {
         }
       }
     }
-    if (guides.length) designs.push({ title: start ? text(start) : "Assured design", guides, donors, protein: parseProteinNotes(proteinTexts) });
+    if (guides.length) designs.push({ nuclease: nucleaseName, title: start ? text(start) : "Assured design", guides, donors, protein: parseProteinNotes(proteinTexts) });
   }
   if (!designs.length) throw new Error("No supported Assured Design gRNA section found. Upload the exported design HTML report; PDF and order sheets are not supported.");
   return designs;
