@@ -99,7 +99,7 @@ function specFromControlOne({ control, guides, donor = "", gene = "sample", minA
   const spec = {
     schema: QC_SPEC_SCHEMA, design: { nuclease, type: "manual", editKind: "knockout", gene, label: "Manual entry", tag: "", codingStrand: "+" },
     reference: { sequence: reference, offset: 0, convention: "0-based index into the control read" },
-    guides: placed.map((g, index) => ({ name: g.inferred ? `${gene}_cut${index + 1}` : `${gene}_g${index + 1}`, spacer: g.spacer, pam: g.pam, strand: g.strand, cut: g.cut, ...(g.cuts ? { cuts: g.cuts, pamStart: g.pamStart, pamEnd: g.pamEnd } : {}), ...(g.enzyme ? { enzyme: g.enzyme, configVersion: g.configVersion } : {}), protospacerStart: g.start, protospacerEnd: g.end, index: index + 1 })),
+    guides: placed.map((g, index) => ({ name: g.inferred ? `${gene}_cut${index + 1}` : `${gene}_g${index + 1}`, spacer: g.spacer, pam: g.pam, strand: g.strand, cut: g.cut, ...(g.inferred ? { inferred: true } : {}), ...(g.cuts ? { cuts: g.cuts, pamStart: g.pamStart, pamEnd: g.pamEnd } : {}), ...(g.enzyme ? { enzyme: g.enzyme, configVersion: g.configVersion } : {}), protospacerStart: g.inferred ? null : g.start, protospacerEnd: g.inferred ? null : g.end, index: index + 1 })),
     donors: [], markers: [], primers: [], amplicons: [],
   };
   const donorSeq = cleanDna(donor);
