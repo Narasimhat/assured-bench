@@ -13,6 +13,7 @@
 
 /** Two selected guides must cut at least this far apart to count as independent. */
 export const MINIMUM_ALTERNATIVE_CUT_OFFSET = 10;
+export const EDIT_SEARCH_WINDOWS = Object.freeze([10, 20, 30]);
 
 /** Spacer composition outside these limits is ranked behind otherwise equal guides. */
 export const SEVERE_GC_LOW_PERCENT = 25;

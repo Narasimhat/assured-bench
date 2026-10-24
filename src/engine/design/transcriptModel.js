@@ -1,3 +1,5 @@
+import { findEnzymeGuides } from "./enzymeGuides.js";
+
 function extractFeatureRanges(loc) {
   const nums = String(loc || "").match(/\d+/g);
   if (!nums || nums.length < 2) return [];
@@ -418,24 +420,15 @@ export function findExonForSegment(modelOrExons, start, end) {
 
 export function findSpCas9Guides(model, reverseComplement, target, range = 50) {
   const seq = getGenomicSequence(model);
-  const results = [];
-  for (let pos = Math.max(0, target - range - 23); pos <= Math.min(seq.length - 23, target + range); pos += 1) {
-    const plusPam = seq.slice(pos + 20, pos + 23);
-    if (["AGG", "TGG", "CGG", "GGG"].includes(plusPam)) {
-      const spacer = seq.slice(pos, pos + 20);
-      const cut = pos + 17;
-      const gc = Math.round((spacer.split("").filter((base) => base === "G" || base === "C").length / 20) * 100);
-      if (!spacer.includes("TTTTT") && !spacer.includes("AAAAA") && Math.abs(cut - target) <= range) results.push({ sp: spacer, pam: plusPam, str: "+", cut, d: cut - target, gc, ps: pos });
-    }
-    const minusPam = seq.slice(pos, pos + 3);
-    if (["CCA", "CCT", "CCC", "CCG"].includes(minusPam)) {
-      const spacer = reverseComplement(seq.slice(pos + 3, pos + 23));
-      const cut = pos + 6;
-      const gc = Math.round((spacer.split("").filter((base) => base === "G" || base === "C").length / 20) * 100);
-      if (!spacer.includes("TTTTT") && !spacer.includes("AAAAA") && Math.abs(cut - target) <= range) results.push({ sp: spacer, pam: reverseComplement(minusPam), str: "-", cut, d: cut - target, gc, ps: pos });
-    }
-  }
-  return results;
+  if (!seq.length) return [];
+  // Preserve the historical window, ordering and soft composition policy for donor design.
+  const start = Math.max(0, target - range - 23);
+  const end = Math.min(seq.length, target + range + 23);
+  if (start > end) return [];
+  return findEnzymeGuides(seq, { enzyme: "spcas9", start, end, allowAmbiguousSpacer: true })
+    .filter(guide => !guide.spacer.includes("TTTTT") && !guide.spacer.includes("AAAAA") && Math.abs(guide.cuts.target - target) <= range)
+    .map(guide => ({ sp: guide.spacer, pam: guide.pam, str: guide.strand, cut: guide.cuts.target,
+      d: guide.cuts.target - target, gc: Math.round(guide.gc), ps: guide.start }));
 }
 
 export function selectNearbyGuidesForModel(model, reverseComplement, targetPos, window = 10) {
@@ -592,7 +585,7 @@ export function extractCodingDonorWindowFromModel(model, donorStart, donorEnd, p
   };
 }
 
-export function findKoDesignTargetFromModel(model, reverseComplement, selectKoGuidePair) {
+export function findKoDesignTargetFromModel(model, reverseComplement, selectKoGuidePair, finder = findSpCas9Guides) {
   const seq = getGenomicSequence(model);
   const segs = getCdsSegments(model);
   const exons = getExonsFromModel(model);
@@ -606,7 +599,7 @@ export function findKoDesignTargetFromModel(model, reverseComplement, selectKoGu
   const candidates = targetSegments.map(({ start, end, index }) => {
     const exonLength = end - start;
     const exon = findExonForSegment(exons, start, end);
-    const guides = findSpCas9Guides(model, reverseComplement, Math.floor((start + end) / 2), Math.floor(exonLength / 2) + 10)
+    const guides = finder(model, reverseComplement, Math.floor((start + end) / 2), Math.floor(exonLength / 2) + 10)
       .filter((guide) => guide.cut >= start - boundaryWindow && guide.cut <= end + boundaryWindow)
       .sort((left, right) => right.gc - left.gc);
     const pair = selectKoGuidePair(guides);

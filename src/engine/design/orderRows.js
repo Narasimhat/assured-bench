@@ -112,7 +112,8 @@ export function buildBatchOrderRows(entries) {
       designType,
       referenceFile: row.referenceSource === "raw" ? "Raw DNA + CDS coordinates" : (row.fileName || "Uploaded GenBank"),
       reviewStatus: procurementReadiness.status,
-      reviewNotes: collectProcurementReviewNotes(procurementReadiness).join(" "),
+      reviewNotes: [...(result.enzyme ? [`${result.enzyme.name}; config ${result.enzyme.version}; parameters ${JSON.stringify(result.enzymeParameters)}.`] : []), ...collectProcurementReviewNotes(procurementReadiness)].join(" "),
+      ...(result.enzyme ? { enzyme: result.enzyme.id, configVersion: result.enzyme.version } : {}),
     };
     const guides = (result.gs || []).map((guide) => ({
       ...common,
@@ -125,7 +126,7 @@ export function buildBatchOrderRows(entries) {
       length: guide.sp.length,
       linkedGuide: "",
       recommended: orderRecommendation,
-      notes: guide.arm || guide.note || "",
+      notes: [guide.arm || guide.note || "", ...(guide.full_crrna ? [`Full crRNA (RNA, 5′→3′): ${guide.full_crrna}.`] : [])].join(" "),
     }));
     const donors = result.type === "pm"
       ? (result.os || []).map((donor, donorIndex) => ({
@@ -139,7 +140,7 @@ export function buildBatchOrderRows(entries) {
         length: donor.od?.length || 0,
         linkedGuide: donor.guideName || "",
         recommended: donorRecommendation(donor),
-        notes: donor.guideName ? `Reverse complement to ${donor.guideName}` : "Recommended donor strand",
+        notes: donor.enzyme ? donor.strand_note : donor.guideName ? `Reverse complement to ${donor.guideName}` : "Recommended donor strand",
       }))
       : result.type === "it"
         ? (result.os || []).map((donor, donorIndex) => ({
@@ -153,7 +154,7 @@ export function buildBatchOrderRows(entries) {
           length: donor.od?.length || 0,
           linkedGuide: donor.guideName || "",
           recommended: donorRecommendation(donor),
-          notes: donor.guideName ? `Guide-linked internal ssODN, reverse complement to ${donor.guideName}` : "Guide-linked internal ssODN donor",
+          notes: donor.enzyme ? donor.strand_note : donor.guideName ? `Guide-linked internal ssODN, reverse complement to ${donor.guideName}` : "Guide-linked internal ssODN donor",
         }))
       : (result.type === "ct" || result.type === "nt")
         ? buildInsertDonorOrderRows(result, common, orderRecommendation)

@@ -13,6 +13,7 @@
 // Panel b (C- and N-terminal tags): sequence and reading frame at the insertion site.
 // Panel c (C- and N-terminal tags): layout of the tagged protein.
 
+import { guideGeometry } from "./enzymeModelGuides.js";
 const FONT = "Arial, Helvetica, sans-serif";
 const MONO = "Consolas, 'DejaVu Sans Mono', 'Courier New', monospace";
 const COLORS = {
@@ -86,6 +87,10 @@ function niceStep(span, target = 7) {
 
 // Window helpers --------------------------------------------------------------------------------
 function guideSite(guide) {
+  if (guide.enzyme && guide.enzyme !== "spcas9") {
+    const bounds = guideGeometry(guide);
+    return { pamStart: bounds.pamStart, pamEnd: bounds.pamEnd, protStart: bounds.spacerStart, protEnd: bounds.spacerEnd };
+  }
   const start = finite(guide.ps) ? guide.ps : guide.str === "-" ? guide.cut - 6 : guide.cut - 17;
   return guide.str === "-"
     ? { pamStart: start, pamEnd: start + 3, protStart: start + 3, protEnd: start + 23 }

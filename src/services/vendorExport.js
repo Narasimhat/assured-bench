@@ -1,3 +1,14 @@
+import { getEnzyme } from "../engine/design/enzymeConfig.js";
+
+function guideOrder(result, guide) {
+  const id = result.enzyme?.id || result.input?.enzyme || "spcas9";
+  const enzyme = getEnzyme(id);
+  const spacer = guide.spacer || guide.sp || guide.sequence || guide.seq;
+  return { enzyme, isCas9: id === "spcas9", spacer,
+    sequence: id === "spcas9" ? spacer : (guide.full_crrna || spacer),
+    notes: id === "spcas9" ? "" : `${enzyme.name}; config ${enzyme.version}; ${guide.full_crrna ? "Verified full crRNA (repeat + spacer)." : "Spacer only: supply a verified enzyme-specific repeat before ordering full crRNA."} Activity/CFD uncalibrated; confirm vendor chemistry and nuclease compatibility.` };
+}
+
 /**
  * Reagent Vendor Ordering Formatter
  * Generates direct copy-paste strings and formatted CSVs for IDT, Twist, Synthego, and GenScript.
@@ -13,17 +24,18 @@ export function generateIdtOrderRows(designPayload) {
   // 1. Guides as Alt-R crRNA
   const guides = result.guides || result.gs || [];
   guides.forEach((g, idx) => {
-    const seq = g.spacer || g.sp || g.sequence || g.seq;
+    const order = guideOrder(result, g);
+    const seq = order.sequence;
     if (seq) {
       rows.push({
         itemType: "crRNA",
         name: `${gene}_gRNA${idx + 1}`,
         sequence: seq,
         vendor: "IDT",
-        product: "Alt-R CRISPR-Cas9 crRNA (2 nmol or 10 nmol)",
+        product: order.isCas9 ? "Alt-R CRISPR-Cas9 crRNA (2 nmol or 10 nmol)" : `${order.enzyme.name} custom crRNA (confirm vendor compatibility)`,
         scale: "2 nmol",
         purification: "Standard Desalting",
-        notes: `Target PAM: ${g.pam || "NGG"}, GC: ${g.gc || 50}%, CFD residual: ${g.cfdResidual || "≤0.023"}`
+        notes: order.isCas9 ? `Target PAM: ${g.pam || "NGG"}, GC: ${g.gc ?? "unavailable"}%, CFD residual: ${g.cfdResidual ?? "unavailable"}` : order.notes
       });
     }
   });
@@ -105,17 +117,18 @@ export function generateSynthegoOrderRows(designPayload) {
 
   const guides = result.guides || result.gs || [];
   guides.forEach((g, idx) => {
-    const seq = g.spacer || g.sp || g.sequence || g.seq;
+    const order = guideOrder(result, g);
+    const seq = order.sequence;
     if (seq) {
       rows.push({
-        itemType: "sgRNA",
+        itemType: order.isCas9 ? "sgRNA" : "crRNA",
         name: g.n || `${gene}_sgRNA_${idx + 1}`,
         sequence: seq,
         vendor: "Synthego",
-        product: "CRISPR Synthetic sgRNA (Modified 2'-O-methyl 3' end-modified)",
+        product: order.isCas9 ? "CRISPR Synthetic sgRNA (Modified 2'-O-methyl 3' end-modified)" : `${order.enzyme.name} custom crRNA (confirm vendor compatibility)`,
         scale: "1.5 nmol",
         purification: "Standard Desalting",
-        notes: `20 nt protospacer without PAM (PAM: ${g.pam || g.pm || "NGG"})`
+        notes: order.isCas9 ? `20 nt protospacer without PAM (PAM: ${g.pam || g.pm || "NGG"})` : order.notes
       });
     }
   });
@@ -133,7 +146,7 @@ export function generateSynthegoOrderRows(designPayload) {
         product: seq.length <= 200 ? "Alt-R HDR Donor Oligo / Ultramer" : "Megamer ssDNA",
         scale: "4 nmol",
         purification: "PAGE",
-        notes: `Length: ${seq.length} nt; co-transfect with Synthego sgRNA RNP`
+        notes: `Length: ${seq.length} nt; deliver with the matched enzyme-compatible guide and nuclease`
       });
     }
   });

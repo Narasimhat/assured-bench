@@ -1,4 +1,5 @@
 import { blockingPolicyFor } from './genomicBlocking.js';
+import { ENZYMES } from './enzymeConfig.js';
 import { applySpliceCheck, buildSpliceCheckRequest } from './pairBlocking.js';
 import { buildGenomicSequenceCsv } from './genomicSequenceExport.js';
 import { buildDesignSchemeSvg, buildDesignSchemeFilename } from './designScheme.js';
@@ -133,6 +134,7 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate }) {
       {loaded && <div className="snp-loaded" role="status"><strong>{loaded.title}</strong>{loaded.detail?` — ${loaded.detail}`:''}<br/>{loaded.reference}<br/><button type="button" className="snp-link" onClick={()=>download(loaded.fileName,raw,'text/plain')}>Download this reference (GenBank)</button> <span>Keep it with the design; the optional splice check reads it.</span></div>}
       {loaded?.warnings?.map((text,i)=><p key={i} role="alert" className="snp-alert">{text}</p>)}
       <div className="snp-grid">
+        <label>Enzyme<select aria-label="Genomic SNP enzyme" value={input.enzyme || 'spcas9'} onChange={e=>update('enzyme',e.target.value)}>{Object.values(ENZYMES).map(enzyme=><option key={enzyme.id} value={enzyme.id}>{enzyme.name}</option>)}</select></label>
         {showEdit && field('Gene or locus','gene')}{field('Cell line (optional)','cellLine')}
         {showLocus && <>{field('Genome assembly','assembly')}{field('Chromosome','chromosome')}{field('Reference start (1-based genomic coordinate)','referenceStart','number')}</>}
         {showEdit && field('Edit position (1-based genomic coordinate)','position','number')}

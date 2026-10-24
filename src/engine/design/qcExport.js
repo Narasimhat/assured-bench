@@ -11,6 +11,7 @@
 // The optional `coding` block carries the gene region (coding.sequence, starting at coding.offset in the same uploaded reference) and the coding exons as
 // [start, end) pairs inside it, for the QC app's functional knockout assessment.
 
+import { guideGeometry } from "./enzymeModelGuides.js";
 export const QC_SPEC_SCHEMA = "assured-qc-design/1";
 
 const COMPLEMENT = { A: "T", C: "G", G: "C", T: "A" };
@@ -45,6 +46,13 @@ function placeSequence(genome, sequence, maxMismatch = 0) {
 }
 
 function describeGuide(genome, guide, index, name) {
+  if (guide.enzyme && guide.enzyme !== "spcas9") {
+    const bounds = guideGeometry(guide);
+    return { name: guide.n || name, spacer: guide.sp, pam: guide.pm || guide.pam, strand: guide.str, cut: guide.cut,
+      protospacerStart: bounds.spacerStart, protospacerEnd: bounds.spacerEnd,
+      pamStart: bounds.pamStart, pamEnd: bounds.pamEnd, cuts: guide.cuts, enzyme: guide.enzyme,
+      offsetFromEdit: guide.d ?? null, index: index + 1 };
+  }
   const spacer = String(guide.sp).toUpperCase();
   const placed = placeSequence(genome, spacer);
   let pam = guide.pam || "";
@@ -125,7 +133,11 @@ export function buildQcDesignSpec(result, options = {}) {
     const insertBp = result.il;
     // The native stop (C-terminal) or start (N-terminal) codon is replaced by the cassette, which carries its own.
     const replacedBp = 3;
-    const placement = alignInsertDonor(genome, result.donor, insertBp, result.h5l, result.h3l, replacedBp);
+    const known = result.donorReferenceInterval;
+    const placement = known ? { refStart: known.start, refEnd: known.end, arm5: result.h5l, arm3: result.h3l, insertBp, replacedBp,
+      left: genome.slice(known.start, known.start + result.h5l), right: genome.slice(known.end - result.h3l, known.end),
+      donorLeft: result.donor.slice(0, result.h5l), donorRight: result.donor.slice(result.h5l + insertBp) }
+      : alignInsertDonor(genome, result.donor, insertBp, result.h5l, result.h3l, replacedBp);
     if (!placement) return { err: "The donor could not be placed on the reference." };
     const markers = collectMarkers(genome, placement, result.ss, new Set());
     markers.forEach((marker) => markerList.push(marker));
@@ -153,7 +165,8 @@ export function buildQcDesignSpec(result, options = {}) {
       const genomic = String(donor.genomicDonor || donor.donorSense || "").toUpperCase();
       const refSegment = genome.slice(donor.donorStart, donor.donorEnd);
       const k = type === "it" ? donor.senseInsertStart : null;
-      const intendedPositions = new Set((donor.desiredDiffIndexes || (Number.isFinite(result.gp) && Number.isFinite(donor.donorStart) ? [result.gp - donor.donorStart] : [])).map((i) => donor.donorStart + i));
+      const intendedPositions = new Set(result.enzyme && result.type === "pm" ? (result.ch || []).map(change => change.p)
+        : (donor.desiredDiffIndexes || (Number.isFinite(result.gp) && Number.isFinite(donor.donorStart) ? [result.gp - donor.donorStart] : [])).map((i) => donor.donorStart + i));
       const placement = type === "it"
         ? { left: refSegment.slice(0, k), donorLeft: genomic.slice(0, k), right: refSegment.slice(k), donorRight: genomic.slice(k + insertBp), refStart: donor.donorStart, refEnd: donor.donorEnd, arm3: refSegment.length - k }
         : { left: refSegment, donorLeft: genomic, right: "", donorRight: "", refStart: donor.donorStart, refEnd: donor.donorEnd, arm3: 0 };
@@ -204,10 +217,11 @@ export function buildQcDesignSpec(result, options = {}) {
 
   return {
     schema: QC_SPEC_SCHEMA,
-    design: { type, editKind, gene: result.gene, label: intendedDescription, tag: result.tag || "", codingStrand: "+" },
+    design: { ...(result.enzyme ? { nuclease: result.enzyme.name } : {}), type, editKind, gene: result.gene, label: intendedDescription, tag: result.tag || "", codingStrand: "+", ...(result.enzyme ? { enzyme: result.enzyme, parameters: result.enzymeParameters } : {}) },
     reference: { sequence: genome.slice(windowStart, windowEnd), offset: windowStart, convention: "0-based index into sequence; the + strand of the uploaded reference" },
     ...(coding ? { coding } : {}),
-    guides: guides.map((guide) => ({ ...guide, cut: shift(guide.cut), protospacerStart: shift(guide.protospacerStart), protospacerEnd: shift(guide.protospacerEnd) })),
+    guides: guides.map((guide) => ({ ...guide, cut: shift(guide.cut), protospacerStart: shift(guide.protospacerStart), protospacerEnd: shift(guide.protospacerEnd),
+      ...(guide.cuts ? { cuts: Object.fromEntries(Object.entries(guide.cuts).map(([key, value]) => [key, shift(value)])), pamStart: shift(guide.pamStart), pamEnd: shift(guide.pamEnd) } : {}) })),
     donors: donors.map((donor) => ({ ...donor, refStart: shift(donor.refStart), refEnd: shift(donor.refEnd), insertStart: shift(donor.insertStart), carriesMarkers: donor.carriesMarkers?.map(shift) })),
     markers: markerList.map((marker) => ({ ...marker, pos: shift(marker.pos) })),
     primers: primers.map((primer) => ({ ...primer, start: shift(primer.start), end: shift(primer.end) })),

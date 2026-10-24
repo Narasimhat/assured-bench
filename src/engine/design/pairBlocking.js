@@ -10,7 +10,9 @@
 //  - inside an exon only if it is synonymous in the coding sequence and at least 4 bases from both exon ends;
 //  - otherwise (deeper intron) any base, preferring changes that do not create a new GT or AG within 60 bp of an exon.
 // Splicing outcomes are still unvalidated: the optional SpliceAI check (scripts/splice_check.py) can be attached to the design.
-import { scoreResidualActivity, CFD_PROTECTION_THRESHOLDS, normalizeMaxBlockingChanges, mkODN, assessGuideAgainstPointMutationDonor } from './designEngine.js';
+import { scoreResidualActivity, buildEditedGuideSite, CFD_PROTECTION_THRESHOLDS, normalizeMaxBlockingChanges, mkODN, assessGuideAgainstPointMutationDonor } from './designEngine.js';
+import { getEnzyme, pamRegex } from './enzymeConfig.js';
+import { guideGeometry } from './enzymeModelGuides.js';
 import { complementBase, genomicAt, isReverse } from './genomicCoords.js';
 import { screenSpliceChanges } from './genomicBlocking.js';
 import { SPLICE_WINDOWS, exonList, classifyPosition } from './spliceZones.js';
@@ -66,13 +68,19 @@ export function createdSpliceDinucleotides(model, seq, set) {
 
 /** The role of a genomic index for a guide: PAM base or a protospacer position (1 = PAM-distal, 20 = PAM-proximal). */
 export function guideRole(guide, p) {
+  if (guide.enzyme && guide.enzyme !== 'spcas9') {
+    const bounds=guideGeometry(guide);
+    if(p<bounds.start || p>=bounds.end)return null;
+    if(p>=bounds.pamStart && p<bounds.pamEnd)return {kind:'pam',index:guide.str==='+'?p-bounds.pamStart:bounds.pamEnd-1-p};
+    return {kind:'spacer',index:guide.str==='+'?p-bounds.spacerStart+1:bounds.spacerEnd-p};
+  }
   const off = p - guide.ps; if (off < 0 || off >= 23) return null;
   if (guide.str === '+') return off >= 20 ? { kind: 'pam', index: off - 20 } : { kind: 'spacer', index: off + 1 };
   return off < 3 ? { kind: 'pam', index: 2 - off } : { kind: 'spacer', index: 20 - (off - 3) };
 }
 
 function enumerateCandidates(model, seq, guides, edit, ctx) {
-  const sites = new Set(); guides.forEach((g) => { for (let p = g.ps; p < g.ps + 23; p += 1) sites.add(p); }); sites.delete(edit.gp);
+  const sites = new Set(); guides.forEach((g) => { for (let p = g.ps; p < guideGeometry(g).end; p += 1) sites.add(p); }); sites.delete(edit.gp);
   const out = [];
   for (const p of sites) {
     if (!'ACGT'.includes(seq[p])) continue;
@@ -98,11 +106,16 @@ const cfdOf = (model, guide, muts) => { const s = scoreResidualActivity(model, g
 export function planBlockingSet({ model, guides, gp, alt, maxChanges }) {
   const seq = String(model.genomicSequence || ''); const edit = { gp, nb: alt }; const ctx = codingMap(model);
   const cap = normalizeMaxBlockingChanges(maxChanges); const strong = CFD_PROTECTION_THRESHOLDS.strong;
-  const cfds = (set) => guides.map((g) => cfdOf(model, g, [edit, ...set]));
+  const configured=guides.some(g=>g.enzyme && g.enzyme!=='spcas9');
+  // A categorical search mask (PAM retained/removed), never an activity score.
+  // Keep all public CFD values null for enzymes without a calibrated CFD model.
+  const cfds = (set) => guides.map((g) => configured ? (pamRegex(getEnzyme(g.enzyme).pam_pattern).test(buildEditedGuideSite(model,g,[edit,...set]).pam)?1:0) : cfdOf(model, g, [edit, ...set]));
+  const finish=plan=>configured?{...plan,cfdBefore:plan.cfdBefore.map(()=>null),cfdAfter:plan.cfdAfter.map(()=>null),
+    alternatives:plan.alternatives.map(item=>({...item,cfdAfter:item.cfdAfter.map(()=>null)})),method:'canonical-PAM removal; residual activity unscored'}:plan;
   const isStrong = (cf) => cf.every((c) => c !== null && c <= strong);
   const before = cfds([]);
   const done = (set, cf) => ({ set, cf });
-  if (isStrong(before)) return { feasible: true, changes: [], cfdBefore: before, cfdAfter: before, alternatives: [], considered: 0 };
+  if (isStrong(before)) return finish({ feasible: true, changes: [], cfdBefore: before, cfdAfter: before, alternatives: [], considered: 0 });
   const cands = enumerateCandidates(model, seq, guides, edit, ctx);
   const rankOf = (e) => { const created = createdSpliceDinucleotides(model, seq, e.set).length; const exonic = e.set.filter((c) => c.cls.zone === 'exon-interior').length; const reach = Math.min(...e.set.map((c) => c.cls.distance ?? 1e6)); return [exonic, created ? 1 : 0, Math.max(...e.cf), -Math.min(reach, 1e5)]; };
   const cmp = (a, b) => { for (let i = 0; i < a.rank.length; i += 1) if (a.rank[i] !== b.rank[i]) return a.rank[i] - b.rank[i]; return 0; };
@@ -122,10 +135,10 @@ export function planBlockingSet({ model, guides, gp, alt, maxChanges }) {
       found.forEach((f) => { f.rank = rankOf(f); });
       found.sort(cmp);
       const seen = new Set(); const distinct = found.filter((f) => { const key = f.set.map((c) => c.gp).sort().join(','); if (seen.has(key)) return false; seen.add(key); return true; });
-      return { feasible: true, changes: distinct[0].set, cfdBefore: before, cfdAfter: distinct[0].cf, alternatives: distinct.slice(1, 4).map((f) => ({ changes: f.set, cfdAfter: f.cf })), considered };
+      return finish({ feasible: true, changes: distinct[0].set, cfdBefore: before, cfdAfter: distinct[0].cf, alternatives: distinct.slice(1, 4).map((f) => ({ changes: f.set, cfdAfter: f.cf })), considered });
     }
   }
-  return { feasible: false, changes: [], cfdBefore: before, cfdAfter: before, alternatives: [], considered, reason: cands.length ? `No set of up to ${cap} allowed substitutions makes every guide strongly protected.` : 'No allowed position (outside the splice-site windows, synonymous inside exons) lies in the guide sites.' };
+  return finish({ feasible: false, changes: [], cfdBefore: before, cfdAfter: before, alternatives: [], considered, reason: cands.length ? `No set of up to ${cap} allowed substitutions makes every guide strongly protected.` : 'No allowed position (outside the splice-site windows, synonymous inside exons) lies in the guide sites.' });
 }
 
 /**
@@ -181,7 +194,13 @@ export function planIndependentPair({ model, candidates, gp, alt, maxChanges, pi
 export function describeChanges(model, changes, guides, edit) {
   const seq = String(model.genomicSequence || ''); const ctx = codingMap(model);
   return changes.map((c) => {
-    const roles = guides.map((g) => { const r = guideRole(g, c.gp); if (!r) return null; if (r.kind === 'pam') { const site = seq.slice(g.ps, g.ps + 23).split(''); site[c.gp - g.ps] = c.nb; const raw = site.join(''); const pam = g.str === '+' ? raw.slice(20) : rc(raw.slice(0, 3)); return `PAM ${g.pam}→${pam} of ${g.name}`; } return `${r.index > 10 ? 'seed ' : ''}position ${r.index}/20 of ${g.name}`; }).filter(Boolean);
+    const roles = guides.map((g) => {
+      const r=guideRole(g,c.gp); if(!r)return null;
+      if(r.kind==='pam') {const site=buildEditedGuideSite(model,g,[{gp:c.gp,nb:c.nb}]);return `PAM ${g.pam}→${site.pam} of ${g.name}`;}
+      const config=getEnzyme(g.enzyme || 'spcas9');
+      const seed=config.pam_side==='5prime'?r.index<=config.seed_length:r.index>g.sp.length-config.seed_length;
+      return `${seed?'seed ':''}position ${r.index}/${g.sp.length} of ${g.name}`;
+    }).filter(Boolean);
     const purpose = roles.join('; ') || 'blocking change';
     if (c.cls.zone === 'exon-interior' && ctx) {
       const ci = Math.floor(ctx.index.get(c.gp) / 3); const withEdit = new Map([[edit.gp, edit.nb]]); const withBoth = new Map(withEdit).set(c.gp, c.nb);
@@ -275,7 +294,7 @@ export function buildPairDesign({ model, seq, exactCandidates, gp, ref, alt, sta
   let candidates = exactCandidates; let splice = null;
   const note = (changeList) => changeList.map((c) => (isReverse(where) ? `${genomicAt(where, c.gp)}: ${forward(seq[c.gp])}→${forward(c.nb)} on the forward strand, ${c.oc}→${c.nc} on the transcript (${c.location})` : `${genomicAt(where, c.gp)}: ${c.oc}→${c.nc} (${c.location})`));
   const edited = seq.slice(0, gp) + alt + seq.slice(gp + 1);
-  if (exactCandidates.length < 2) blocking.reason = 'Fewer than two SpCas9 guides were found within 30 bp, so a two-guide design is not possible.';
+  if (exactCandidates.length < 2) blocking.reason = `Fewer than two ${getEnzyme(exactCandidates[0]?.enzyme || 'spcas9').name} guides were found within 30 bp, so a two-guide design is not possible.`;
   else {
     const planned = shared ? planGuidePair({ model, candidates: exactCandidates, gp, alt, maxChanges, pinned }) : planIndependentPair({ model, candidates: exactCandidates, gp, alt, maxChanges, pinned });
     const best = planned.best;

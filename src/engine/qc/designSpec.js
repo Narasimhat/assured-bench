@@ -2,6 +2,7 @@
 // before any trace is analysed: a spec that disagrees with its own reference would give confident but
 // wrong allele calls.
 
+import { getEnzyme, pamRegex } from "../design/enzymeConfig.js";
 import { isDna, reverseComplement } from "./seq.js";
 
 export const QC_SPEC_SCHEMA = "assured-qc-design/1";
@@ -30,12 +31,27 @@ export function validateDesignSpec(spec) {
       const site = reference.slice(guide.protospacerStart, guide.protospacerEnd);
       const expected = guide.strand === "+" ? spacer : reverseComplement(spacer);
       if (site !== expected) fail(`${label}: the spacer does not match the reference at ${guide.protospacerStart}-${guide.protospacerEnd} on the ${guide.strand} strand.`);
-      const cut = guide.strand === "+" ? guide.protospacerEnd - 3 : guide.protospacerStart + 3;
-      if (cut !== guide.cut) fail(`${label}: cut index ${guide.cut} is not 3 bp from the PAM (expected ${cut}).`);
-      const pamSite = guide.strand === "+"
-        ? reference.slice(guide.protospacerEnd, guide.protospacerEnd + 3)
-        : reverseComplement(reference.slice(guide.protospacerStart - 3, guide.protospacerStart));
-      if (!/^[ACGT]GG$/.test(pamSite)) warnings.push(`${label}: PAM ${pamSite} is not NGG on the reference (it may be changed on purpose by a blocking edit).`);
+      const enzymeId = guide.enzyme?.id || guide.enzyme || spec.design?.enzyme?.id || spec.design?.enzyme || "spcas9";
+      let enzyme;
+      try { enzyme = getEnzyme(enzymeId); } catch { fail(`${label}: unknown enzyme ${enzymeId}.`); return; }
+      const fivePrime = enzyme.pam_side === "5prime";
+      const offset = enzyme.cut_offsets.target;
+      const cut = guide.strand === "+" ? guide.protospacerStart + offset : guide.protospacerEnd - offset;
+      if (cut !== guide.cut) fail(`${label}: cut index ${guide.cut} disagrees with ${enzyme.name} geometry (expected ${cut}).`);
+      const pamLength = enzyme.pam_pattern.length;
+      const pamStart = guide.strand === "+"
+        ? (fivePrime ? guide.protospacerStart - pamLength : guide.protospacerEnd)
+        : (fivePrime ? guide.protospacerEnd : guide.protospacerStart - pamLength);
+      const rawPam = reference.slice(pamStart, pamStart + pamLength);
+      const pamSite = guide.strand === "+" ? rawPam : reverseComplement(rawPam);
+      if (pamStart < 0 || !pamRegex(enzyme.pam_pattern).test(pamSite)) warnings.push(`${label}: PAM ${pamSite} is not ${enzyme.pam_pattern} on the reference (it may be changed on purpose by a blocking edit).`);
+      if (guide.cuts) {
+        for (const [strand, strandOffset] of Object.entries(enzyme.cut_offsets)) {
+          const expected = guide.strand === "+" ? guide.protospacerStart + strandOffset : guide.protospacerEnd - strandOffset;
+          inside(guide.cuts[strand], `${label} ${strand} cut`);
+          if (guide.cuts[strand] !== expected) fail(`${label}: ${strand} cut disagrees with ${enzyme.name} geometry.`);
+        }
+      }
     } else warnings.push(`${label}: protospacer position not given; the cut index is taken as stated.`);
   });
 
@@ -128,6 +144,7 @@ export function reverseSpec(spec) {
     guides: (spec.guides || []).map((guide) => ({
       ...guide, strand: flip(guide.strand), cut: boundary(guide.cut),
       protospacerStart: boundary(guide.protospacerEnd), protospacerEnd: boundary(guide.protospacerStart),
+      ...(guide.cuts ? { cuts: Object.fromEntries(Object.entries(guide.cuts).map(([key, value]) => [key, boundary(value)])), pamStart: boundary(guide.pamEnd), pamEnd: boundary(guide.pamStart) } : {}),
     })),
     donors: (spec.donors || []).map((donor) => {
       const replaced = donor.replacedBp || 0;

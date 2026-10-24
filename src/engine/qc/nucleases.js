@@ -8,6 +8,9 @@ export const NUCLEASES = {
   "SpCas9-NG": { label: "SpCas9-NG (NG)", pam: /^[ACGT]G$/, pamLength: 2, side: "3", cut: 3, spacer: [17, 24] },
   SaCas9: { label: "SaCas9 (NNGRRT)", pam: /^[ACGT]{2}G[AG][AG]T$/, pamLength: 6, side: "3", cut: 3, spacer: [20, 24] },
   Cas12a: { label: "Cas12a (TTTV)", pam: /^TTT[ACG]$/, pamLength: 4, side: "5", cut: 20, spacer: [20, 24] },
+  AsCas12a: { label: "AsCas12a", pam: /^TTT[ACG]$/, pamLength: 4, side: "5", cut: 20, spacer: [20, 24] },
+  LbCas12a: { label: "LbCas12a", pam: /^TTT[ACG]$/, pamLength: 4, side: "5", cut: 20, spacer: [20, 24] },
+  Mad7: { label: "Mad7", pam: /^[CT]TT[ACGT]$/, pamLength: 4, side: "5", cut: 20, spacer: [20, 24] },
   SpRY: { label: "SpRY (PAM-free)", pam: /^[ACGT]+$/, pamLength: 3, side: "3", cut: 3, spacer: [17, 24] },
 };
 
