@@ -104,8 +104,9 @@ export function WorkflowAgent({ project, onUpdateProject }) {
       {report?.requestKey !== requestKey && <p className="note">Saved record for the applied design. Compare again to evaluate the current enzyme selection and priority.</p>}
       <p>Priority used: {AGENT_PRIORITIES[visible.priority] || visible.priority}. Compared: {visible.enzymesCompared?.map(id => ENZYMES[id]?.name || id).join(", ")}.</p>
       <p className="muted">Agent {visible.agentVersion} · enzyme config {visible.configVersion} · {new Date(visible.createdAt).toLocaleString()}</p>
-      <div className="agent-comparisons">{visible.candidates.map(candidate => <article key={candidate.enzyme} className="agent-candidate">
-        <h4>{candidate.eligible ? `#${candidate.rank} ` : ""}{candidate.name} ({candidate.pam})</h4>
+      <div className="agent-comparisons">{visible.candidates.map((candidate, index) => <article key={candidate.enzyme} className="agent-candidate">
+        <h4>#{index + 1} {candidate.name} ({candidate.pam})</h4>
+        {candidate.eligible && visible.candidates.filter(other => other.eligible && other.rank === candidate.rank).length > 1 && <p className="muted">Tied on design criteria</p>}
         <p><strong>{candidate.status === "unavailable" ? "No design" : candidate.status.toUpperCase()}</strong>{project.workflowRecommendation?.selectedEnzyme === candidate.enzyme ? " · Applied to this experiment" : ""}</p>
         <ul>{candidate.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
         {candidate.warnings?.length > 0 && <details><summary>{candidate.warnings.length} review item(s)</summary><ul>{candidate.warnings.map((text, i) => <li key={i}>{text}</li>)}</ul></details>}
