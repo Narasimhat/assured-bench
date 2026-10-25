@@ -105,7 +105,7 @@ export function assessEnzymeReCutting(model, guide, config, edits, donorSequence
   return { guide_id: guide.id, state: removed ? "canonical_pam_removed" : "mismatched_target_unscored", pam_after: pam,
     cfd: null, residual_activity: null, reason: removed
       ? "The original PAM no longer matches this enzyme's configured canonical motif. Noncanonical-PAM cleavage is not modeled."
-      : "The spacer was changed but a canonical PAM remains. Cas12a/Mad7 mismatch tolerance is not calibrated; protection needs review." };
+      : "The spacer was changed but a canonical PAM remains. This enzyme's mismatch tolerance is not calibrated; protection needs review." };
 }
 
 export function findSynonymousPamEdits(model, guide, config, edits, interval, maxChanges, excludedAa, allowed = () => true) {
@@ -238,7 +238,7 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
       const matchedProtection = protection.filter(check => guides.some(guide => guide.id === check.guide_id));
       const intact = matchedProtection.some(check => check.state === "intact_target");
       const synthesis = scanSynthesisRisks(sense);
-      const warnings = ["No calibrated Cas12a/Mad7 residual-activity or genome-wide specificity model has been applied. Review the complete design before ordering.",
+      const warnings = ["No calibrated enzyme-specific residual-activity or genome-wide specificity model has been applied. Review the complete design before ordering.",
         "Homology-arm and synthesis defaults are general HDR heuristics, not enzyme- or cell-type-specific validation."];
       const cutArms = asymmetric ? snpDonorArms(selected[index].strand, run.enzyme.pam_side) : null;
       if (cutArms && selected[index].cuts.target - donorWindow.start !== cutArms.upstream) warnings.push("Reference ends shifted the nominal 91/36 PAM-oriented donor layout. Supply more flanking sequence for the requested asymmetry.");

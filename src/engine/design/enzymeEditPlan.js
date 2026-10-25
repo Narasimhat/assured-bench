@@ -74,7 +74,7 @@ export function planEnzymeModification(row, rawReference = null, { model: suppli
   run.modification = { type, label, mutation: row.mutation || null, tag: ["it", "ct", "nt"].includes(type) ? row.tag : null,
     target_boundary: target, ko_intervals: koIntervals, search_radius: radius,
     distance_basis: "nearest predicted strand cut to the target boundary", total_reference_candidates: allCount,
-    donor_status: "pending", note: "Donors are constructed and checked against the requested protein change. Cas12a/Mad7 re-cutting activity is not calibrated, so this is not ordering approval. Knockout mode lists coding-region guides and does not select a deletion pair." };
+    donor_status: "pending", note: "Donors are constructed and checked against the requested protein change. Enzyme-specific re-cutting activity is not calibrated, so this is not ordering approval. Knockout mode lists coding-region guides and does not select a deletion pair." };
   run.reference = { gene: model.gene, transcript_id: model.transcriptId, source: row.referenceSource === "raw" ? "raw DNA" : row.fileName || "GenBank",
     requested_gene: row.gene || null, reference_issues: model.referenceIssues || [], orientation: "input record orientation" };
   run.parameters.delivery = row.deliveryMethod === "unknown" || !row.deliveryMethod ? "unknown" : run.parameters.delivery;

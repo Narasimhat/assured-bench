@@ -115,6 +115,7 @@ function completeMetadata(result, model, config, options) {
   result.guideSequenceQc = result.gs.map((guide, index) => ({ guideIndex: index + 1, guideName: guide.n,
     ...assessGuideSequence(guide.sp, result.deliveryMethod, config.id) }));
   result.enzymeWarnings = [`${config.name} uses the shared design rules, reports and primer workflow. Activity/specificity and noncanonical-PAM/mismatch tolerance require enzyme-specific validation; no SpCas9 CFD is applied.`,
+    ...(config.design_note ? [config.design_note] : []),
     ...(config.id === "mad7" ? [config.license_note] : [])];
   result.dbg = `Parsed ${model.genomicSequence.length} bp. ${config.name} config ${config.version}; ${model.gene}, ${model.cdsSegments.length} CDS segments, ${model.proteinLength} aa.`;
   return result;
@@ -130,7 +131,7 @@ export function runConfiguredEnzymeDesign(type, model, mutation, tag, homologyAr
       const cuts = result.gs.map(guide => guide.cuts);
       const possible = cuts[0] && cuts[1] ? Object.values(cuts[1]).flatMap(right => Object.values(cuts[0]).map(left => Math.abs(right - left))) : [];
       result.deletionOutcome.cutBoundaryRange = possible.length ? [Math.min(...possible), Math.max(...possible)] : null;
-      result.deletionOutcome.staggeredEnds = true;
+      result.deletionOutcome.staggeredEnds = config.cut_offsets.target !== config.cut_offsets.non_target;
       return completeMetadata(result, model, config, options);
     }
     const row = { enzyme: config.id, projectType: type, gene: model.gene, mutation, tag,

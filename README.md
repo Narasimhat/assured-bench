@@ -136,3 +136,14 @@ on the opposite side of the nominal target-strand cut. This mirrors the referenc
 layout for 5′-PAM Cas12a/Mad7 while retaining Cas9's 3′-PAM behavior. The policy is
 a computational design heuristic; enzyme-specific HDR and strand preferences
 still require experimental validation.
+
+
+### Additional Cas9 enzymes (config 1.2.0)
+
+Designer, Bench and Hub include SpCas9-NG (3′ NG; 20 nt spacer), SaCas9 (3′ NNGRRT; 21 nt spacer), and SpRY (3′ NNN search envelope; 20 nt spacer). Their nominal coincident cuts are 3 nt before the PAM. The standard two-guide knockout, nearest-window edit selection, 127 nt SNP donor, protein-check, report, ordering and QC handoff workflows apply. No SpCas9 CFD calibration or guide library is reused for these enzymes.
+
+SpRY is near-PAMless, not equally active at every PAM (NRN/NYN activity differs). NNN scanning includes both classes without assigning a quantitative activity prediction. PAM-only substitutions cannot block a site under this envelope; synonymous seed changes remain unscored and require review. SaCas9 needs its own guide scaffold. Cas9-family scaffolds are not emitted as a Cas12 direct repeat plus spacer.
+
+QC accepts the named enzyme IDs from design exports automatically. Legacy manual QC spacer ranges remain supported; Designer currently fixes these Cas9 variants to their stated default spacer lengths. Generic Cas12a remains a legacy QC option; use AsCas12a or LbCas12a for new designs.
+
+Sources: [SpCas9-NG, Nishimasu et al.](https://doi.org/10.1126/science.aas9129), [SaCas9, Ran et al.](https://doi.org/10.1038/nature14299), [SpRY, Walton et al.](https://doi.org/10.1126/science.aba8853).

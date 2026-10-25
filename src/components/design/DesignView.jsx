@@ -874,12 +874,14 @@ export function DesignView({
             {enzyme !== "spcas9" && <details style={{ marginTop: "1rem" }}>
               <summary>{enzymeConfig.name} guide settings</summary>
               <p>{enzymeConfig.license_note || enzymeConfig.repeat_note}</p>
+              {enzymeConfig.design_note && <p>{enzymeConfig.design_note}</p>}
               <div className="grid-3">
                 <label>Spacer length<input aria-label="Spacer length" type="number" min={enzymeConfig.spacer_len.min} max={enzymeConfig.spacer_len.max} value={currentProject.options?.spacerLength || enzymeConfig.spacer_len.default} onChange={event => setOption({ spacerLength: Number(event.target.value) })}/></label>
-                <label>5′ direct repeat<input aria-label="Direct repeat" value={currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat ?? ""} onChange={event => setOption({ directRepeat: event.target.value, repeatVerified: false })}/></label>
+                {enzymeConfig.pam_side === "5prime" && <><label>5′ direct repeat<input aria-label="Direct repeat" value={currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat ?? ""} onChange={event => setOption({ directRepeat: event.target.value, repeatVerified: false })}/></label>
                 <label>Repeat documentation<input aria-label="Repeat documentation" value={currentProject.options?.repeatSource || ""} onChange={event => setOption({ repeatSource: event.target.value, repeatVerified: false })}/></label>
+              </>}
               </div>
-              <label><input type="checkbox" checked={!!currentProject.options?.repeatVerified} disabled={!currentProject.options?.repeatSource || !(currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat)} onChange={event => setOption({ repeatVerified: event.target.checked })}/> I verified the repeat against the documentation for my nuclease.</label>
+              {enzymeConfig.pam_side === "5prime" && <label><input type="checkbox" checked={!!currentProject.options?.repeatVerified} disabled={!currentProject.options?.repeatSource || !(currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat)} onChange={event => setOption({ repeatVerified: event.target.checked })}/> I verified the repeat against the documentation for my nuclease.</label>}
             </details>}
 
             {editType === "pm" && <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>SNP donors are 127 nt: nominally 91 nt toward the PAM and 36 nt on the opposite side of the target-strand cut, ordered opposite the guide. Cas12a/Mad7 mirror the Cas9 layout because their PAM is 5′. Prefer silent PAM disruption, with synonymous seed changes as a review-required fallback.</p>}

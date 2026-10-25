@@ -11,9 +11,11 @@ export const NUCLEASES = {
   Cas12a: { label: "Cas12a (TTTV)", pam: /^TTT[ACG]$/, pamLength: 4, side: "5", cut: 20, spacer: [20, 24] },
   ...Object.fromEntries(Object.values(ENZYMES).filter(e => e.id !== "spcas9").map(e => [e.name, {
     label: e.name, enzyme: e.id, version: e.version, pam: pamRegex(e.pam_pattern), pamLength: e.pam_pattern.length,
-    side: "5", cut: e.cut_offsets.target, cutOffsets: e.cut_offsets, spacer: [e.spacer_len.min, e.spacer_len.max],
+    side: e.pam_side === "5prime" ? "5" : "3",
+    cut: e.pam_side === "5prime" ? e.cut_offsets.target : e.spacer_len.default - e.cut_offsets.target,
+    ...(e.pam_side === "5prime" ? { cutOffsets: e.cut_offsets } : {}),
+    spacer: e.pam_side === "5prime" ? [e.spacer_len.min, e.spacer_len.max] : e.name === "SaCas9" ? [20, 24] : [17, 24],
   }])),
-  SpRY: { label: "SpRY (PAM-free)", pam: /^[ACGT]+$/, pamLength: 3, side: "3", cut: 3, spacer: [17, 24] },
 };
 
 export function nucleaseOrDefault(name) {
