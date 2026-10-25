@@ -119,3 +119,14 @@ used. Results and CSV retain enzyme/config/model/cut provenance. Unknown or
 conflicting enzymes fail explicitly. Non-Cas9 designs cannot silently enter the
 verified Cas9-only ICE template. These paths pass generated-signal/AB1 checks;
 Cas12a/Mad7 laboratory calibration and enzyme-specific thresholds are unvalidated.
+
+## Shared SNP donor policy
+
+All enzymes now use the Cas9-style SNP donor policy: exactly 127 nt, asymmetric
+36/91 cut-centered reference windows (with the same sequence-end handling), and
+opposite-guide ordering. Stale tag format, arm-length or strand settings do not
+change a SNP donor. Matched donors retain shared blockers for co-delivery where
+feasible; otherwise the design falls back or flags the incompatible geometry.
+Synonymous PAM disruption is preferred. If unavailable, synonymous PAM-proximal
+seed changes are proposed with full protein/splice checks and an explicit
+unscored-protection warning. Tag format/arm controls remain available for tags.

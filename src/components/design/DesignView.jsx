@@ -882,6 +882,8 @@ export function DesignView({
               <label><input type="checkbox" checked={!!currentProject.options?.repeatVerified} disabled={!currentProject.options?.repeatSource || !(currentProject.options?.directRepeat ?? enzymeConfig.direct_repeat)} onChange={event => setOption({ repeatVerified: event.target.checked })}/> I verified the repeat against the documentation for my nuclease.</label>
             </details>}
 
+            {editType === "pm" && <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>SNP donors use the same policy as Cas9: 127 nt, a 36/91 bp asymmetric window around the matched cut, ordered opposite the guide. Prefer silent PAM disruption, with synonymous seed changes as a review-required fallback.</p>}
+
             {/* Advanced Options Bar */}
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>

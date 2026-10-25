@@ -22,7 +22,8 @@ import { buildDonorFormatReport, planDonorArms } from "./donorFormat.js";
 import { describeGuideUse } from "./guideUse.js";
 import { getEnzyme, pamRegex } from "./enzymeConfig.js";
 import { findConfiguredModelGuides, guideGeometry } from "./enzymeModelGuides.js";
-import { findSynonymousPamEdits } from "./enzymeDonors.js";
+import { snpDonorWindow } from "./snpDonorPolicy.js";
+import { findSynonymousPamEdits, findSynonymousSeedEdits } from "./enzymeDonors.js";
 import { runConfiguredEnzymeDesign } from "./enzymeWorkflow.js";
 
 const CODON_TABLE = {
@@ -615,7 +616,8 @@ export function findBlockingSet(model, guide, blockedPositions = new Set(), opti
   if (guide.enzyme && guide.enzyme !== "spcas9") {
     const config = getEnzyme(guide.enzyme), bounds = guideGeometry(guide);
     const allowed = pos => !blockedPositions.has(pos) && (!options.isPositionAllowed || options.isPositionAllowed(pos));
-    const changes = findSynonymousPamEdits(model, guide, config, [], { start: 0, end: model.genomicSequence.length }, options.maxChanges || 3, null, allowed);
+    const interval = { start: 0, end: model.genomicSequence.length };
+    const changes = findSynonymousPamEdits(model, guide, config, [], interval, options.maxChanges || 3, null, allowed);
     if (changes.length) return changes.map(edit => {
       const info = getCodonAtAa(model, edit.aa_number, toAA);
       return { gp: edit.start, nb: edit.sequence, lb: `p.${info.aa}${edit.aa_number}${info.aa}`, oc: info.cod,
@@ -631,7 +633,13 @@ export function findBlockingSet(model, guide, blockedPositions = new Set(), opti
           mt: "noncoding", pur: `${config.name} canonical PAM disruption outside CDS`, blockingTier: "strong", blockingReason: "Intronic canonical PAM removed; splice effects and noncanonical activity require review." }];
       }
     }
-    return [];
+    const seed = findSynonymousSeedEdits(model, guide, config, [], interval, options.maxChanges || 3, null, allowed);
+    return seed.map(edit => {
+      const info = getCodonAtAa(model, edit.aa_number, toAA);
+      return { gp: edit.start, nb: edit.sequence, lb: `p.${info.aa}${edit.aa_number}${info.aa}`, oc: info.cod,
+        nc: info.genomicPositions.map(pos => seed.find(change => change.start === pos)?.sequence || model.genomicSequence[pos]).join(""),
+        pur: `${config.name} PAM-proximal seed mismatch (unscored)`, mt: "silent", blockingTier: "weak", blockingReason: "Synonymous seed change proposed; protection remains uncalibrated." };
+    });
   }
   const maxChanges = Number.isFinite(options.maxChanges) ? options.maxChanges : MAX_BLOCKING_CHANGES;
   const candidates = collectSilentCandidates(model, guide, blockedPositions, options);
@@ -807,24 +815,10 @@ export function validatePointMutationPayload(model, donorStart, payload, targetA
 
 export function mkODN(model, guide, mutationPositions, mutationBases, silentMutations = [], validationTarget = null) {
   const seq = getGenomicSequence(model);
-  let donorStart;
-  let donorEnd;
-  if (guide.str === "+") { donorStart = guide.cut - 36; donorEnd = guide.cut + 91; }
-  else { donorStart = guide.cut - 91; donorEnd = guide.cut + 36; }
-  const desiredLength = donorEnd - donorStart;
-  if (donorStart < 0) {
-    donorEnd = Math.min(seq.length, donorEnd - donorStart);
-    donorStart = 0;
-  }
-  if (donorEnd > seq.length) {
-    donorStart = Math.max(0, donorStart - (donorEnd - seq.length));
-    donorEnd = seq.length;
-  }
-  if (donorEnd - donorStart < desiredLength && seq.length >= desiredLength) {
-    donorStart = Math.max(0, donorEnd - desiredLength);
-    donorEnd = Math.min(seq.length, donorStart + desiredLength);
-  }
-  if (donorStart < 0 || donorEnd > seq.length || donorEnd - donorStart < desiredLength) return null;
+  const interval = snpDonorWindow(seq.length, guide.cut, guide.str);
+  if (!interval) return null;
+  const { start: donorStart, end: donorEnd } = interval;
+  if (mutationPositions.some(pos => pos < donorStart || pos >= donorEnd) || silentMutations.some(edit => edit.gp < donorStart || edit.gp >= donorEnd)) return null;
 
   const payload = seq.slice(donorStart, donorEnd).split("");
   const wildType = seq.slice(donorStart, donorEnd);

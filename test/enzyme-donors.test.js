@@ -10,7 +10,7 @@ import { getEnzyme } from "../src/engine/design/enzymeConfig.js";
 
 const site = "TTTAACGTCAGTCAGTACGATCGATCA";
 const flank = "GAC".repeat(200);
-const cds = "ATG" + site + site + "GCT".repeat(60) + site + "TAA";
+const cds = "ATG" + site + site.slice(0, -1) + "C" + "GCT".repeat(60) + site + "TAA";
 const sequence = flank + cds + flank;
 const start = flank.length;
 const gb = `LOCUS       DONOR_TEST ${sequence.length} bp DNA\nFEATURES             Location/Qualifiers
@@ -24,7 +24,7 @@ ORIGIN
 //\n`;
 const base = { enzyme: "mad7", projectType: "pm", mutation: "N3K", gene: "TEST", gbRaw: gb,
   fileName: "test.gb", referenceSource: "genbank", enzymeSpacerLength: 23, guideSearchRadius: 60,
-  deliveryMethod: "rnp", autoTrimArms: false };
+  deliveryMethod: "rnp", autoTrimArms: false, coDelivery: false };
 const protein = dna => dna.match(/.../g).map(toAA).join("");
 
 for (const enzyme of ["mad7", "ascas12a", "lbcas12a"]) {
@@ -46,11 +46,13 @@ for (const enzyme of ["mad7", "ascas12a", "lbcas12a"]) {
 }
 
 test("co-delivery checks every matched guide; separate donors identify pairing and alternative re-cutting risks", () => {
-  const joint = planEnzymeModification(base);
+  const pairedCds = "ATG" + site + "GCTAACATC" + "GAAAAC" + "GCT".repeat(60) + "TAA";
+  const raw = { gene: "TEST", sequence: flank + pairedCds + flank, cdsStart: start + 1, cdsEnd: start + pairedCds.length };
+  const joint = planEnzymeModification({ ...base, referenceSource: "raw", mutation: "S5A", coDelivery: true }, raw);
   assert.equal(joint.donor_design.selected_guide_ids.length, 2);
-  assert.equal(joint.donor_design.donors.length, 1);
+  assert.equal(joint.donor_design.donors.length, 2, JSON.stringify(joint.donor_design));
   assert.equal(joint.donor_design.donors[0].matched_guide_ids.length, 2);
-  const separate = planEnzymeModification({ ...base, coDelivery: false });
+  const separate = planEnzymeModification({ ...base, referenceSource: "raw", mutation: "S5A", coDelivery: false }, raw);
   assert.equal(separate.donor_design.donors.length, 2);
   for (const donor of separate.donor_design.donors) {
     assert.equal(donor.matched_guide_ids.length, 1);
@@ -60,7 +62,7 @@ test("co-delivery checks every matched guide; separate donors identify pairing a
   }
 });
 
-test("ssODN strand is explicit; CSV/FASTA preserve chosen orientation and GenBank annotates input-sense DNA", () => {
+test("SNP ordering is opposite-guide; CSV/FASTA preserve ordering and GenBank annotates input-sense DNA", () => {
   const run = planEnzymeModification({ ...base, enzymeDonorStrand: "antisense" });
   const donor = run.donor_design.donors[0];
   assert.equal(donor.order_sequence, rc(donor.sequence));
@@ -103,14 +105,14 @@ for (const [type, tag] of [["ct", "SD40-2xHA"], ["nt", "N:EGFP-Linker"]]) {
 
 test("short reference, impossible format, insufficient arm geometry and missing guides cannot emit invalid donors", () => {
   const limitedReference = planEnzymeModification({ ...base, referenceSource: "raw" }, { gene: "TEST", sequence: cds, cdsStart: 1, cdsEnd: cds.length });
-  assert.equal(limitedReference.donor_design.donors.length, 0);
-  assert.match(limitedReference.donor_design.errors.join(" "), /Insufficient reference/);
+  assert.ok(limitedReference.donor_design.donors.length);
+  assert.ok(limitedReference.donor_design.donors.every(donor => donor.order_sequence.length === 127));
   const short = planEnzymeModification({ ...base, donorFormat: "block", homologyArm: "20" });
-  assert.equal(short.donor_design.donors.length, 0);
-  assert.equal(short.status, "BLOCKED");
+  assert.ok(short.donor_design.donors.length);
+  assert.ok(short.donor_design.donors.every(donor => donor.order_sequence.length === 127));
   const long = planEnzymeModification({ ...base, donorFormat: "ssodn", homologyArm: "200" });
-  assert.equal(long.donor_design.donors.length, 0);
-  assert.match(long.donor_design.errors.join(" "), /length limits/);
+  assert.ok(long.donor_design.donors.length);
+  assert.ok(long.donor_design.donors.every(donor => donor.order_sequence.length === 127));
   const noGuides = planEnzymeModification({ ...base, guideSearchRadius: 1 });
   assert.equal(noGuides.donor_design.donors.length, 0);
   assert.match(noGuides.donor_design.errors.join(" "), /No guide passes/);
@@ -124,7 +126,7 @@ test("internal tags at an annotated splice/start boundary refuse a splice-unchec
 });
 
 test("a retained exact target blocks the matched donor; mismatched targets remain unscored", () => {
-  const run = planEnzymeModification({ ...base, enzymePamBlocking: false });
+  const run = planEnzymeModification({ ...base, mutation: "N12K", enzymePamBlocking: false });
   const donor = run.donor_design.donors[0];
   assert.equal(donor.status, "BLOCKED");
   assert.equal(run.status, "BLOCKED");
@@ -153,7 +155,8 @@ test("minus-strand Cas12-family guides retain input-oriented donor edits and syn
     guideSearchRadius: 60, enzymeDonorStrand: "antisense" }, raw);
   assert.ok(matched.donor_design.donors.length, JSON.stringify(matched.donor_design));
   const donor = matched.donor_design.donors[0];
-  assert.equal(donor.order_sequence, rc(donor.sequence));
+  assert.equal(donor.order_sequence, donor.sequence);
+  assert.equal(donor.strand, "sense");
   const expected = protein(minusCds).slice(0, 9) + "V" + protein(minusCds).slice(10);
   assert.equal(protein(donor.repaired_reference_sequence.slice(start, start + minusCds.length)), expected);
   assert.ok(donor.guide_protection.some(check => check.state === "canonical_pam_removed"));

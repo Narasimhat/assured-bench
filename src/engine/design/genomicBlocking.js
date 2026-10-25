@@ -71,12 +71,12 @@ export function buildBlockingComparison(model, guide, gp, alt, policy, maxChange
       const expected=new Map([[gp,alt],...changes.map(m=>[m.gp,m.nb])]);
       if(!donor || [...donor.genomicDonor].some((b,i)=>b!==(expected.get(donor.donorStart+i)??seq[donor.donorStart+i])))throw Error('Blocking donor validation failed.');
       const protection=assessGuideAgainstPointMutationDonor(guide,donor);
-      if((guide.enzyme && guide.enzyme!=='spcas9' ? protection.tier==='strong' && baselineProtection.tier!=='strong' : Number.isFinite(protection.cfd) && protection.cfd < baselineProtection.cfd))variants.push({id:pamOnly?'pam-blocking':'pam-seed-blocking',changes,donor,protection});
+      if((guide.enzyme && guide.enzyme!=='spcas9' ? (protection.tier==='strong' && baselineProtection.tier!=='strong' || protection.tier==='weak' && ['none','weak'].includes(baselineProtection.tier) && (protection.mismatches?.length || 0) > (baselineProtection.mismatches?.length || 0)) : Number.isFinite(protection.cfd) && protection.cfd < baselineProtection.cfd))variants.push({id:pamOnly?'pam-blocking':'pam-seed-blocking',changes,donor,protection});
     }
   }
   for(const v of variants)v.splice=screenSpliceChanges(model,edited,v.changes);
   // Prefer a strong candidate, then fewer local screening flags, fewer added bases and lower CFD.
-  const rank=v=>[v.protection.tier==='strong'?0:1,v.splice.junctionChanges.length*100+v.splice.nearby.length+v.splice.motifChanges.length,v.changes.length,v.protection.cfd??Infinity];
+  const rank=v=>[guide.enzyme && guide.enzyme!=='spcas9' ? ({strong:0,moderate:1,weak:2,none:3}[v.protection.tier] ?? 4) : v.protection.tier==='strong'?0:1,v.splice.junctionChanges.length*100+v.splice.nearby.length+v.splice.motifChanges.length,guide.enzyme && guide.enzyme!=='spcas9' ? -(v.protection.mismatches?.length || 0) : 0,v.changes.length,v.protection.cfd??Infinity];
   const sorted=[...variants].sort((a,b)=>{const x=rank(a),y=rank(b);for(let i=0;i<x.length;i++)if(x[i]!==y[i])return x[i]-y[i];return 0;});
   const selected=sorted[0];
   return {selected,variants,requestedSplice:screenSpliceChanges(model,seq,[{gp,nb:alt}]),
