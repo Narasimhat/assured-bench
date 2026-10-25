@@ -1,8 +1,11 @@
 import { ENZYMES, ENZYME_CONFIG_VERSION, getEnzyme } from "../engine/design/enzymeConfig.js";
 import { runDesign, summarizeProcurementReadiness, summarizePrimerReadiness } from "../engine/design/designEngine.js";
+import { isTwoGuidePolicy } from "../engine/design/genomicBlocking.js";
+import { designGenomicSnp } from "../engine/design/genomicSnp.js";
+import { normalizeGenomicDesign } from "./genomicDesignResult.js";
 import { getReleaseVerdict } from "../engine/design/releaseVerdict.js";
 
-export const WORKFLOW_AGENT_VERSION = "1.0.0";
+export const WORKFLOW_AGENT_VERSION = "1.1.0";
 export const AGENT_PRIORITIES = {
   balanced: "Protection, then cut proximity",
   closest: "Closest cut, then protection",
@@ -14,16 +17,22 @@ export function agentRequest(project, enzymes, priority = "balanced") {
   const selected = [...new Set(enzymes)];
   if (!selected.length) throw Error("Select at least one available enzyme.");
   selected.forEach(getEnzyme);
-  if (!["ko", "pm", "it", "nt", "ct"].includes(project.editType)) throw Error("Use a coding modification for enzyme comparison. Genomic SNP comparison is not available in this version.");
-  if (!project.genbankRaw?.trim()) throw Error("Fetch a gene or upload an annotated GenBank reference first.");
+  if (!["ko", "pm", "it", "nt", "ct", "genomic-snv"].includes(project.editType)) throw Error("Choose a supported modification.");
+  const genomic = project.editType === "genomic-snv" ? project.genomicDesignInput : null;
+  if (project.editType === "genomic-snv" && !genomic) throw Error("Enter the exact variant in Genomic SNP and click its design button first. The agent can then compare enzymes even if that initial enzyme has no guide.");
+  if (genomic && (!genomic.input || typeof genomic.input !== "object")) throw Error("Enter and validate the genomic variant again.");
+  const raw = genomic?.genbankRaw || project.genbankRaw;
+  if (!raw?.trim()) throw Error("Fetch a gene or upload an annotated GenBank reference first.");
   if (["pm", "it"].includes(project.editType) && !project.mutation?.trim()) throw Error("Enter the requested protein change or insertion site first.");
   // Reuse design rules, but never transfer guide sequences, repeat verification or
   // previous risk acknowledgements from one enzyme to another.
-  const options = { ...project.options };
+  const options = genomic ? { deliveryMethod: genomic.input.deliveryMethod || "rnp",
+    coDeliveryBlocking: genomic.input.blockingPolicy === "pair", maxBlockingChanges: genomic.input.maxBlockingChanges ?? (isTwoGuidePolicy(genomic.input.blockingPolicy) ? 3 : 2) } : { ...project.options };
   for (const key of ["customGuides", "directRepeat", "repeatSource", "repeatVerified", "spacerLength", "enzyme", "weakProtectionAcceptance", "acceptWeakProtection", "weakProtectionReason", "acknowledgeWeakProtection", "weakProtectionAcceptedBy", "acceptedBy"]) delete options[key];
-  return { projectId: project.id, gene: project.geneMeta?.geneSymbol || project.gene?.trim() || "",
-    editType: project.editType, mutation: project.mutation || "", tag: project.tag || "",
-    homologyArmLength: project.homologyArmLength, genbankRaw: project.genbankRaw,
+  return { projectId: project.id, gene: genomic?.input?.gene || project.geneMeta?.geneSymbol || project.gene?.trim() || "",
+    editType: project.editType, mutation: genomic ? `chr${genomic.input.chromosome}:${genomic.input.position} ${genomic.input.ref}>${genomic.input.alt}` : project.mutation || "", tag: project.tag || "",
+    homologyArmLength: project.homologyArmLength, genbankRaw: raw,
+    ...(genomic ? { variant: genomic.input } : {}),
     options, enzymes: selected, priority };
 }
 
@@ -37,10 +46,12 @@ export function summarizeAgentCandidate(enzyme, result, type) {
   if (type === "ko" && guides.length !== 2) problems.push("A knockout requires two guides.");
   if (type === "pm" && (!donors.length || donors.some(d => d.od?.length !== 127 || !d.proteinValidation?.valid))) problems.push("A valid 127 nt protein-checked SNP donor is required.");
   if (["it", "nt", "ct"].includes(type) && !result.insertValidation?.framePreserved) problems.push("The insert must preserve the intended coding frame.");
-  const pairs = verdict.guidePairs || [];
+  const pairs = type === "genomic-snv" ? (result.candidates || []).map(c => ({ tier: c.protection?.tier })) : verdict.guidePairs || [];
   const strong = pairs.filter(p => p.tier === "strong").length;
   const distances = guides.map(g => Math.abs(g.d)).filter(Number.isFinite);
-  const changes = new Set((result.ss || []).map(s => JSON.stringify([s.gp ?? s.p, s.nc ?? s.sequence]))).size;
+  const changes = type === "genomic-snv" ? Math.max(0, ...(result.candidates || []).map(c => c.nucleotideValidation?.additionalChanges || 0))
+    : new Set((result.ss || []).map(s => JSON.stringify([s.gp ?? s.p, s.nc ?? s.sequence]))).size;
+  if (type === "genomic-snv" && (!donors.length || donors.some(d => d.od?.length !== 127 || !d.nucleotideValidation?.valid))) problems.push("An exact, nucleotide-checked 127 nt SNP donor is required.");
   const metrics = { guideCount: guides.length, donorCount: donors.length,
     distance: type === "ko" ? null : distances.length ? Math.min(...distances) : null,
     strongPairs: strong, totalPairs: pairs.length,
@@ -53,7 +64,7 @@ export function summarizeAgentCandidate(enzyme, result, type) {
   const reasons = [
     type === "ko" ? `Two-guide knockout; predicted deletion ${result.deletionOutcome?.deletionSize ?? "not recorded"} bp; nominal junction ${result.deletionOutcome?.frameshiftPredicted ? "shifts the reading frame" : "does not predict a frameshift"}. Staggered cuts and repair can change the junction.`
       : `Nearest selected cut: ${metrics.distance ?? "unknown"} bp from the edit; ${strong}/${pairs.length} guide–donor pairs have strong computed protection.`,
-    `${changes} distinct documented blocking change(s); screening primers ${metrics.primersReady ? "pass the configured checks" : "need review"}.`,
+    `${changes} ${type === "genomic-snv" ? "maximum additional base change(s) per donor" : "distinct documented blocking change(s)"}; screening primers ${metrics.primersReady ? "pass the configured checks" : "need review"}.`,
     ...problems, ...verdict.blockers,
   ];
   return { enzyme, name: config.name, pam: config.pam_pattern, eligible, status: verdict.status,
@@ -100,9 +111,11 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
       expectedGene: request.gene, ensureGuidePair: true, allowNonCodingBlockers: true };
     let result;
     try {
-      result = runner(request.editType, request.genbankRaw, request.mutation, request.tag,
-        ["ct", "nt"].includes(request.editType) ? Number(request.homologyArmLength) : "", options);
-      if (!result.err) result.procurement = summarizeProcurementReadiness(result);
+      result = request.editType === "genomic-snv"
+        ? normalizeGenomicDesign(designGenomicSnp(request.genbankRaw, { ...request.variant, enzyme, spacerLength: config.spacer_len.default }))
+        : runner(request.editType, request.genbankRaw, request.mutation, request.tag,
+          ["ct", "nt"].includes(request.editType) ? Number(request.homologyArmLength) : "", options);
+      if (!result.err && request.editType !== "genomic-snv") result.procurement = summarizeProcurementReadiness(result);
     } catch (error) { result = { err: error.message || String(error) }; }
     results.push(summarizeAgentCandidate(enzyme, result, request.editType));
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -110,7 +123,7 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
   return { schema: "assured-workflow-agent/1", agentVersion: WORKFLOW_AGENT_VERSION,
     configVersion: ENZYME_CONFIG_VERSION, createdAt: new Date().toISOString(),
     inputs: { gene: request.gene, editType: request.editType, mutation: request.mutation, tag: request.tag,
-      homologyArmLength: request.homologyArmLength, options: request.options },
+      homologyArmLength: request.homologyArmLength, options: request.options, ...(request.variant ? { variant: request.variant } : {}) },
     knockoutRanking: "Within release gates: nominal frameshift, then splice-donor removal with frame-disrupting exon skipping, then other two-guide plans; then primer checks. This is mechanistic evidence, not a knockout probability.",
     rankingRule: "Eligible designs and configured release gates first; then selected priority; then primer readiness. Exact ties are retained.",
     priority: request.priority, enzymesCompared: request.enzymes,
@@ -118,7 +131,7 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
     candidates: rankAgentCandidates(results, request.priority),
     limitations: [
       "Ranking compares computed design constraints, not measured editing efficiency. No cross-enzyme activity or genome-wide specificity comparison has been performed.",
-      "Base editing, prime editing and genomic SNP comparison are outside this version. This agent compares the supported nuclease/HDR workflows.",
+      "Base editing and prime editing are outside this version. This agent compares the supported nuclease/HDR workflows, including exact genomic SNPs.",
       "Missing activity scores remain unknown. Strong protection describes the configured sequence check; it is not proof that re-cutting cannot occur.",
       "Guide-specific inputs and previous repeat verification are not transferred between enzymes. Confirm reagent compatibility and all release requirements before ordering.",
     ] };
@@ -133,10 +146,11 @@ export function workflowNextSteps(result) {
   const verdict = getReleaseVerdict(result);
   return [
     verdict.status === "blocked" ? "Resolve the design blockers and regenerate; do not order this design."
+      : result.type === "genomic-snv" ? "Review the genomic coordinates, reference/alternate allele, nucleotide-checked donors and primers. Splicing and protein outcomes require separate validation."
       : "Review the selected guide(s), matched donor(s), protein checks and screening primers in the full report.",
     "Complete genome-wide specificity and reagent/scaffold checks; review every release requirement before ordering.",
     result.type === "ko" ? "Use the selected two-guide deletion plan and its screening primers."
-      : result.type === "pm" ? "Use the matched 127 nt donor and its documented blocking changes; do not mix alternative guide–donor pairs unless co-delivery passed."
+      : ["pm", "genomic-snv"].includes(result.type) ? "Use the matched 127 nt donor and its documented blocking changes; do not mix alternative guide–donor pairs unless co-delivery passed."
       : "Confirm the insert, reading frame, donor format and both junction-screening assays.",
     "Send this exact design to QC, upload the parental control and edited traces, and review the existing clone decisions and ranking. Confirm final clones independently.",
   ];

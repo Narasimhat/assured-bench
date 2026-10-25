@@ -11,12 +11,13 @@ export function createProject() {
     options: { enzyme: "spcas9", deliveryMethod: "rnp", maxBlockingChanges: 3, coDeliveryBlocking: false },
     geneMeta: null,
     genbankRaw: "",
+    genomicDesignInput: null,
     designResult: null,
     qcResults: []
   };
 }
 
-const designInputs = ["gene", "editType", "mutation", "tag", "homologyArmLength", "options", "genbankRaw"];
+const designInputs = ["gene", "editType", "mutation", "tag", "homologyArmLength", "options", "genbankRaw", "genomicDesignInput"];
 
 export function updateProject(project, fields) {
   const changed = designInputs.some(key => key in fields &&
@@ -26,6 +27,7 @@ export function updateProject(project, fields) {
     // A new target or design cannot retain the previous experiment's screening results.
     Object.assign(next, { designResult: null, svgScheme: null, caption: null, status: null, qcResults: [], qcDesignSpec: null, qcDesignSource: null, qcImportedDesignText: null, workflowRecommendation: null }, fields);
   }
+  if ("editType" in fields && fields.editType !== project.editType && !("genomicDesignInput" in fields)) next.genomicDesignInput = null;
   if ("qcDesignSpec" in fields && fields.qcDesignSpec !== project.qcDesignSpec) next.qcResults = [];
   return next;
 }

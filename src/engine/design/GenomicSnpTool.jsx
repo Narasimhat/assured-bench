@@ -3,7 +3,7 @@ import { ENZYMES } from './enzymeConfig.js';
 import { applySpliceCheck, buildSpliceCheckRequest } from './pairBlocking.js';
 import { buildGenomicSequenceCsv } from './genomicSequenceExport.js';
 import { buildDesignSchemeSvg, buildDesignSchemeFilename } from './designScheme.js';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { designGenomicSnp, readGenomicReferenceMetadata, buildGenomicSnpReport } from './genomicSnp.js';
 import { fetchGeneReference, fetchVariantReference, searchClinVar, SNP_FLANK, SPECIES } from './geneFetch.js';
 import './genomicSnp.css';
@@ -17,16 +17,22 @@ function download(name, text, type) {
 const MODES=[['clinvar','ClinVar variant'],['gene','Gene'],['file','GenBank file']];
 const onEnter=run=>event=>{if(event.key==='Enter'){event.preventDefault();run();}};
 
-export default function GenomicSnpTool({ onGenerate, onInvalidate }) {
-  const [raw,setRaw]=useState('');
-  const [input,setInput]=useState({addBlocking:true,coDelivery:true,gene:'',cellLine:'',assembly:'',chromosome:'',referenceStart:'',position:'',ref:'G',alt:'A',forwardConfirmed:false,deliveryMethod:'rnp',fileName:''});
+export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, initialRequest, appliedDesign }) {
+  const [raw,setRaw]=useState(initialRequest?.genbankRaw || '');
+  const [input,setInput]=useState({addBlocking:true,coDelivery:true,gene:'',cellLine:'',assembly:'',chromosome:'',referenceStart:'',position:'',ref:'G',alt:'A',forwardConfirmed:false,deliveryMethod:'rnp',fileName:'',...initialRequest?.input});
   const [result,setResult]=useState(null);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
-  const [mode,setMode]=useState('clinvar');
+  const [mode,setMode]=useState(initialRequest ? 'file' : 'clinvar');
   const [look,setLook]=useState({query:'',source:'ensembl',species:'human'});
   const [lookup,setLookup]=useState({status:'idle',variants:[],total:0,message:'',text:''});
-  const [loaded,setLoaded]=useState(null);
+  const [loaded,setLoaded]=useState(() => initialRequest ? {fileName:initialRequest.input.fileName || 'genomic_reference.gb',title:initialRequest.input.gene || 'Saved genomic reference',reference:`${initialRequest.input.assembly} chr${initialRequest.input.chromosome}:${initialRequest.input.referenceStart}`,warnings:[]} : null);
+  useEffect(() => {
+    if (!appliedDesign?.workflowRecommendation || appliedDesign.type !== "genomic-snv") return;
+    setResult(appliedDesign);
+    setInput(prev => ({...prev,...appliedDesign.input,enzyme:appliedDesign.enzyme?.id || 'spcas9'}));
+    setError('');
+  }, [appliedDesign]);
   const working=lookup.status==='loading';
   const update=(key,value)=>{setInput(prev=>({...prev,[key]:value}));setResult(null);onInvalidate?.();setError('');};
   const idle={status:'idle',variants:[],total:0,message:'',text:''};
@@ -36,7 +42,9 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate }) {
     setInput(prev=>({...prev,fileName:'',assembly:'',chromosome:'',referenceStart:'',position:'',forwardConfirmed:false}));
   }
   function runDesign(text,next) {
-    const design=designGenomicSnp(text,{...next,blockingPolicy:blockingPolicyFor(next)});
+    const designInput={...next,blockingPolicy:blockingPolicyFor(next)};
+    onRequest?.({genbankRaw:text,input:designInput});
+    const design=designGenomicSnp(text,designInput);
     if(design.err){setResult(null);setError(design.err);}else {setResult(design);onGenerate?.(design);}
   }
   async function findVariant() {
@@ -134,7 +142,7 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate }) {
       {loaded && <div className="snp-loaded" role="status"><strong>{loaded.title}</strong>{loaded.detail?` — ${loaded.detail}`:''}<br/>{loaded.reference}<br/><button type="button" className="snp-link" onClick={()=>download(loaded.fileName,raw,'text/plain')}>Download this reference (GenBank)</button> <span>Keep it with the design; the optional splice check reads it.</span></div>}
       {loaded?.warnings?.map((text,i)=><p key={i} role="alert" className="snp-alert">{text}</p>)}
       <div className="snp-grid">
-        <label>Enzyme<select aria-label="Genomic SNP enzyme" value={input.enzyme || 'spcas9'} onChange={e=>update('enzyme',e.target.value)}>{Object.values(ENZYMES).map(enzyme=><option key={enzyme.id} value={enzyme.id}>{enzyme.name}</option>)}</select></label>
+        <label>Enzyme<select aria-label="Genomic SNP enzyme" value={input.enzyme || 'spcas9'} onChange={e=>update('enzyme',e.target.value)}>{Object.values(ENZYMES).map(enzyme=><option key={enzyme.id} value={enzyme.id}>{enzyme.name} ({enzyme.pam_pattern})</option>)}</select></label>
         {showEdit && field('Gene or locus','gene')}{field('Cell line (optional)','cellLine')}
         {showLocus && <>{field('Genome assembly','assembly')}{field('Chromosome','chromosome')}{field('Reference start (1-based genomic coordinate)','referenceStart','number')}</>}
         {showEdit && field('Edit position (1-based genomic coordinate)','position','number')}
