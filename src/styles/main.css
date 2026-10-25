@@ -568,3 +568,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
 
 #bench-design-report { scroll-margin-top: 140px; }
 @media(max-width:700px){#bench-design-report{scroll-margin-top:12px}}
+
+/* Keep optional agent controls out of the main design flow until requested. */
+.agent-optional { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); margin-left: 8px; }
+.workflow-agent .agent-details { border-top: 1px solid var(--border-color); margin-top: 10px; }
+.workflow-agent .agent-details > summary { cursor: pointer; min-height: 44px; padding: 12px 0; font-size: 0.9rem; font-weight: 600; }
+.workflow-agent .agent-actions { margin-top: 12px; }
+.workflow-agent .agent-summary { margin-top: 14px; padding: 12px; border-radius: 8px; background: var(--primary-bg); }
+.workflow-agent .agent-summary h3 { margin: 0; font-size: 1rem; }
+.workflow-agent .agent-review-note { font-size: 0.85rem; color: var(--text-muted); }
+.workflow-agent .agent-candidate > details { margin-bottom: 12px; }

@@ -10,6 +10,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
   const worker = useRef(null);
+  const panel = useRef(null);
   let request, inputError = "";
   try { request = agentRequest(project, enzymes, priority); } catch (e) { inputError = e.message; }
   const requestKey = request ? JSON.stringify(request) : inputError;
@@ -50,6 +51,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     const { requestKey: ignored, ...clean } = report;
     const audit = agentAudit(clean, candidate.enzyme);
     const result = { ...candidate.result, workflowRecommendation: audit };
+    panel.current?.querySelectorAll("details").forEach(detail => { detail.open = false; });
     onUpdateProject({
       options: { ...request.options, enzyme: candidate.enzyme, spacerLength: config.spacer_len.default,
         directRepeat: config.direct_repeat || "", repeatVerified: false, repeatSource: "", customGuides: [] },
@@ -73,55 +75,69 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     a.href = url; a.download = "assured-workflow-recommendation.json"; a.click(); URL.revokeObjectURL(url);
   };
   const recommended = visible?.candidates.filter(c => c.recommended) || [];
-  return <section className="card workflow-agent" aria-labelledby="workflow-agent-title">
-    <h2 id="workflow-agent-title">Workflow agent</h2>
-    <p>Compare the enzymes available in your lab for this modification. The agent runs the design engine and explains its ranking. These are rule-based recommendations, not predictions of editing success.</p>
-    <fieldset disabled={Boolean(progress)}>
-      <legend>Available enzymes</legend>
-      <div className="agent-enzyme-options">{Object.values(ENZYMES).map(config => <label key={config.id}>
-        <input type="checkbox" checked={enzymes.includes(config.id)} onChange={e => setEnzymes(prev => e.target.checked ? [...prev, config.id] : prev.filter(id => id !== config.id))} />
-        {config.name} ({config.pam_pattern})
-      </label>)}</div>
-    </fieldset>
-    <label className="agent-priority">Recommendation priority
-      <select value={priority} disabled={Boolean(progress)} onChange={e => setPriority(e.target.value)}>
-        {Object.entries(AGENT_PRIORITIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-      </select>
-    </label>
-    {project.editType === "ko" && <p>For knockout, the agent compares nominal frameshift and exon-skipping evidence, then primer checks. Cut-proximity and blocking-change priorities apply to HDR edits. Repair outcomes can differ from the nominal junction.</p>}
-    <p className="muted">All priorities first exclude blocked or incomplete designs and respect the existing release gates. Activity scores are not compared across enzymes. Custom guides and prior risk acceptance are not reused.</p>
-    {inputError && <p className="note">{inputError}</p>}
+  return <section ref={panel} className="card workflow-agent" aria-labelledby="workflow-agent-title">
+    <h2 id="workflow-agent-title">Workflow agent <span className="agent-optional">Optional</span></h2>
+    <p className="muted">Compare enzyme options for your modification.</p>
+    <details className="agent-details">
+      <summary>Comparison settings · {enzymes.length} enzymes</summary>
+      <fieldset disabled={Boolean(progress)}>
+        <legend>Available enzymes</legend>
+        <div className="agent-enzyme-options">{Object.values(ENZYMES).map(config => <label key={config.id}>
+          <input type="checkbox" checked={enzymes.includes(config.id)} onChange={e => setEnzymes(prev => e.target.checked ? [...prev, config.id] : prev.filter(id => id !== config.id))} />
+          {config.name} ({config.pam_pattern})
+        </label>)}</div>
+      </fieldset>
+      <label className="agent-priority">Recommendation priority
+        <select value={priority} disabled={Boolean(progress)} onChange={e => setPriority(e.target.value)}>
+          {Object.entries(AGENT_PRIORITIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+      </label>
+      {project.editType === "ko" && <p>Knockout comparison uses nominal frameshift and exon-skipping evidence, then primer checks. Repair outcomes can differ.</p>}
+      <p className="muted">Blocked or incomplete designs are excluded first. Activity scores are not compared across enzymes. Custom guides and previous risk acceptance are not reused.</p>
+    </details>
+    {inputError && <p className="muted">{inputError}</p>}
     <div className="agent-actions">
       <button type="button" className="btn btn-primary" disabled={Boolean(inputError || progress)} onClick={compare}>Compare enzymes and recommend</button>
       {progress && <button type="button" className="btn btn-secondary" onClick={cancel}>Cancel comparison</button>}
-      {visible && <button type="button" className="btn btn-secondary" onClick={download}>Download recommendation</button>}
     </div>
     {progress && <p role="status" aria-live="polite">Comparing {progress.enzyme} · {progress.completed}/{progress.total} completed</p>}
     {error && <p role="alert" className="error">{error}</p>}
     {visible && <>
-      <h3>{recommended.length ? `Recommended for design review: ${recommended.map(c => c.name).join(", ")}` : "No option can be recommended with these inputs"}</h3>
-      {recommended.length > 1 && <p><strong>Equally supported options:</strong> these designs are tied on the recorded criteria. Their option numbers indicate display order; the agent cannot distinguish their experimental performance.</p>}
-      <div className="note">
+      <div className="agent-summary" aria-live="polite">
+        <h3>{recommended.length ? `Recommended for design review: ${recommended.map(c => c.name).join(", ")}` : "No option can be recommended with these inputs"}</h3>
+        {recommended.length > 1 && <p><strong>Equally supported options.</strong> These designs are tied; numbers indicate display order.</p>}
+        <p className="agent-review-note">Design review only. Experimental performance and genome-wide specificity remain unverified.</p>
+        {report?.requestKey !== requestKey && <p className="muted">Saved recommendation. Compare again to evaluate changed settings.</p>}
+      </div>
+      <details className="agent-details">
+        <summary>Compare {visible.candidates.length} options and choose a design</summary>
+        <div className="agent-comparisons">{visible.candidates.map((candidate, index) => <article key={candidate.enzyme} className="agent-candidate">
+          <h4>#{index + 1} {candidate.name} ({candidate.pam})</h4>
+          {candidate.eligible && visible.candidates.filter(other => other.eligible && other.rank === candidate.rank).length > 1 && <p className="muted">Tied on design criteria</p>}
+          <p><strong>{candidate.status === "unavailable" ? "No design" : candidate.status.toUpperCase()}</strong>{project.workflowRecommendation?.selectedEnzyme === candidate.enzyme ? " · Applied" : ""}</p>
+          <p>{candidate.reasons[0]}</p>
+          <details>
+            <summary>{candidate.recommended ? "Why recommended and review items" : "Design findings and review items"}</summary>
+            <ul>{candidate.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
+            {candidate.warnings?.length > 0 && <ul>{candidate.warnings.map((text, i) => <li key={i}>{text}</li>)}</ul>}
+          </details>
+          {candidate.result && <button type="button" className="btn btn-secondary" disabled={!candidate.eligible || Boolean(progress)} onClick={() => apply(candidate)}>Use {candidate.name} design</button>}
+        </article>)}</div>
+      </details>
+      <details className="agent-details">
+        <summary>Evidence, ranking details and export</summary>
         <strong>Evidence still needed before an experimental choice</strong>
         <ul>{agentEvidenceGaps(visible).map(text => <li key={text}>{text}</li>)}</ul>
-        <p>This recommendation supports design review. It does not establish which enzyme will perform best experimentally.</p>
-      </div>
-      {report?.requestKey !== requestKey && <p className="note">Saved record for the applied design. Compare again to evaluate the current enzyme selection and priority.</p>}
-      <p>Priority used: {AGENT_PRIORITIES[visible.priority] || visible.priority}. Compared: {visible.enzymesCompared?.map(id => ENZYMES[id]?.name || id).join(", ")}.</p>
-      <p className="muted">Agent {visible.agentVersion} · enzyme config {visible.configVersion} · {new Date(visible.createdAt).toLocaleString()}</p>
-      <div className="agent-comparisons">{visible.candidates.map((candidate, index) => <article key={candidate.enzyme} className="agent-candidate">
-        <h4>#{index + 1} {candidate.name} ({candidate.pam})</h4>
-        {candidate.eligible && visible.candidates.filter(other => other.eligible && other.rank === candidate.rank).length > 1 && <p className="muted">Tied on design criteria</p>}
-        <p><strong>{candidate.status === "unavailable" ? "No design" : candidate.status.toUpperCase()}</strong>{project.workflowRecommendation?.selectedEnzyme === candidate.enzyme ? " · Applied to this experiment" : ""}</p>
-        <p><strong>{candidate.recommended ? "Why recommended for review" : "Design findings"}</strong></p>
-        <ul>{candidate.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
-        {candidate.warnings?.length > 0 && <details><summary>{candidate.warnings.length} review item(s)</summary><ul>{candidate.warnings.map((text, i) => <li key={i}>{text}</li>)}</ul></details>}
-        {candidate.result && <button type="button" className="btn btn-secondary" disabled={!candidate.eligible || Boolean(progress)} onClick={() => apply(candidate)}>Use {candidate.name} design</button>}
-      </article>)}</div>
-      <details><summary>What this recommendation can and cannot establish</summary><ul>{visible.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul></details>
+        <p>Priority used: {AGENT_PRIORITIES[visible.priority] || visible.priority}. Compared: {visible.enzymesCompared?.map(id => ENZYMES[id]?.name || id).join(", ")}.</p>
+        <p className="muted">Agent {visible.agentVersion} · enzyme config {visible.configVersion} · {new Date(visible.createdAt).toLocaleString()}</p>
+        <ul>{visible.limitations.map((text, i) => <li key={i}>{text}</li>)}</ul>
+        <button type="button" className="btn btn-secondary" onClick={download}>Download recommendation</button>
+      </details>
     </>}
-    <h3>Next steps for this experiment</h3>
-    <p>{qcNextAction(project.qcResults)}</p>
-    <ol>{workflowNextSteps(project.designResult).map((text, i) => <li key={i}>{text}</li>)}</ol>
+    {project.designResult && <details className="agent-details">
+      <summary>Next steps for this experiment</summary>
+      <p>{qcNextAction(project.qcResults)}</p>
+      <ol>{workflowNextSteps(project.designResult).map((text, i) => <li key={i}>{text}</li>)}</ol>
+    </details>}
   </section>;
 }
