@@ -7,6 +7,7 @@ import { buildReportHtml, getProjectTypeMeta } from "../engine/design/reportHtml
 import { buildRowMeta, buildHistoricalContext, buildReviewItems } from "../engine/design/reportInputs.js";
 import { buildQcDesignSpec } from "../engine/design/qcExport.js";
 import { buildDesignSchemeSvg } from "../engine/design/designScheme.js";
+import { isAgentAudit } from "./workflowAgent.js";
 import { buildGenomicSnpReport } from "../engine/design/genomicSnp.js";
 
 /**
@@ -35,7 +36,7 @@ export function generateReportHtml(project, designResult) {
   const historicalContext = buildHistoricalContext(meta, designResult, projectType);
   const reviewItems = buildReviewItems(meta, designResult, fileName);
 
-  return buildReportHtml(
+  const html = buildReportHtml(
     meta,
     designResult,
     fileName,
@@ -43,6 +44,20 @@ export function generateReportHtml(project, designResult) {
     reviewItems,
     null
   );
+  return appendWorkflowRecommendation(html, designResult.workflowRecommendation);
+}
+
+const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+export function appendWorkflowRecommendation(html, audit) {
+  if (!isAgentAudit(audit)) return html;
+  const selected = audit.candidates.find(c => c.enzyme === audit.selectedEnzyme);
+  const section = `<section style="margin:20px;padding:16px;border:1px solid #cbd5e1;border-radius:8px"><h2>Workflow agent recommendation</h2>
+    <p>Applied enzyme: ${escapeHtml(selected?.name || audit.selectedEnzyme)}. Rule-based comparison; no experimental efficiency prediction.</p>
+    <p>Agent ${escapeHtml(audit.agentVersion)}; config ${escapeHtml(audit.configVersion)}; priority ${escapeHtml(audit.priority)}; ${escapeHtml(audit.createdAt)}.</p>
+    <ul>${(selected?.reasons || []).map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul>
+    <p>Reference SHA-256: ${escapeHtml(audit.referenceSha256)}; input SHA-256: ${escapeHtml(audit.inputSha256)}.</p>
+    <ul>${audit.limitations.map(text => `<li>${escapeHtml(text)}</li>`).join("")}</ul></section>`;
+  return html.replace(/<body[^>]*>/i, body => body + section);
 }
 
 /**
@@ -71,6 +86,9 @@ export function downloadDesignJson(project, designResult) {
     };
   }
 
+  if (jsonContent.design && isAgentAudit(designResult.workflowRecommendation)) {
+    jsonContent.design.workflowRecommendation = designResult.workflowRecommendation;
+  }
   const gene = (project.gene || "design").toLowerCase();
   downloadBlob(JSON.stringify(jsonContent, null, 2), `${gene}_${project.editType || "edit"}_design.json`, "application/json");
 }

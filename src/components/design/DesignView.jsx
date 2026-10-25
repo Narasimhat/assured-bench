@@ -27,6 +27,8 @@ import {
   downloadDesignJson,
   downloadSchemeSvg
 } from "../../services/designExport.js";
+import { uploadedReferenceGene } from "../../services/referenceGene.js";
+import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
 import {
   Search,
@@ -360,15 +362,20 @@ export function DesignView({
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    e.target.value = "";
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target.result;
+      let geneSymbol;
+      try { geneSymbol = uploadedReferenceGene(text, geneInput, file.name); }
+      catch (error) { setError(error.message); return; }
       const meta = {
-        geneSymbol: file.name.replace(/\.[^/.]+$/, ""),
+        geneSymbol,
         source: "Manual file upload",
         fileName: file.name,
         genbankText: text
       };
+      setError(null);
       onUpdateProject({ gene: meta.geneSymbol, geneMeta: meta, genbankRaw: text });
     };
     reader.readAsText(file);
@@ -965,9 +972,11 @@ export function DesignView({
       </div>
 
       {/* Results Display: Single Unified ASSURED Design Report (Zero Duplication) */}
+      <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />
+
       {designResult && (
         <>
-          <div className="card" style={{ padding: 0, overflow: "hidden", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--border-light)" }}>
+          <div id="bench-design-report" tabIndex={-1} className="card" style={{ padding: 0, overflow: "hidden", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--border-light)" }}>
             {/* Integrated Report Header Toolbar */}
             <div style={{ padding: "0.85rem 1.25rem", background: "linear-gradient(90deg, #f0f6fc 0%, #f8fbfe 100%)", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>

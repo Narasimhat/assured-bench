@@ -553,3 +553,18 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
 }
 
 @media(max-width:700px){.design-option-row{flex-wrap:wrap}.design-option-row select{width:100%}}
+
+.workflow-agent h2 { margin: 0 0 0.6rem; }
+.workflow-agent p { margin: 0.6rem 0; }
+.workflow-agent fieldset { border: 1px solid var(--border-color); padding: 12px; margin: 1rem 0; border-radius: 8px; min-width: 0; }
+.agent-enzyme-options, .agent-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.agent-enzyme-options label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.agent-priority { display: grid; gap: 8px; max-width: 420px; margin: 1rem 0; }
+.agent-comparisons { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; margin: 1rem 0; }
+.agent-candidate { border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; min-width: 0; overflow-wrap: anywhere; }
+.agent-candidate h4 { margin: 0 0 8px; }
+.workflow-agent :is(ul, ol) { padding-left: 22px; }
+.workflow-agent li { margin-bottom: 6px; }
+
+#bench-design-report { scroll-margin-top: 140px; }
+@media(max-width:700px){#bench-design-report{scroll-margin-top:12px}}

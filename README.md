@@ -147,3 +147,13 @@ SpRY is near-PAMless, not equally active at every PAM (NRN/NYN activity differs)
 QC accepts the named enzyme IDs from design exports automatically. Legacy manual QC spacer ranges remain supported; Designer currently fixes these Cas9 variants to their stated default spacer lengths. Generic Cas12a remains a legacy QC option; use AsCas12a or LbCas12a for new designs.
 
 Sources: [SpCas9-NG, Nishimasu et al.](https://doi.org/10.1126/science.aas9129), [SaCas9, Ran et al.](https://doi.org/10.1038/nature14299), [SpRY, Walton et al.](https://doi.org/10.1126/science.aba8853).
+
+### Workflow agent
+
+In Bench's Design screen, fetch or upload a reference, choose the modification and fill its details, then use **Workflow agent → Compare enzymes and recommend**. Select the enzymes available in your lab and choose protection-first, closest-cut, or fewer-blocking-changes priority. The agent runs the existing design engine for each enzyme in a cancellable Web Worker, with no remote model calls. The full knockout, protein-substitution, internal-tag and terminal-tag tools supply the calculations.
+
+Blocked or incomplete designs cannot be recommended. Configured release gates precede the chosen priority; exact ties remain ties, with alphabetical display only. Cut distance, computed guide–donor protection, documented blocking changes and primer checks explain the ranking. This is a rule-based decision agent, not a calibrated predictor of experimental efficiency. It does not compare base editing, prime editing or genomic SNP workflows in this version. Missing genome-wide specificity or activity evidence stays unknown. SpRY PAM-only substitutions do not become blocking protection.
+
+**Use [enzyme] design** adopts the computed result into the normal report, Order and QC path. The agent records its version, enzyme-config version, priority, compared/excluded enzymes, reference/input SHA-256, reasoning and limitations. Recommendation JSON and the applied design's HTML/QC JSON retain that record; saved Bench projects retain it too. Changing design inputs clears the recommendation and previous QC, and cancels a running comparison. Guide sequences, direct-repeat verification and prior weak-protection acknowledgements are not transferred between enzymes.
+
+The next-step checklist explains donor/pair use and screening. Existing AssuredQC clone decisions and ranking remain the source for downstream clone selection; final clones still need independent confirmation. Comparison does not send orders, change delivery conditions, or choose an unsupported editing technology.
