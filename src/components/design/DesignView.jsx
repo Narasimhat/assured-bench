@@ -563,7 +563,7 @@ export function DesignView({
             What do you want to design?
           </label>
 
-          <div role="radiogroup" aria-label="Edit Type" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))", gap: "0.55rem" }}>
+          <div className="edit-type-grid" role="radiogroup" aria-label="Edit Type" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))", gap: "0.55rem" }}>
             {[
               { id: "ko", badge: "KO", title: "Knockout", desc: "Dual-guide deletion & frameshift" },
               { id: "pm", badge: "AA", title: "Point Mutation", desc: "Codon substitution + PAM block" },
@@ -888,7 +888,7 @@ export function DesignView({
 
             {/* Advanced Options Bar */}
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div className="design-option-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Max Silent Blocking Changes:</span>
                 <select
                   value={maxBlockingChanges}
@@ -903,7 +903,7 @@ export function DesignView({
 
               {(editType === "ct" || editType === "nt") && (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div className="design-option-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Donor Format:</span>
                     <select
                       aria-label="Donor Format"
@@ -918,7 +918,7 @@ export function DesignView({
                     </select>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div className="design-option-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                     <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Homology Arm (bp):</span>
                     <select
                       value={homologyArmLength}

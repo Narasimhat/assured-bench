@@ -308,7 +308,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       <h2>Upload Sanger Traces (.ab1 / .zip)</h2>
 
       {/* Option 1: Separated Parental Control vs. Edited Clones Dropzones */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "10px" }}>
+      <div className="qc-responsive-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginBottom: "10px" }}>
         {/* Box 1: Parental / WT Control */}
         <div
           className={`drop${draggingControl ? " over" : ""}`}
@@ -572,7 +572,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               </span>
               <span className="muted" style={{ fontSize: "11px" }}>Click &quot;Customize / Override&quot; to edit gRNAs or ssODNs</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+            <div className="qc-responsive-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
               <div>
                 <strong style={{ fontSize: "12px", color: "var(--text-muted)" }}>
                   gRNA Spacers ({designGuideItems.length}):

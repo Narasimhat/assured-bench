@@ -222,3 +222,18 @@ code { font-family: var(--font-mono); font-size: 12px; background: #f1f5f9; bord
 details > summary { cursor: pointer; padding: 6px 0; color: var(--text-main); font-weight: 600; }
 details.aligned { margin: 12px 0; }
 details.aligned summary { cursor: pointer; margin: 6px 0; }
+
+@media (max-width: 700px) {
+  .page { padding: 12px 10px 28px; overflow-wrap: anywhere; }
+  .page:not(.embedded) h1 { margin: -12px -10px 14px; padding: 14px 10px; }
+  .page.embedded { padding: 0 0 20px; }
+  .page .card, .page .drop { padding: 14px; min-width: 0; }
+  .page .row > * { min-width: 0; max-width: 100%; flex-basis: 100% !important; }
+  .page .qc-responsive-grid, .page .workflows { grid-template-columns: minmax(0, 1fr) !important; }
+  .page :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { min-width: 0; max-width: 100%; font-size: 16px !important; }
+  .page :is(button, select, input:not([type=checkbox]):not([type=radio])) { min-height: 44px; }
+  .page button { max-width: 100%; white-space: normal; }
+  .page :is(pre, table) { display: block; max-width: 100%; overflow-x: auto; }
+  .page .scroll { max-width: 100%; }
+  .page summary { min-height: 44px; }
+}
