@@ -10,7 +10,7 @@ export const NUCLEASES = {
   SaCas9: { label: "SaCas9 (NNGRRT)", pam: /^[ACGT]{2}G[AG][AG]T$/, pamLength: 6, side: "3", cut: 3, spacer: [20, 24] },
   Cas12a: { label: "Cas12a (TTTV)", pam: /^TTT[ACG]$/, pamLength: 4, side: "5", cut: 20, spacer: [20, 24] },
   ...Object.fromEntries(Object.values(ENZYMES).filter(e => e.id !== "spcas9").map(e => [e.name, {
-    label: e.name, enzyme: e.id, version: e.version, pam: pamRegex(e.pam_pattern), pamLength: e.pam_pattern.length,
+    label: `${e.name} (${e.pam_pattern})`, enzyme: e.id, version: e.version, pam: pamRegex(e.pam_pattern), pamLength: e.pam_pattern.length,
     side: e.pam_side === "5prime" ? "5" : "3",
     cut: e.pam_side === "5prime" ? e.cut_offsets.target : e.spacer_len.default - e.cut_offsets.target,
     ...(e.pam_side === "5prime" ? { cutOffsets: e.cut_offsets } : {}),
