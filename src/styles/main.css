@@ -529,3 +529,27 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
 .quick-start-example { border-top: 1px solid var(--border-color); padding: 1rem 0; }
 .quick-start-example ol { padding-left: 1.25rem; margin: 0.75rem 0; color: var(--text-muted); font-size: 0.85rem; }
 .quick-start-example li { margin-bottom: 0.5rem; }
+
+/* Phone layout retains the full Design → Order → QC workflow. */
+@media (max-width: 700px) {
+  .app-header { position: static; padding: 12px; gap: 12px; }
+  .brand, .project-controls, .header-project-pill { min-width: 0; max-width: 100%; }
+  .header-project-pill input { min-width: 0; width: 100%; }
+  .stepper-container { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .step-btn { min-width: 0; min-height: 44px; padding: 10px; justify-content: center; white-space: normal; }
+  .step-btn:last-child { grid-column: 1 / -1; }
+  .app-container { width: 100%; min-width: 0; padding: 12px; }
+  .app-container .card { min-width: 0; padding: 14px; margin-bottom: 14px; }
+  .app-container .card-title { flex-wrap: wrap; gap: 10px; }
+  .app-container .grid-2, .app-container .grid-3, .edit-type-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .app-container :is(.grid-2, .grid-3) > * { min-width: 0; }
+  .app-container :is(p, label, h1, h2, h3) { overflow-wrap: anywhere; }
+  :is(.app-container, .app-header) :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { min-width: 0; max-width: 100%; font-size: 16px !important; }
+  :is(.app-container, .app-header) :is(button, select, input:not([type=checkbox]):not([type=radio])) { min-height: 44px; }
+  .app-container button { max-width: 100%; white-space: normal; }
+  .app-container :is(pre, table) { display: block; max-width: 100%; overflow-x: auto; }
+  .app-container svg:not(.lucide) { max-width: 100%; }
+  .project-context input { min-width: 0; flex-basis: 100%; }
+}
+
+@media(max-width:700px){.design-option-row{flex-wrap:wrap}.design-option-row select{width:100%}}
