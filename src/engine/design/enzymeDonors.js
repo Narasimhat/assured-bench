@@ -1,4 +1,4 @@
-import { snpDonorWindow, snpDonorStrand, SNP_DONOR_POLICY } from "./snpDonorPolicy.js";
+import { snpDonorWindow, snpDonorArms, snpDonorStrand, SNP_DONOR_POLICY } from "./snpDonorPolicy.js";
 import { toAA, getInsertPreset, INTERNAL_TAGS, buildInsertValidation } from "./designEngine.js";
 import { codingPosToGenomic, getCodonAtAa, genomicPosToAa } from "./transcriptModel.js";
 import { planDonorArms, DONOR_FORMATS, scanSynthesisRisks } from "./donorFormat.js";
@@ -177,7 +177,7 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
     const supplied = row.selectedGuideIds?.length ? row.selectedGuideIds.map(id => run.candidates.find(guide => guide.id === id)).filter(Boolean) : null;
     for (const guide of supplied || run.candidates.filter(candidate => candidate.qc.passed)) {
       if (!supplied && run.modification.type === "pm") {
-        const window = snpDonorWindow(model.genomicSequence.length, guide.cuts.target, guide.strand);
+        const window = snpDonorWindow(model.genomicSequence.length, guide.cuts.target, guide.strand, run.enzyme.pam_side);
         if (!window || request.edits.some(edit => edit.start < window.start || edit.end > window.end)) continue;
       }
       if (supplied || !selected.length || selected.every(other => Math.abs(other.cuts.target - guide.cuts.target) >= 10)) selected.push(guide);
@@ -190,7 +190,7 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
     const desiredFormat = pointEdit ? "ssodn" : row.donorFormat || "auto";
     if (!["auto", ...Object.keys(DONOR_FORMATS)].includes(desiredFormat)) throw new Error("Unknown donor format.");
     for (const value of pointEdit ? [] : [row.homologyArm, row.homologyArm3]) if (value !== undefined && value !== "" && (!Number.isInteger(Number(value)) || Number(value) <= 0)) throw new Error("Homology arm lengths must be positive whole numbers.");
-    const plan = pointEdit ? { format: "ssodn", arms: { five: SNP_DONOR_POLICY.shortArm, three: SNP_DONOR_POLICY.longArm, requestedFive: SNP_DONOR_POLICY.shortArm, requestedThree: SNP_DONOR_POLICY.longArm, limited: { five: false, three: false } } } : planDonorArms({ insertBp: coreLength, genome: model.genomicSequence, leftEdge: request.coreStart,
+    const plan = pointEdit ? { format: "ssodn", arms: { five: SNP_DONOR_POLICY.shortArm, three: SNP_DONOR_POLICY.longArm, requestedFive: null, requestedThree: null, limited: { five: false, three: false } } } : planDonorArms({ insertBp: coreLength, genome: model.genomicSequence, leftEdge: request.coreStart,
       rightEdge: request.coreEnd, requestedArm: row.homologyArm, options: { donorFormat: desiredFormat,
         arm3Length: row.homologyArm3, autoTrimArms: row.autoTrimArms !== false } });
     const spec = DONOR_FORMATS[plan.format];
@@ -199,7 +199,7 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
     const coDelivery = row.coDelivery !== false;
     const asymmetric = pointEdit || row.nativeDonorWindows && ["pm", "it"].includes(run.modification.type) && (!row.donorFormat || row.donorFormat === "auto" || row.donorFormat === "ssodn") && !row.homologyArm && !row.homologyArm3;
     const windows = asymmetric ? selected.map(guide => {
-      const window = snpDonorWindow(model.genomicSequence.length, guide.cuts.target, guide.strand);
+      const window = snpDonorWindow(model.genomicSequence.length, guide.cuts.target, guide.strand, run.enzyme.pam_side);
       if (!window) throw new Error("Supply enough flanking reference for a complete 127-base donor window.");
       return window;
     }) : selected.map(() => interval);
@@ -240,6 +240,8 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
       const synthesis = scanSynthesisRisks(sense);
       const warnings = ["No calibrated Cas12a/Mad7 residual-activity or genome-wide specificity model has been applied. Review the complete design before ordering.",
         "Homology-arm and synthesis defaults are general HDR heuristics, not enzyme- or cell-type-specific validation."];
+      const cutArms = asymmetric ? snpDonorArms(selected[index].strand, run.enzyme.pam_side) : null;
+      if (cutArms && selected[index].cuts.target - donorWindow.start !== cutArms.upstream) warnings.push("Reference ends shifted the nominal 91/36 PAM-oriented donor layout. Supply more flanking sequence for the requested asymmetry.");
       if (edits.some(edit => edit.kind === "synonymous_seed")) warnings.push("Synonymous PAM-proximal seed changes were proposed because PAM disruption was unavailable. Their re-cutting protection is uncalibrated and must be reviewed experimentally.");
       if (edits.some(edit => inSpliceWindow(model, edit.start))) warnings.push("A desired edit overlaps an annotated splice window; splice effects require independent review.");
       if (guides.some(guide => Object.values(guide.cuts).some(cut => cut < donorWindow.start || cut > donorWindow.end))) warnings.push("A predicted strand cut is outside the donor-covered reference interval; review repair geometry.");
@@ -252,7 +254,7 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
         format: plan.format, format_label: spec.label, reference_interval: donorWindow, coordinate_system: run.coordinate_system,
         primary_guide_id: asymmetric ? selected[index].id : guides[0].id,
         sequence: sense, reverse_complement: reverseComplementDna(sense), strand, order_sequence: strand === "antisense" ? reverseComplementDna(sense) : sense,
-        strand_note: pointEdit ? "Cas9-style SNP donor: 127 nt, asymmetric 36/91 cut-centered reference window, ordered opposite the matched guide. This is a shared design heuristic, not enzyme-specific HDR validation." : plan.format === "ssodn" ? "Strand is a user choice relative to the input record, not a Cas9-derived recommendation. Optimize experimentally for this nuclease." : "Double-stranded homology cassette shown in input orientation; vector backbone is not included.",
+        strand_note: pointEdit ? "PAM-oriented SNP donor: 127 nt, nominal 91 nt toward the PAM and 36 nt on the opposite side of the target-strand cut, ordered opposite the matched guide. This is a shared design heuristic, not enzyme-specific HDR validation." : plan.format === "ssodn" ? "Strand is a user choice relative to the input record, not a Cas9-derived recommendation. Optimize experimentally for this nuclease." : "Double-stranded homology cassette shown in input orientation; vector backbone is not included.",
         arms: { ...plan.arms, five: coreStart, three: donorWindow.end - request.coreEnd }, annotations: [{ label: "5prime homology", start: 0, end: coreStart },
           { label: run.modification.label, start: coreStart, end: coreStart + coreLength },
           { label: "3prime homology", start: coreStart + coreLength, end: sense.length }],
@@ -262,7 +264,7 @@ export function buildEnzymeDonorDesign(model, run, row = {}) {
     });
     return { status: donors.some(donor => donor.status === "BLOCKED") ? "blocked" : "review_required", donors,
       selected_guide_ids: selected.map(guide => guide.id), co_delivery: coDelivery,
-      parameters: { ...(pointEdit ? { snp_donor_policy: SNP_DONOR_POLICY, order_strand: "opposite matched guide" } : {}), format: plan.format, arm5_requested: plan.arms.requestedFive, arm3_requested: plan.arms.requestedThree,
+      parameters: { ...(pointEdit ? { snp_donor_policy: { ...SNP_DONOR_POLICY, pam_side: run.enzyme.pam_side }, order_strand: "opposite matched guide" } : {}), format: plan.format, arm5_requested: plan.arms.requestedFive, arm3_requested: plan.arms.requestedThree,
         auto_trim: row.autoTrimArms !== false, synonymous_pam_blocking: row.enzymePamBlocking !== false,
         max_blocking_changes_per_guide: Number(row.maxBlockingChanges || 3) },
       note: "Donors are sequence- and protein-checked; re-cutting, specificity, splice effects, delivery and empirical HDR efficiency require review. Primer design is available separately in Primer Tool." };

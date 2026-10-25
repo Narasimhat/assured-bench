@@ -130,3 +130,9 @@ feasible; otherwise the design falls back or flags the incompatible geometry.
 Synonymous PAM disruption is preferred. If unavailable, synonymous PAM-proximal
 seed changes are proposed with full protein/splice checks and an explicit
 unscored-protection warning. Tag format/arm controls remain available for tags.
+
+SNP donor policy 2 places the 91 nt flank toward the PAM and the 36 nt flank
+on the opposite side of the nominal target-strand cut. This mirrors the reference
+layout for 5′-PAM Cas12a/Mad7 while retaining Cas9's 3′-PAM behavior. The policy is
+a computational design heuristic; enzyme-specific HDR and strand preferences
+still require experimental validation.

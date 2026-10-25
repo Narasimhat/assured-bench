@@ -17,11 +17,13 @@ const sequence = flank + cds + flank;
 const gb = genbank(sequence, 300, 300 + cds.length);
 const translate = s => s.match(/.../g).map(toAA).join('');
 
-test('the shared SNP policy is 127 nt and 36/91 around the matched cut, with the same end handling as Cas9', () => {
+test('the SNP policy keeps the 91 nt flank toward the PAM on both strands and leaves Cas9 unchanged', () => {
   assert.deepEqual(snpDonorWindow(1000, 400, '+'), { start: 364, end: 491 });
   assert.deepEqual(snpDonorWindow(1000, 400, '-'), { start: 309, end: 436 });
   assert.deepEqual(snpDonorWindow(1000, 5, '+'), { start: 0, end: 127 });
   assert.deepEqual(snpDonorWindow(1000, 990, '-'), { start: 873, end: 1000 });
+  assert.deepEqual(snpDonorWindow(1000, 400, '+', '5prime'), { start: 309, end: 436 });
+  assert.deepEqual(snpDonorWindow(1000, 400, '-', '5prime'), { start: 364, end: 491 });
   assert.equal(snpDonorWindow(126, 50, '+'), null);
 });
 for (const enzyme of ['mad7', 'ascas12a', 'lbcas12a']) {
@@ -33,8 +35,8 @@ for (const enzyme of ['mad7', 'ascas12a', 'lbcas12a']) {
     for (const donor of result.os) {
       const guide = result.gs[donor.gi];
       assert.equal(donor.od.length, 127);
-      assert.equal(donor.donorStart, guide.cut - (guide.str === '+' ? 36 : 91));
-      assert.equal(donor.donorEnd, guide.cut + (guide.str === '+' ? 91 : 36));
+      assert.equal(donor.donorStart, guide.cut - (guide.str === '+' ? 91 : 36));
+      assert.equal(donor.donorEnd, guide.cut + (guide.str === '+' ? 36 : 91));
       assert.equal(donor.orderStrand, guide.str === '+' ? 'antisense' : 'sense');
       assert.equal(donor.od, guide.str === '+' ? rc(donor.genomicDonor) : donor.genomicDonor);
       assert.ok(donor.proteinValidation.valid);

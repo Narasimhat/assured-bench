@@ -107,6 +107,7 @@ test("short reference, impossible format, insufficient arm geometry and missing 
   const limitedReference = planEnzymeModification({ ...base, referenceSource: "raw" }, { gene: "TEST", sequence: cds, cdsStart: 1, cdsEnd: cds.length });
   assert.ok(limitedReference.donor_design.donors.length);
   assert.ok(limitedReference.donor_design.donors.every(donor => donor.order_sequence.length === 127));
+  assert.ok(limitedReference.donor_design.donors.some(donor => donor.warnings.some(w=>/Reference ends shifted/.test(w))));
   const short = planEnzymeModification({ ...base, donorFormat: "block", homologyArm: "20" });
   assert.ok(short.donor_design.donors.length);
   assert.ok(short.donor_design.donors.every(donor => donor.order_sequence.length === 127));
