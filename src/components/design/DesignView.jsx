@@ -760,7 +760,7 @@ export function DesignView({
                   const config = getEnzyme(event.target.value);
                   setOption({ enzyme: config.id, spacerLength: config.spacer_len.default, directRepeat: config.direct_repeat || "", repeatSource: "", repeatVerified: false });
                 }} style={{ width: "100%" }}>
-                  {Object.values(ENZYMES).map(config => <option key={config.id} value={config.id}>{config.name}</option>)}
+                  {Object.values(ENZYMES).map(config => <option key={config.id} value={config.id}>{config.name} ({config.pam_pattern})</option>)}
                 </select>
               </label>
               {editType === "pm" && (
