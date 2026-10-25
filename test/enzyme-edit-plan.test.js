@@ -34,7 +34,7 @@ test("uploaded GenBank and fetched GenBank use the same modification-aware guide
   const fetched = planEnzymeModification({ ...base, fileName: "TEST_Ensembl.gb" });
   assert.deepEqual(fetched.candidates, run.candidates);
   assert.match(enzymeGuideCsv(run), /Point mutation N3K/);
-  assert.match(enzymeGuideGenbank(run), /target_boundary/);
+  assert.match(enzymeGuideGenbank(run).replace(/\n\s+/g, ""), /target_boundary/);
 });
 test("raw DNA/CDS inputs map to the same edit boundary and candidates", () => {
   const raw = planEnzymeModification({ ...base, referenceSource: "raw" }, {

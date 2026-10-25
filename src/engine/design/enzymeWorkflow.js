@@ -64,7 +64,7 @@ function canonicalDonor(model, donor, guide, guideIndex, guides, result, type) {
     const index = pos - start + delta;
     return index < 0 || index >= length ? null : reverse ? length - 1 - index : index;
   };
-  const changes = donor.edits.filter(edit => edit.kind === "synonymous_pam");
+  const changes = donor.edits.filter(edit => ["synonymous_pam", "synonymous_seed"].includes(edit.kind));
   const desired = donor.edits.filter(edit => edit.kind === "desired");
   const wt = model.genomicSequence.slice(start, end);
   const bounds = guideGeometry(guide);
@@ -96,7 +96,7 @@ function canonicalDonor(model, donor, guide, guideIndex, guides, result, type) {
     senseInsertStart: core.start, senseInsertEnd: core.end,
     insertStart: reverse ? length - core.end : core.start, insertEnd: reverse ? length - core.start : core.end,
     donorAnnotations: reverse ? annotations.map(item => ({ ...item, start: length - item.end, end: length - item.start })) : annotations,
-    armRegions: annotations.map(item => ({ ...item })),
+    armRegions: type === "pm" ? [{ start: 0, end: guide.cut - start, label: "Upstream of cut", color: "#DBEAFE" }, { start: guide.cut - start, end: length, label: "Downstream of cut", color: "#E0E7FF" }] : annotations.map(item => ({ ...item })),
   };
 }
 
@@ -160,7 +160,7 @@ export function runConfiguredEnzymeDesign(type, model, mutation, tag, homologyAr
     let selection = selectConfiguredEditGuides(candidates, evaluate, { type, customGuides: options.customGuides || [], ensureGuidePair: options.ensureGuidePair !== false });
     if (!selection) return { err: `No ${config.name} guides found with cut sites within 30 bp of the requested edit.` };
     let donorDesign = buildEnzymeDonorDesign(model, run, { ...row, selectedGuideIds: selection.guides.map(guide => guide.id) });
-    if (!donorDesign.donors.length && selection.guides.length > 1 && options.coDeliveryBlocking && !options.customGuides?.length) {
+    if ((!donorDesign.donors.length || donorDesign.status === "blocked") && selection.guides.length > 1 && options.coDeliveryBlocking && !options.customGuides?.length) {
       const lead = selection.guides.find(guide => evaluate(guide) === 0);
       if (lead) {
         const single = buildEnzymeDonorDesign(model, run, { ...row, selectedGuideIds: [lead.id] });
@@ -204,14 +204,16 @@ export function runConfiguredEnzymeDesign(type, model, mutation, tag, homologyAr
     result.guideDonorInstruction = options.coDeliveryBlocking
       ? "Co-delivery requested: review every guide against every donor. Canonical-PAM removal or target interruption is a sequence finding, not a calibrated no-cleavage guarantee."
       : "Use one explicitly matched guide/ssODN pair at a time; do not pool alternatives. Review enzyme-specific re-cutting before ordering.";
-    const uniqueEdits = new Map(allDonors.flatMap(donor => donor.edits.filter(edit => edit.kind === "synonymous_pam").map(edit => [edit.start, edit])));
+    const uniqueEdits = new Map(allDonors.flatMap(donor => donor.edits.filter(edit => ["synonymous_pam", "synonymous_seed"].includes(edit.kind)).map(edit => [edit.start, edit])));
     result.ss = [...uniqueEdits.values()].map(edit => {
-      const index = selected.findIndex(guide => edit.start >= guide.pam_start && edit.start < guide.pam_end);
+      const index = selected.findIndex(guide => edit.start >= guide.start && edit.start < guide.end);
+      const sourceDonor = allDonors.find(donor => donor.edits.some(change => change.start === edit.start && change.sequence === edit.sequence));
+      const seed = edit.kind === "synonymous_seed";
       const info = getCodonAtAa(model, edit.aa_number, toAA);
       return { gp: edit.start, nb: edit.sequence, lb: `p.${info.aa}${edit.aa_number}${info.aa}`, oc: info.cod,
-        nc: info.genomicPositions.map(pos => uniqueEdits.get(pos)?.sequence || model.genomicSequence[pos]).join(""),
-        pur: `${config.name} synonymous canonical-PAM disruption`, mt: "silent", gi: Math.max(index, 0) + 1,
-        blockingTier: "strong", blockingReason: "Canonical enzyme PAM removed; noncanonical activity remains uncalibrated." };
+        nc: info.genomicPositions.map(pos => sourceDonor.edits.find(change => change.start === pos && change.end === pos + 1 && change.sequence.length === 1)?.sequence || model.genomicSequence[pos]).join(""),
+        pur: `${config.name} synonymous ${seed ? "PAM-proximal seed change (unscored)" : "canonical-PAM disruption"}`, mt: "silent", gi: Math.max(index, 0) + 1,
+        blockingTier: seed ? "weak" : "strong", blockingReason: seed ? "Seed mismatch proposed; residual activity is uncalibrated." : "Canonical enzyme PAM removed; noncanonical activity remains uncalibrated." };
     });
     if (type === "pm") {
       const desired = allDonors[0].edits.filter(edit => edit.kind === "desired");

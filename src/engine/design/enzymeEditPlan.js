@@ -81,7 +81,7 @@ export function planEnzymeModification(row, rawReference = null, { model: suppli
   if (run.parameters.delivery === "unknown") run.modification.note += " Delivery is undecided; Pol III terminator screening must be repeated if U6 delivery is selected.";
   run.parameters.donor = { requested_format: row.donorFormat || "auto", requested_arm5: row.homologyArm || null,
     requested_arm3: row.homologyArm3 || null, auto_trim: row.autoTrimArms !== false,
-    strand: row.enzymeDonorStrand || "sense", synonymous_pam_blocking: row.enzymePamBlocking !== false,
+    strand: row.projectType === "pm" ? "opposite matched guide" : row.enzymeDonorStrand || "sense", synonymous_pam_blocking: row.enzymePamBlocking !== false,
     max_blocking_changes_per_guide: Number(row.maxBlockingChanges || 3), co_delivery: row.coDelivery !== false };
   if (buildDonors) {
     run.donor_design = buildEnzymeDonorDesign(model, run, row);
