@@ -815,7 +815,7 @@ export function validatePointMutationPayload(model, donorStart, payload, targetA
 
 export function mkODN(model, guide, mutationPositions, mutationBases, silentMutations = [], validationTarget = null) {
   const seq = getGenomicSequence(model);
-  const interval = snpDonorWindow(seq.length, guide.cut, guide.str);
+  const interval = snpDonorWindow(seq.length, guide.cut, guide.str, getEnzyme(guide.enzyme || "spcas9").pam_side);
   if (!interval) return null;
   const { start: donorStart, end: donorEnd } = interval;
   if (mutationPositions.some(pos => pos < donorStart || pos >= donorEnd) || silentMutations.some(edit => edit.gp < donorStart || edit.gp >= donorEnd)) return null;
