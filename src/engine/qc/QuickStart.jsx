@@ -552,6 +552,18 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
           )}
         </div>
 
+        <div style={{ marginBottom: "12px" }}>
+          <label className="field" htmlFor="q-nuc">Enzyme</label>
+          <select id="q-nuc" value={nuclease} disabled={Boolean(designName && !customSequenceMode)} aria-describedby="q-nuc-help" onChange={(e) => { setNuclease(e.target.value); setOutcome(null); }}>
+            {Object.entries(NUCLEASES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <p id="q-nuc-help" className="muted">
+            {designName && !customSequenceMode
+              ? "Enzyme loaded from the design file. Use Customize / Override to select it manually."
+              : "Select the enzyme used for editing. Sequencing traces do not automatically identify the enzyme."}
+          </p>
+        </div>
+
         {designName && !customSequenceMode ? (
           <div style={{ padding: "10px 14px", background: "var(--success-bg)", borderRadius: "8px", border: "1px solid var(--success-border)", fontSize: "13px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
@@ -782,9 +794,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               ))}
             </tbody></table>
           </div>
-          <details><summary>Additional settings: Nuclease, Sample type, Protein assessment</summary>
-            <label className="field" htmlFor="q-nuc">Nuclease</label>
-            <select id="q-nuc" value={nuclease} onChange={(e) => setNuclease(e.target.value)}>{Object.entries(NUCLEASES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select>
+          <details><summary>Additional settings: Sample type, Protein assessment</summary>
             <label className="field" htmlFor="q-type">Sample type (overrides the guess for every sample)</label>
             <select id="q-type" value={typeOverride} onChange={(e) => setTypeOverride(e.target.value)}><option value="">as paired</option><option value="clone">clones</option><option value="pool">pools</option></select>
             <label className="field" htmlFor="q-goal">Accept</label>
