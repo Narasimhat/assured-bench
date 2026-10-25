@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ENZYMES } from "../../engine/design/enzymeConfig.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/design/designScheme.js";
-import { AGENT_PRIORITIES, agentRequest, agentAudit, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
+import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
   const [enzymes, setEnzymes] = useState(() => Object.keys(ENZYMES));
@@ -99,8 +99,13 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     {progress && <p role="status" aria-live="polite">Comparing {progress.enzyme} · {progress.completed}/{progress.total} completed</p>}
     {error && <p role="alert" className="error">{error}</p>}
     {visible && <>
-      <h3>{recommended.length ? `Best supported under these rules: ${recommended.map(c => c.name).join(", ")}` : "No option can be recommended with these inputs"}</h3>
-      {recommended.length > 1 && <p>These options are tied on the recorded design criteria. The agent cannot distinguish their experimental performance.</p>}
+      <h3>{recommended.length ? `Recommended for design review: ${recommended.map(c => c.name).join(", ")}` : "No option can be recommended with these inputs"}</h3>
+      {recommended.length > 1 && <p><strong>Equally supported options:</strong> these designs are tied on the recorded criteria. Their option numbers indicate display order; the agent cannot distinguish their experimental performance.</p>}
+      <div className="note">
+        <strong>Evidence still needed before an experimental choice</strong>
+        <ul>{agentEvidenceGaps(visible).map(text => <li key={text}>{text}</li>)}</ul>
+        <p>This recommendation supports design review. It does not establish which enzyme will perform best experimentally.</p>
+      </div>
       {report?.requestKey !== requestKey && <p className="note">Saved record for the applied design. Compare again to evaluate the current enzyme selection and priority.</p>}
       <p>Priority used: {AGENT_PRIORITIES[visible.priority] || visible.priority}. Compared: {visible.enzymesCompared?.map(id => ENZYMES[id]?.name || id).join(", ")}.</p>
       <p className="muted">Agent {visible.agentVersion} · enzyme config {visible.configVersion} · {new Date(visible.createdAt).toLocaleString()}</p>
@@ -108,6 +113,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
         <h4>#{index + 1} {candidate.name} ({candidate.pam})</h4>
         {candidate.eligible && visible.candidates.filter(other => other.eligible && other.rank === candidate.rank).length > 1 && <p className="muted">Tied on design criteria</p>}
         <p><strong>{candidate.status === "unavailable" ? "No design" : candidate.status.toUpperCase()}</strong>{project.workflowRecommendation?.selectedEnzyme === candidate.enzyme ? " · Applied to this experiment" : ""}</p>
+        <p><strong>{candidate.recommended ? "Why recommended for review" : "Design findings"}</strong></p>
         <ul>{candidate.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>
         {candidate.warnings?.length > 0 && <details><summary>{candidate.warnings.length} review item(s)</summary><ul>{candidate.warnings.map((text, i) => <li key={i}>{text}</li>)}</ul></details>}
         {candidate.result && <button type="button" className="btn btn-secondary" disabled={!candidate.eligible || Boolean(progress)} onClick={() => apply(candidate)}>Use {candidate.name} design</button>}

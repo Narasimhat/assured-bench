@@ -5,7 +5,16 @@ import { designGenomicSnp } from "../engine/design/genomicSnp.js";
 import { normalizeGenomicDesign } from "./genomicDesignResult.js";
 import { getReleaseVerdict } from "../engine/design/releaseVerdict.js";
 
-export const WORKFLOW_AGENT_VERSION = "1.1.0";
+export const WORKFLOW_AGENT_VERSION = "1.1.1";
+export const AGENT_EVIDENCE_GAPS = Object.freeze([
+  "Measured editing or HDR efficiency in your cell type and delivery conditions.",
+  "Calibrated experimental activity comparisons between these enzymes.",
+  "A genome-wide off-target specificity comparison for these designs.",
+]);
+export function agentEvidenceGaps(audit) {
+  return Array.isArray(audit?.evidenceGaps) && audit.evidenceGaps.length && audit.evidenceGaps.every(text => typeof text === "string")
+    ? audit.evidenceGaps : AGENT_EVIDENCE_GAPS;
+}
 export const AGENT_PRIORITIES = {
   balanced: "Protection, then cut proximity",
   closest: "Closest cut, then protection",
@@ -121,6 +130,7 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
     await new Promise(resolve => setTimeout(resolve, 0));
   }
   return { schema: "assured-workflow-agent/1", agentVersion: WORKFLOW_AGENT_VERSION,
+    recommendationPurpose: "design_review", evidenceGaps: [...AGENT_EVIDENCE_GAPS],
     configVersion: ENZYME_CONFIG_VERSION, createdAt: new Date().toISOString(),
     inputs: { gene: request.gene, editType: request.editType, mutation: request.mutation, tag: request.tag,
       homologyArmLength: request.homologyArmLength, options: request.options, ...(request.variant ? { variant: request.variant } : {}) },
