@@ -53,6 +53,8 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     onUpdateProject({
       options: { ...request.options, enzyme: candidate.enzyme, spacerLength: config.spacer_len.default,
         directRepeat: config.direct_repeat || "", repeatVerified: false, repeatSource: "", customGuides: [] },
+      ...(result.type === "genomic-snv" ? { gene: result.gene,
+        mutation: `chr${result.input.chromosome}:${result.input.position} ${result.input.ref}>${result.input.alt}` } : {}),
       designResult: result, svgScheme: buildDesignSchemeSvg(result), caption: buildDesignSchemeCaption(result),
       status: result.procurement?.status || "review", workflowRecommendation: audit,
     });

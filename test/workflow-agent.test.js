@@ -111,3 +111,25 @@ test("knockout ranking uses nominal effect evidence without inventing efficiency
   const frameshift = candidate("frameshift", { result: { type: "ko" }, metrics: { knockoutPenalty: 0, primersReady: true } });
   assert.equal(rankAgentCandidates([inframe, frameshift])[0].enzyme, "frameshift");
 });
+test("exact genomic SNPs compare enzymes with nucleotide validation and QC handoff", async () => {
+  let seed = 137;
+  const dna = Array.from({length:1800}, () => { seed=(seed*1664525+1013904223)>>>0; return "ACGT"[(seed>>>16)%4]; }).join("");
+  const genomicRaw = "LOCUS LOCUS 1800 bp DNA\nFEATURES             Location/Qualifiers\nORIGIN\n1 " + dna.toLowerCase() + "\n//";
+  const variant = { gene:"Locus", assembly:"test", chromosome:"1", referenceStart:1000, position:1600,
+    ref:dna[600], alt:dna[600]==="A"?"G":"A", forwardConfirmed:true, blockingPolicy:"independent", deliveryMethod:"rnp" };
+  const genomic = { ...project, editType:"genomic-snv", genomicDesignInput:{genbankRaw:genomicRaw,input:variant} };
+  const request = agentRequest(genomic, ["spcas9","spcas9ng","mad7"]);
+  assert.equal(request.variant.position,1600);
+  assert.match(request.mutation,/chr1:1600/);
+  const report = await runWorkflowAgent(request);
+  assert.ok(report.candidates.some(c=>c.eligible),JSON.stringify(report.candidates.map(c=>c.reasons)));
+  for(const candidate of report.candidates.filter(c=>c.result)){
+    assert.equal(candidate.result.type,"genomic-snv");
+    assert.ok(candidate.result.os.every(d=>d.nucleotideValidation.valid&&d.od.length===127));
+    const qc=buildQcDesignSpec(candidate.result);
+    assert.ok(!qc.err,qc.err);
+    assert.ok(validateDesignSpec(qc).ok);
+  }
+  const bad=await runWorkflowAgent(agentRequest({...genomic,genomicDesignInput:{genbankRaw:genomicRaw,input:{...variant,ref:variant.alt}}},["mad7"]));
+  assert.ok(bad.candidates.every(c=>!c.recommended));
+});

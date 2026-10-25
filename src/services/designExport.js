@@ -16,7 +16,7 @@ import { buildGenomicSnpReport } from "../engine/design/genomicSnp.js";
 export function generateReportHtml(project, designResult) {
   if (!designResult) return "";
   if (designResult.type === "genomic-snv" && Array.isArray(designResult.candidates)) {
-    return buildGenomicSnpReport(designResult);
+    return appendWorkflowRecommendation(buildGenomicSnpReport(designResult), designResult.workflowRecommendation);
   }
 
   const projectType = project.editType || designResult.type || "ko";

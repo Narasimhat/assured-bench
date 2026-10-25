@@ -19,7 +19,7 @@ import {
 import { ENZYMES, getEnzyme } from "../../engine/design/enzymeConfig.js";
 import { DONOR_FORMATS } from "../../engine/design/donorFormat.js";
 import GenomicSnpTool from "../../engine/design/GenomicSnpTool.jsx";
-import { indexOfGenomic } from "../../engine/design/genomicCoords.js";
+import { normalizeGenomicDesign } from "../../services/genomicDesignResult.js";
 import { fetchGeneGenbank } from "../../services/ensembl.js";
 import {
   generateReportHtml,
@@ -384,39 +384,8 @@ export function DesignView({
   // Convert GenomicSnpTool result into a unified Bench designResult so Order, QC, GelSimulator, and Report work seamlessly
   const handleGenomicSnpGenerated = (snpDesign) => {
     if (!snpDesign || snpDesign.err) return;
-    const gp = indexOfGenomic(snpDesign.input, snpDesign.input.position);
-    const normalizedResult = {
-      ...snpDesign,
-      type: "genomic-snv",
-      gene: snpDesign.input?.gene || "Locus",
-      gp,
-      deliveryMethod: snpDesign.input?.deliveryMethod || "rnp",
-      gs: (snpDesign.candidates || []).map((c) => ({
-        ...c,
-        n: c.name,
-        pm: c.pam,
-        note: `chr${snpDesign.input.chromosome}:${c.interval.start}–${c.interval.end}; cut offset ${c.d} bp; ${c.protection.tier} protection`
-      })),
-      os: (snpDesign.candidates || []).map((c) => ({
-        ...c.donor,
-        n: `ssODN matched to ${c.name}`,
-        guideName: c.name,
-        guideStrand: c.str,
-        nucleotideValidation: c.nucleotideValidation,
-        guideProtection: c.crossProtection || [{ guideName: c.name, ...c.protection }],
-        desiredDiffIndexes: Number.isFinite(gp) && Number.isFinite(c.donor?.donorStart) ? [gp - c.donor.donorStart] : []
-      })),
-      ps: snpDesign.primers?.length ? [snpDesign.primers[0].forward, snpDesign.primers[0].reverse] : [],
-      primerCandidates: snpDesign.primers || [],
-      amp: snpDesign.primers?.length ? `${snpDesign.primers[0].ampliconLength} bp (WT and edited)` : "",
-      primerStrategy: "Genomic PCR; RNA validation must separately establish splice effects.",
-      procurement: {
-        status: snpDesign.status === "BLOCKED" ? "blocked" : "review",
-        blockers: snpDesign.blockers || [],
-        warnings: snpDesign.warnings || [],
-        standingRequirements: []
-      }
-    };
+    const { workflowRecommendation: ignored, ...manualDesign } = snpDesign;
+    const normalizedResult = normalizeGenomicDesign(manualDesign);
     const svgScheme = buildDesignSchemeSvg(normalizedResult);
     const caption = buildDesignSchemeCaption(normalizedResult);
     onUpdateProject({
@@ -625,7 +594,10 @@ export function DesignView({
         {editType === "genomic-snv" ? (
           <div style={{ marginTop: "1rem" }}>
             <GenomicSnpTool
-              onInvalidate={() => onUpdateProject({ designResult: null, svgScheme: null, status: null })}
+              onInvalidate={() => onUpdateProject({ designResult: null, svgScheme: null, status: null, genomicDesignInput: null })}
+              initialRequest={currentProject.genomicDesignInput}
+              appliedDesign={currentProject.designResult}
+              onRequest={input => onUpdateProject({ genomicDesignInput: input })}
               onGenerate={handleGenomicSnpGenerated}
             />
           </div>
