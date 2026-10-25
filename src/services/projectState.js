@@ -24,7 +24,7 @@ export function updateProject(project, fields) {
   const next = { ...project, ...fields };
   if (changed || ("designResult" in fields && fields.designResult !== project.designResult)) {
     // A new target or design cannot retain the previous experiment's screening results.
-    Object.assign(next, { designResult: null, svgScheme: null, caption: null, status: null, qcResults: [], qcDesignSpec: null, qcDesignSource: null, qcImportedDesignText: null }, fields);
+    Object.assign(next, { designResult: null, svgScheme: null, caption: null, status: null, qcResults: [], qcDesignSpec: null, qcDesignSource: null, qcImportedDesignText: null, workflowRecommendation: null }, fields);
   }
   if ("qcDesignSpec" in fields && fields.qcDesignSpec !== project.qcDesignSpec) next.qcResults = [];
   return next;
