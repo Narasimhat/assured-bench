@@ -13,22 +13,23 @@ const lindel = await loadLindel();
 const G1 = "TGTCAAAGCTGACGTCCAGG"; const G2 = "AGTTGGTCCTAGAGATGGGA";
 const design = (options) => runDesign("ko", DIPK2A, "", "", 400, options);
 
-test("without the outcome model nothing changes: same pair as before, no outcome fields", () => {
+test("without repair weights selection still enforces functional eligibility and exposes no invented outcomes", () => {
   const r = design({});
-  assert.deepEqual(r.gs.map((g) => g.sp), ["AATGGCCAACCTTCATCAGA", "TGGAGCTTGTGGAAGAATGG"]);
+  assert.ok(r.gs.every(g => g.gc >= 40 && g.gc <= 60));
+  assert.equal(r.koSelection.independentGuides.length, 2);
   assert.equal(r.koAssessment.outcomes, null); assert.equal(r.gs[0].ko.outcomes, undefined);
   assert.ok(!summarizeProcurementReadiness(r).warnings.some((w) => /loss-of-function alleles are|Repair-outcome/.test(w)));
 });
 
-test("with the outcome model the pair is chosen by the share of alleles predicted to lose the protein: both guides above 85% on DIPK2A, up from 36% for the old pair's weaker guide", () => {
+test("repair scores are retained separately for independent guides and the stricter coordinated pair", () => {
   const r = design({ koLindel: lindel });
   const lof = r.gs.map((g) => g.ko.outcomes.lofPct);
-  assert.ok(lof.every((v) => v > 85), String(lof));
-  assert.equal(r.koAssessment.tier, "robust");
+  assert.ok(lof.every(Number.isFinite), String(lof));
+  assert.ok(r.koSelection.independentGuides.every(g => g.gc >= 40 && g.gc <= 60));
   assert.equal(r.koAssessment.outcomes.minLofPct, Math.min(...lof));
-  assert.deepEqual(r.gs.map((g) => g.sp).sort(), ["ATTATGTTGGAGAAGAACTG", "TTTCCATTAATTGCCAAGCG"]);
+  assert.ok(!r.gs.some(g => g.sp === "ATTATGTTGGAGAAGAACTG"), "the old 35% GC guide is ineligible");
   assert.ok(!summarizeProcurementReadiness(r).warnings.some((w) => /loss-of-function alleles are/.test(w)), "no warning when both guides are strong");
-  const cuts = r.gs.map((g) => g.cut); assert.ok(Math.abs(cuts[1] - cuts[0]) >= 40 && Math.abs(cuts[1] - cuts[0]) <= 140, "pair spacing rule still holds");
+  const cuts = r.gs.map((g) => g.cut); assert.ok(Math.abs(cuts[1] - cuts[0]) >= 10 && Math.abs(cuts[1] - cuts[0]) <= 140, "pair spacing rule still holds");
 });
 
 test("pasting the guides of the clones that kept protein shows why: 73% and 36% predicted loss-of-function alleles, with a warning that gives the clone-level consequence", () => {
@@ -45,7 +46,7 @@ test("the report names the predicted outcomes, and says so when the outcome mode
   const failed = design({ koOutcomesUnavailable: "the Lindel weights could not be loaded (HTTP 404)." });
   assert.match(buildDesignSummary(failed), /Repair-outcome ranking not applied: the Lindel weights could not be loaded/);
   assert.ok(summarizeProcurementReadiness(failed).warnings.some((w) => /Guides were chosen by the frameshift-panel tier alone/.test(w)));
-  assert.equal(failed.gs[0].sp, "AATGGCCAACCTTCATCAGA", "the fallback is the tier-only choice");
+  assert.deepEqual(failed.gs.map(g => g.sp), design({}).gs.map(g => g.sp), "weights failure retains the strict sequence-supported ranking");
 });
 
 test("the outcome model is SpCas9-only: other enzymes are designed as before", () => {

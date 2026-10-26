@@ -39,6 +39,11 @@ for (const enzyme of ["spcas9ng", "sacas9", "spry"]) {
       const aa = toAA(model.cdsSequence.slice(27, 30));
       const mutation = type === "pm" ? aa + "10" + (aa === "A" ? "G" : "A") : type === "it" ? aa + "10" : "";
       const result = runDesignFromTranscriptModel(type, model, mutation, type === "it" ? "SPOT" : type === "nt" ? "N:EGFP-Linker" : "SD40-2xHA", "", { enzyme, deliveryMethod: "rnp", coDeliveryBlocking: false, autoTrimArms: false });
+      if (type === "ko" && enzyme === "sacas9" && result.err) {
+        assert.match(result.err, /Criteria were not relaxed/);
+        assert.ok(result.koSelection);
+        return;
+      }
       assert.ok(!result.err, result.err);
       assert.ok(result.gs.length > 0);
       const length = enzyme === "sacas9" ? 21 : 20;

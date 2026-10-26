@@ -217,7 +217,7 @@ export function buildQcDesignSpec(result, options = {}) {
 
   return {
     schema: QC_SPEC_SCHEMA,
-    design: { ...(result.enzyme ? { nuclease: result.enzyme.name } : {}), type, editKind, gene: result.gene, label: intendedDescription, tag: result.tag || "", codingStrand: "+", ...(result.enzyme ? { enzyme: result.enzyme, parameters: result.enzymeParameters } : {}) },
+    design: { ...(result.enzyme ? { nuclease: result.enzyme.name } : {}), type, editKind, gene: result.gene, label: intendedDescription, tag: result.tag || "", codingStrand: "+", ...(result.koSelection ? { knockoutSelection: { version: result.koSelection.version, policy: result.koSelection.policy, gcRange: result.koSelection.gcRange, evidenceScope: result.koSelection.evidenceScope, unassessed: result.koSelection.unassessed } } : {}), ...(result.enzyme ? { enzyme: result.enzyme, parameters: result.enzymeParameters } : {}) },
     reference: { sequence: genome.slice(windowStart, windowEnd), offset: windowStart, convention: "0-based index into sequence; the + strand of the uploaded reference" },
     ...(coding ? { coding } : {}),
     guides: guides.map((guide) => ({ ...guide, cut: shift(guide.cut), protospacerStart: shift(guide.protospacerStart), protospacerEnd: shift(guide.protospacerEnd),

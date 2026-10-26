@@ -167,3 +167,5 @@ Workflow agent 1.2.0 loads the shared Lindel model lazily for SpCas9 knockout co
 
 
 Workflow agent 1.3.0 prioritizes functional knockout evidence for the complete two-guide plan: the worst assessed consequence of either guide acting alone and the deletion between them, followed by annotated-isoform coverage. A simple frameshift in the nominal deletion is a later tie-breaker. Stronger functional evidence cannot override a blocked design. SpCas9 guide pairs retain Lindel-based repair-outcome selection; uncalibrated cross-enzyme outcome frequencies are not invented. Final protein loss still needs experimental confirmation, and superiority over another tool requires a held-out benchmark.
+
+Functional knockout selection ranks individual guides before coordinated pairs with strict 40–60% spacer GC. See [selection policy and limitations](docs/functional-knockout-selection.md).

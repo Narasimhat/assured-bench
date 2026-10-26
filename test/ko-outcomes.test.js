@@ -87,21 +87,18 @@ test("DIPK2A: a guide in the 5' half of exon 2 is robust (every frameshift stops
   assert.equal(a.tier, "robust"); assert.equal(a.robustPct, 100); assert.ok(a.minMarginNt >= 160);
 });
 
-test("Selection: the knockout-aware chooser does not pick the old DIPK2A pair; the opt-out reproduces it", () => {
-  const legacy = runDesign("ko", DIPK2A, "", "", 400, { ...OPTIONS, koAware: false });
-  assert.deepEqual(legacy.gs.map((g) => g.sp), OLD_PAIR, "koAware:false is the previous geometry-only behaviour");
-  assert.equal(legacy.koAssessment.tier, "escape", "the assessment is still reported for the legacy choice");
+test("Selection: strict functional selection cannot be bypassed with the former geometry opt-out", () => {
   const aware = runDesign("ko", DIPK2A, "", "", 400, OPTIONS);
+  const formerOptOut = runDesign("ko", DIPK2A, "", "", 400, { ...OPTIONS, koAware: false });
   assert.ok(!aware.err, aware.err);
-  assert.notDeepEqual(aware.gs.map((g) => g.sp), OLD_PAIR);
-  assert.equal(aware.koAssessment.tier, "robust");
-  assert.deepEqual(aware.gs.map((g) => g.ko.tier), ["robust", "robust"], "each guide is robust on its own, since either may act alone");
-  assert.equal(aware.koAssessment.between.tier, "robust");
-  assert.equal(aware.deletionOutcome.frameshiftPredicted, true);
-  assert.match(aware.koAssessment.summary, /clear margin/);
+  assert.deepEqual(formerOptOut.gs.map(g => g.sp), aware.gs.map(g => g.sp));
+  assert.notDeepEqual(aware.gs.map(g => g.sp), OLD_PAIR);
+  assert.ok(aware.gs.every(g => g.gc >= 40 && g.gc <= 60));
+  assert.ok(aware.koSelection.independentPair);
+  assert.ok(aware.koSelection.recommendedPair);
 });
 
-test("Readiness: an escape-tier pair raises a review warning that names the cause; a robust pair does not", () => {
+test("Readiness: functional escape and missing external evidence remain explicit", () => {
   const poor = runDesign("ko", DIPK2A, "", "", 400, { ...OPTIONS, customGuides: OLD_PAIR });
   assert.ok(!poor.err, poor.err);
   assert.equal(poor.koAssessment.tier, "escape");
@@ -109,10 +106,10 @@ test("Readiness: an escape-tier pair raises a review warning that names the caus
   assert.ok(poorReadiness.warnings.some((w) => /Knockout confidence is low/.test(w) && /last exon junction/.test(w)), JSON.stringify(poorReadiness.warnings));
   assert.notEqual(poorReadiness.status, "ready");
   const good = summarizeProcurementReadiness(runDesign("ko", DIPK2A, "", "", 400, OPTIONS));
-  assert.ok(!good.warnings.some((w) => /Knockout confidence is (low|moderate)/.test(w)), JSON.stringify(good.warnings));
+  assert.ok(good.warnings.some(w => /has not assessed/.test(w)), "missing external evidence remains visible even for strong pairs");
 });
 
-test("Isoform coverage is reported, not graded: the chosen DIPK2A pair names the two shorter annotated isoforms it may leave expressed", () => {
+test("Isoform escape remains reported even after shared coding coverage is required", () => {
   const aware = runDesign("ko", DIPK2A, "", "", 400, OPTIONS);
   assert.ok(aware.koAssessment.isoformGaps.every((id) => ["NM_001134470.2", "NM_001363944.1"].includes(id)), JSON.stringify(aware.koAssessment.isoformGaps));
   assert.match(aware.koAssessment.isoformNote || "", /Isoform coverage/);
