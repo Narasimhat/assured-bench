@@ -264,135 +264,122 @@ export const BIOMNI_PRESET_MISSIONS = Object.freeze([
   },
 ]);
 
+// Symbols that may be written in lower case and still be read as genes ("knock out lrrk2" is not read; "knock out dipk2a" is, because DIPK2A is the loaded project or listed here).
 const KNOWN_GENES = new Set([
   "TP53", "APOE", "DIPK2A", "NR2F2", "INS", "SCN5A", "LRP2", "SORCS1",
   "BRCA1", "BRCA2", "EGFR", "KRAS", "MYC", "PCSK9", "CFTR", "HBB", "ACTB", "GAPDH", "LMNA",
 ]);
 
-const STOPWORDS = new Set([
-  "DESIGN", "CRISPR", "GUIDE", "GUIDES", "KNOCKOUT", "KNOCKIN", "MUTATION",
-  "POINT", "CHECK", "QUERY", "SEARCH", "RANK", "LINDEL", "COMPARE", "ENZYME",
-  "ENZYMES", "TRACE", "TRACES", "SANGER", "CLONE", "CLONES", "GENE", "TARGET",
-  "HUMAN", "MOUSE", "WITH", "FROM", "USING", "AND", "FOR", "THE", "INTO",
-  "UNIPROT", "GNOMAD", "CLINVAR", "PUBMED", "ENSEMBL", "NCBI", "BRUNELLO",
-  "SPCAS9", "SACAS9", "SPRY", "MAD7", "CAS12A", "FLAG", "EGFP", "SPOT", "RNP",
-  "PROTEIN", "DOMAIN", "DOMAINS", "CONSTRAINT", "REPORT", "ORDER", "ANALYZE",
-  "ASSESS", "TERMINAL", "INTERNAL", "TAG", "DONOR", "PRIMER", "PRIMERS", "WHAT",
-  "PLEASE", "RUN", "SHOW", "BEST", "HIGH", "LOW", "ALL", "EXON", "CODON", "BIALLELIC", " MODEL", "DNA", "REPAIR",
+// Upper-case words that are not gene symbols: verbs and nouns of the request, enzymes, cell types, methods, edit classes.
+const NOT_A_GENE = new Set([
+  "DESIGN", "CRISPR", "GUIDE", "GUIDES", "KNOCKOUT", "KNOCKIN", "MUTATION", "POINT", "CHECK", "QUERY", "SEARCH", "RANK", "LINDEL", "COMPARE",
+  "ENZYME", "ENZYMES", "TRACE", "TRACES", "SANGER", "CLONE", "CLONES", "GENE", "TARGET", "HUMAN", "MOUSE", "WITH", "FROM", "USING", "AND", "FOR",
+  "THE", "INTO", "UNIPROT", "GNOMAD", "CLINVAR", "PUBMED", "ENSEMBL", "NCBI", "BRUNELLO", "SPCAS9", "SACAS9", "SPRY", "MAD7", "CAS12A", "CAS9",
+  "FLAG", "EGFP", "GFP", "SPOT", "RNP", "PROTEIN", "DOMAIN", "DOMAINS", "CONSTRAINT", "REPORT", "ORDER", "ANALYZE", "ASSESS", "TERMINAL", "INTERNAL",
+  "TAG", "DONOR", "PRIMER", "PRIMERS", "WHAT", "PLEASE", "RUN", "SHOW", "BEST", "HIGH", "LOW", "ALL", "EXON", "CODON", "BIALLELIC", "MODEL", "DNA",
+  "REPAIR", "KNOCK", "OUT", "BOTH", "ALLELES", "GENERATE", "MAKE", "CREATE", "NEED", "WANT", "THIS",
+  // cell types and systems
+  "IPSC", "IPSCS", "ESC", "ESCS", "HESC", "HIPSC", "HIPSCS", "HEK", "HEK293", "HEK293T", "HELA", "K562", "JURKAT", "HAP1", "U2OS", "HCT116", "PBMC", "HUVEC", "RPE1",
+  // methods, edit classes, abbreviations
+  "PCR", "RNA", "ICE", "TIDE", "NGS", "WT", "KO", "KI", "HDR", "NHEJ", "MMEJ", "SNP", "SNV", "NMD", "LOF", "DSB", "UTR", "ORF", "CDS", "SGRNA", "GRNA", "PAM",
+  "HOM", "HET", "CT", "NT", "NG", "LBCAS12A", "ASCAS12A", "ENASCAS12A", "DTAG", "SD40", "V5", "HA", "2XHA",
+  // short English words that survive in an all-capitals request
+  "IN", "OF", "TO", "AT", "ON", "AN", "BY", "OR", "IS", "IT", "AS", "BE", "DO", "IF", "NO", "SO", "UP", "WE", "ANY", "CAN", "NOT", "BUT", "ARE", "HOW", "NEW", "USE", "ONE", "TWO",
 ]);
 
+const MUTATION_RE = /(?<![A-Za-z0-9])(?:p\.)?([ACDEFGHIKLMNPQRSTVWY]\d{1,5}[ACDEFGHIKLMNPQRSTVWY*])(?![A-Za-z0-9])/i;
+const POSITION_RE = /(?<![A-Za-z0-9])([ACDEFGHIKLMNPQRSTVWY]\d{1,5})(?![A-Za-z0-9])/i;
+const GENE_TOKEN_RE = /(?<![A-Za-z0-9-])([A-Z][A-Z0-9]{1,9}(?:-[A-Z0-9]{1,4})?|C\d{1,2}orf\d{1,4})(?![A-Za-z0-9])/g;
+const TAGS = [
+  ["SPOT", /\bspot\b/], ["alphaBtx", /\balphabtx\b/], ["2xHA-only", /\b2xha\b/], ["dTAG-V5", /\bdtag\b/], ["SD40-V5", /\bsd40\b/],
+  ["T2A-EGFP", /\begfp\b|\bgfp\b/], ["P2A-mCherry", /\bmcherry\b/], ["FLAG", /\bflag\b/],
+];
+const ENZYME_PATTERNS = [
+  ["mad7", /\bmad7\b/], ["lbcas12a", /\blbcas12a\b/], ["ascas12a", /\bascas12a\b|\benascas12a\b|\bcas12a\b/], ["sacas9", /\bsacas9\b/],
+  ["spry", /\bspry\b/], ["spcas9ng", /\bspcas9-ng\b|\bspcas9ng\b/], ["spcas9", /\bspcas9\b/],
+];
+
 /**
- * Parse a natural-language biomedical co-scientist prompt into structured intent.
+ * What a request must contain before anything is run. Used on the parsed prompt and again after an override.
+ */
+export function intentErrors(intent) {
+  const errors = [];
+  if (!intent?.gene) errors.push("No gene symbol was found. Write the symbol in capitals (for example DIPK2A) or say 'this gene' to use the loaded project's gene.");
+  if (!intent?.editType) errors.push("The edit type is not stated. Say knockout, point mutation (with the amino-acid change, for example R175H), N-terminal tag, C-terminal tag, or internal tag.");
+  if (intent?.editType === "pm" && !intent.mutation) errors.push("A point-mutation knock-in needs the amino-acid change (for example R175H); none was found in the request.");
+  if (intent?.editType === "it" && !intent.mutation) errors.push("An internal tag needs the amino-acid position of the insertion (for example R154); none was found in the request.");
+  if (["ct", "nt", "it"].includes(intent?.editType) && !intent.tag) errors.push("The tag is not named (FLAG, 2xHA-only, dTAG-V5, SD40-V5, T2A-EGFP, P2A-mCherry, SPOT or alphaBtx).");
+  return errors;
+}
+
+/**
+ * Parse a natural-language request into structured intent. Nothing is guessed: a gene, an edit type, and (for point mutations
+ * and internal tags) the residue must be present in the text, otherwise `errors` says what is missing and the caller must not run.
+ * Defaults that are harmless (SpCas9; the loaded project's tag) are listed in `assumptions` so they are shown to the user.
  */
 export function parseBiomniPrompt(prompt, currentProject = {}) {
   const text = String(prompt || "").trim();
   const lower = text.toLowerCase();
-  const upper = text.toUpperCase();
+  // tag names are not residues or genes (T2A-EGFP, P2A-mCherry, dTAG-V5, SD40-V5, 2xHA)
+  const scan = text.replace(/\b(?:T2A|P2A)(?:-\w+)?\b|\bdTAG(?:-V5)?\b|\bSD40(?:-V5)?\b|\b2xHA(?:-only)?\b/gi, " ");
+  const errors = [];
+  const assumptions = [];
+  const projectGene = String(currentProject?.geneMeta?.geneSymbol || currentProject?.gene || "").trim().toUpperCase();
 
-  // 1. Amino acid change (e.g. R175H, R176C, R154S)
-  const mutMatch = upper.match(/\b([ACDEFGHIKLMNPQRSTVWY]\d{1,5}[ACDEFGHIKLMNPQRSTVWY])\b/);
-  const posMatch = upper.match(/\b([ACDEFGHIKLMNPQRSTVWY]\d{1,5})\b/);
-  let mutation = mutMatch ? mutMatch[1] : "";
+  // Edit type first: a residue-like token ("A2M") is a mutation only if the request is about a point mutation.
+  const koWords = /\b(knock[\s-]?out|ko|null allele|loss[\s-]of[\s-]function|lof|disrupt\w*|delet\w*|frameshift|biallelic)\b/.test(lower);
+  const pmWords = /\b(point mutation|snp|missense|substitution|variant|hdr|knock[\s-]?in)\b/.test(lower) || /\bp\.[a-z]\d/i.test(text);
+  const mutHit = scan.match(MUTATION_RE);
+  let mutation = mutHit ? mutHit[1].toUpperCase() : "";
+  let editType = "";
+  if (/\b(internal tag|in-frame tag|internal\b.*\btag|spot|alphabtx)\b/.test(lower)) editType = "it";
+  else if (/\b(n-terminal|n-term|start codon|nt tag)\b/.test(lower)) editType = "nt";
+  else if (/\b(c-terminal|c-term|stop codon|ct tag|2xha|egfp|mcherry|dtag|sd40)\b/.test(lower) || (/\bflag\b/.test(lower) && !mutation)) editType = "ct";
+  else if (mutation && (pmWords || !koWords)) editType = "pm";
+  else if (/\b(point mutation|snp|missense|substitution|hdr)\b/.test(lower)) editType = "pm";
+  else if (koWords) { editType = "ko"; if (mutation && !pmWords) mutation = ""; }
+  if (editType === "it" && !mutation) { const pos = scan.match(POSITION_RE); if (pos) mutation = pos[1].toUpperCase(); }
+  if (editType === "ko" || editType === "ct" || editType === "nt") mutation = "";
 
-  // 2. Target gene symbol
+  // Gene: exact-case symbols only, minus words that are not genes and the mutation token; several candidates are an error, not a pick.
+  const candidates = [];
+  for (const m of scan.matchAll(GENE_TOKEN_RE)) {
+    const tok = m[1];
+    if (NOT_A_GENE.has(tok.toUpperCase()) || tok.toUpperCase() === mutation) continue;
+    if (!candidates.includes(tok)) candidates.push(tok);
+  }
   let gene = "";
-  for (const known of KNOWN_GENES) {
-    if (new RegExp(`\\b${known}\\b`).test(upper)) {
-      gene = known;
-      break;
-    }
-  }
-  if (!gene) {
-    const forMatch = text.match(/\b(?:for|in|target|gene|of)\s+([A-Za-z][A-Za-z0-9]{1,9})\b/i);
-    if (forMatch && !STOPWORDS.has(forMatch[1].toUpperCase())) {
-      gene = forMatch[1].toUpperCase();
-    }
-  }
-  if (!gene) {
-    const tokens = upper.match(/\b[A-Z][A-Z0-9]{2,8}\b/g) || [];
-    for (const tok of tokens) {
-      if (!STOPWORDS.has(tok) && tok !== mutation) {
-        gene = tok;
-        break;
-      }
-    }
-  }
-  if (!gene) {
-    gene = (currentProject?.gene || currentProject?.geneMeta?.geneSymbol || "TP53").trim().toUpperCase();
+  if (candidates.length === 1) gene = candidates[0].toUpperCase();
+  else if (candidates.length > 1) errors.push(`More than one possible gene symbol (${candidates.join(", ")}); name the target once.`);
+  else {
+    // a lower-case symbol is read only if it is the loaded project's gene or in the short built-in list
+    const lowerHit = lower.match(/\b(?:for|of|in|at|on|gene|target|knock[\s-]?out|knockout|tag|mutate|edit)\s+([a-z][a-z0-9]{1,9})\b/);
+    const word = lowerHit ? lowerHit[1].toUpperCase() : "";
+    if (word && (word === projectGene || KNOWN_GENES.has(word))) { gene = word; assumptions.push(`'${lowerHit[1]}' was read as the gene symbol ${word} (it is ${word === projectGene ? "the loaded project's gene" : "a listed gene"}).`); }
+    else if (/\b(this|the (?:current|loaded)|current|loaded|same)\s+(gene|target|locus|project)\b/.test(lower) && projectGene) { gene = projectGene; assumptions.push(`Gene taken from the loaded project (${projectGene}) because the request says 'this gene'.`); }
   }
 
-  // 3. Edit type
-  let editType = "ko";
-  if (/\b(internal tag|in-frame tag|spot|alphabtx)\b/.test(lower)) {
-    editType = "it";
-    if (!mutation) mutation = posMatch ? posMatch[1] : "R154";
-  } else if (/\b(n-terminal|n-term|start codon|nt tag)\b/.test(lower)) {
-    editType = "nt";
-  } else if (/\b(c-terminal|c-term|stop codon|ct tag|flag|2xha|egfp|mcherry|dtag|sd40)\b/.test(lower) && !mutMatch) {
-    editType = "ct";
-  } else if (mutMatch || /\b(point mutation|snp|missense|substitution|hdr)\b/.test(lower)) {
-    editType = "pm";
-    if (!mutation) {
-      mutation = currentProject?.mutation || (gene === "APOE" ? "R176C" : "R175H");
-    }
-  } else if (!text && currentProject?.editType) {
-    editType = currentProject.editType;
-    mutation = currentProject.mutation || "";
-  }
+  // Tag and enzyme
+  let tag = "";
+  for (const [candidateTag, regex] of TAGS) if (regex.test(lower)) { tag = candidateTag; break; }
+  if (!tag && ["ct", "nt", "it"].includes(editType) && currentProject?.tag) { tag = currentProject.tag; assumptions.push(`Tag not named; the loaded project's tag (${tag}) is used.`); }
+  if (!tag && editType === "ko") tag = currentProject?.tag || "FLAG"; // not used by a knockout
+  let enzyme = "";
+  for (const [enzId, regex] of ENZYME_PATTERNS) if (regex.test(lower)) { enzyme = enzId; break; }
+  if (!enzyme) { enzyme = currentProject?.options?.enzyme || "spcas9"; assumptions.push(`Enzyme not named; ${ENZYMES[enzyme]?.name || enzyme} is used${currentProject?.options?.enzyme ? " (the loaded project's enzyme)" : " (default)"}.`); }
 
-  // 4. Tag selection
-  let tag = currentProject?.tag || "FLAG";
-  const tagMap = [
-    ["SPOT", /\bspot\b/],
-    ["alphaBtx", /\balphabtx\b/],
-    ["2xHA-only", /\b2xha\b/],
-    ["dTAG-V5", /\bdtag\b/],
-    ["SD40-V5", /\bsd40\b/],
-    ["T2A-EGFP", /\begfp\b|\bgfp\b/],
-    ["P2A-mCherry", /\bmcherry\b/],
-    ["FLAG", /\bflag\b/],
-  ];
-  for (const [candidateTag, regex] of tagMap) {
-    if (regex.test(lower)) {
-      tag = candidateTag;
-      break;
-    }
-  }
-
-  // 5. Primary enzyme
-  let enzyme = currentProject?.options?.enzyme || "spcas9";
-  const enzymeMap = [
-    ["mad7", /\bmad7\b/],
-    ["lbcas12a", /\blbcas12a\b/],
-    ["ascas12a", /\bascas12a\b|\benascas12a\b|\bcas12a\b/],
-    ["sacas9", /\bsacas9\b/],
-    ["spry", /\bspry\b/],
-    ["spcas9ng", /\bspcas9-ng\b|\bspcas9ng\b/],
-    ["spcas9", /\bspcas9\b/],
-  ];
-  for (const [enzId, regex] of enzymeMap) {
-    if (regex.test(lower)) {
-      enzyme = enzId;
-      break;
-    }
-  }
-
-  const wantsEnzymeCompare = /\b(compare|all enzymes|which enzyme|vs\b|versus|multi-enzyme|nuclease)\b/.test(lower);
-  const wantsLindel = editType === "ko" || /\b(lindel|lof|loss of function|nmd|ko rank|frameshift)\b/.test(lower);
-  const wantsClinvar = editType === "pm" || /\b(clinvar|pathogenic|clinical|variant)\b/.test(lower);
-  const wantsUniprot = true;
-
-  return {
-    gene,
-    editType,
-    mutation,
-    tag,
-    enzyme,
-    wantsUniprot,
-    wantsClinvar,
-    wantsLindel,
-    wantsEnzymeCompare,
+  const intent = {
+    gene, editType, mutation, tag, enzyme,
+    wantsUniprot: true,
+    wantsClinvar: editType === "pm" || /\b(clinvar|pathogenic|clinical|variant)\b/.test(lower),
+    wantsLindel: editType === "ko" || /\b(lindel|lof|loss of function|nmd|ko rank|frameshift)\b/.test(lower),
+    wantsEnzymeCompare: /\b(compare|all enzymes|which enzyme|vs\b|versus|multi-enzyme|nuclease)\b/.test(lower),
   };
+  for (const e of intentErrors(intent)) {
+    if (e.startsWith("No gene symbol") && errors.some((x) => x.startsWith("More than one possible gene"))) continue;
+    errors.push(e);
+  }
+  return { ...intent, errors, assumptions, ok: errors.length === 0 };
 }
 
 /**
@@ -777,7 +764,8 @@ export function computeQcPredictionCalibration(project = {}, qcResults = []) {
  * Build a descriptive Biomni Co-Scientist mission prompt from Manual Design inputs.
  */
 export function buildManualBiomniPrompt({ gene, editType = "ko", mutation = "", tag = "FLAG", enzyme = "spcas9" } = {}) {
-  const g = (gene || "TP53").trim().toUpperCase();
+  const g = String(gene || "").trim().toUpperCase();
+  if (!g) throw new Error("A gene symbol is required to build a request.");
   const enzName = ENZYMES[enzyme]?.name || enzyme || "SpCas9";
   if (editType === "pm") {
     return `Design ${enzName} ${mutation || "point mutation"} knock-in for ${g}, check ClinVar & UniProt domains, and model clonal screening power`;
@@ -817,9 +805,11 @@ export async function runBiomniCoScientist(
     ? {
         ...parsedIntent,
         ...intentOverride,
-        gene: String(intentOverride.gene || parsedIntent.gene || "TP53").trim().toUpperCase(),
+        gene: String(intentOverride.gene || parsedIntent.gene || "").trim().toUpperCase(),
       }
     : parsedIntent;
+  if (intentOverride) { intent.errors = intentErrors(intent); intent.ok = intent.errors.length === 0; }
+  if (intent.errors?.length) throw new Error(`The request was not run. ${intent.errors.join(" ")}`);
   const plan = buildBiomniPlan(intent);
   const steps = [];
 

@@ -3,7 +3,7 @@ import { ENZYMES } from "../../engine/design/enzymeConfig.js";
 import { runDesign, summarizeProcurementReadiness } from "../../engine/design/designEngine.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/design/designScheme.js";
 import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
-import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAssay } from "../../services/biomniAgent.js";
+import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAssay, parseBiomniPrompt } from "../../services/biomniAgent.js";
 import { screenTargetVariants } from "../../services/variantScreen.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
@@ -19,6 +19,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
   const [biomniError, setBiomniError] = useState("");
   const worker = useRef(null);
   const panel = useRef(null);
+  const interpreted = React.useMemo(() => parseBiomniPrompt(biomniPrompt, project || {}), [biomniPrompt, project?.gene, project?.geneMeta?.geneSymbol, project?.tag, project?.options?.enzyme]);
   let request, inputError = "";
   try { request = agentRequest(project, enzymes, priority); } catch (e) { inputError = e.message; }
   const requestKey = request ? JSON.stringify(request) : inputError;
@@ -82,6 +83,8 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     const activePrompt = (typeof customPrompt === "string" ? customPrompt : biomniPrompt).trim();
     if (!activePrompt || biomniRunning) return;
     if (typeof customPrompt === "string") setBiomniPrompt(customPrompt);
+    const understood = parseBiomniPrompt(activePrompt, project || {});
+    if (!understood.ok) { setBiomniError(`The request was not run. ${understood.errors.join(" ")}`); return; }
     setBiomniRunning(true);
     setBiomniError("");
     setBiomniResult(null);
@@ -109,7 +112,8 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     const rawGb = biomniResult?.genbankRaw || project?.genbankRaw;
     if (!rawGb || !customSpacers?.length) return;
     const config = ENZYMES[enzymeId] || ENZYMES.spcas9;
-    const targetGene = biomniResult?.intent?.gene || project?.gene || "TP53";
+    const targetGene = biomniResult?.intent?.gene || project?.gene;
+    if (!targetGene) { setBiomniError("The target gene is not known for this design, so the alternative guides were not applied."); return; }
     const opts = {
       ...(project?.options || {}),
       enzyme: enzymeId,
@@ -239,12 +243,22 @@ export function WorkflowAgent({ project, onUpdateProject }) {
         <button
           type="button"
           className="btn btn-primary"
-          disabled={biomniRunning || !biomniPrompt.trim()}
+          disabled={biomniRunning || !biomniPrompt.trim() || !interpreted.ok}
           onClick={() => runCoScientist()}
         >
           {biomniRunning ? "Running Agent..." : "🚀 Run Co-Scientist"}
         </button>
       </div>
+
+      {biomniPrompt.trim() && (
+        <div aria-live="polite" style={{ fontSize: "0.82rem", margin: "0.25rem 0 0.5rem", padding: "0.4rem 0.6rem", borderRadius: "6px", border: `1px solid ${interpreted.ok ? "#cbd5e1" : "#fca5a5"}`, background: interpreted.ok ? "#f8fafc" : "#fef2f2" }}>
+          <strong>Request as understood:</strong>{" "}
+          {interpreted.ok
+            ? <>gene <code>{interpreted.gene}</code> · edit <code>{interpreted.editType.toUpperCase()}</code>{interpreted.mutation ? <> · residue <code>{interpreted.mutation}</code></> : null}{["ct", "nt", "it"].includes(interpreted.editType) ? <> · tag <code>{interpreted.tag}</code></> : null} · enzyme <code>{ENZYMES[interpreted.enzyme]?.name || interpreted.enzyme}</code></>
+            : <span style={{ color: "#b91c1c" }}>not run: {interpreted.errors.join(" ")}</span>}
+          {interpreted.assumptions.map((a, i) => <div key={i} className="muted">Assumed: {a}</div>)}
+        </div>
+      )}
 
       {biomniProgress && (
         <div role="status" aria-live="polite" style={{ padding: "0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "0.5rem" }}>

@@ -449,7 +449,7 @@ export function DesignView({
       );
 
       if (result.err) throw new Error(result.err);
-      const resolvedGene = geneMeta?.geneSymbol || geneInput.trim() || result.gene || "TP53";
+      const resolvedGene = geneMeta?.geneSymbol || geneInput.trim() || result.gene || "";
 
       let biomniReport = null;
       try {
@@ -490,8 +490,9 @@ export function DesignView({
         if (biomniReport?.designResult && !biomniReport.designResult.err) {
           result = biomniReport.designResult;
         }
-      } catch {
-        // Keep primary design result if Biomni enrichment fails
+      } catch (enrichErr) {
+        // The primary design stands; the co-scientist enrichment (UniProt, Brunello cross-reference, dbSNP screen) is simply absent.
+        console.warn("Co-scientist enrichment skipped:", enrichErr?.message || enrichErr);
       }
 
       result.procurement = summarizeProcurementReadiness(result);
