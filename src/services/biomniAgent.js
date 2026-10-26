@@ -9,8 +9,9 @@
 import { ENZYMES } from "../engine/design/enzymeConfig.js";
 import { parseGB, runDesign, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
+import { codingModels } from "../engine/design/koOutcomes.js";
 import { rankKoGuides } from "../engine/design/koRank.js";
-import { fetchGeneReference } from "../engine/design/geneFetch.js";
+import { cdsToGenomic, fetchGeneReference } from "../engine/design/geneFetch.js";
 import { fetchGeneGenbank } from "./ensembl.js";
 import { agentRequest, runWorkflowAgent } from "./workflowAgent.js";
 
@@ -254,6 +255,13 @@ export function buildBiomniPlan(intent) {
       tool: "fetch_gene_reference",
       rationale: "Retrieve annotated GenBank reference (Ensembl MANE Select or NCBI RefSeqGene) and splice junctions.",
     },
+    {
+      step: 2,
+      id: "analyze_common_isoform_exons",
+      title: `Analyze Pan-Isoform Common Coding Exons (${intent.gene})`,
+      tool: "analyze_common_isoform_exons",
+      rationale: "Map all protein-coding isoforms (in-record CDS + RefSeq NM_ transcripts) to identify constitutive/common non-terminal exons.",
+    },
   ];
 
   if (intent.wantsUniprot) {
@@ -402,6 +410,128 @@ export async function searchClinvarVariants(geneSymbol, mutation = "", fetchFn =
 }
 
 /**
+ * Analyze all protein-coding isoforms of a gene (from in-record GenBank CDS annotations + live NCBI Datasets RefSeq NM_ transcripts)
+ * to identify Common (Constitutive) Coding Exons shared across all isoforms.
+ */
+export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn = globalThis.fetch) {
+  const sym = String(geneSymbol || "").trim().toUpperCase();
+  if (!genbankRaw || !genbankRaw.trim()) {
+    return { ok: false, error: "No GenBank sequence available for isoform exon analysis." };
+  }
+
+  let model;
+  try {
+    model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: sym });
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) };
+  }
+
+  const mainSegs = model.cdsSegments || [];
+  if (!mainSegs.length) {
+    return { ok: false, error: "No coding exons found in reference." };
+  }
+
+  const inRecordIsoforms = codingModels(model);
+  let totalIsoforms = inRecordIsoforms.length;
+  let isoformIds = inRecordIsoforms.map(i => i.id);
+  let source = inRecordIsoforms.length > 1 ? "GenBank multi-CDS annotations" : "Canonical CDS";
+
+  // Default sharing counts from in-record CDS models
+  const sharingCounts = mainSegs.map(([s, e]) =>
+    inRecordIsoforms.filter(iso =>
+      (iso.model.cdsSegments || []).some(([a, b]) => Math.min(e, b) - Math.max(s, a) >= Math.min(20, e - s))
+    ).length
+  );
+
+  // If the GenBank record only has 1 CDS feature, query NCBI Datasets v2 for all curated RefSeq NM_ isoforms
+  if (inRecordIsoforms.length <= 1 && typeof fetchFn === "function") {
+    try {
+      const url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/symbol/${encodeURIComponent(sym)}/taxon/9606/product_report`;
+      const res = await fetchFn(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout?.(6000) });
+      if (res?.ok) {
+        const data = await res.json();
+        const product = data?.reports?.[0]?.product;
+        const primaryLoc = (t) => (t.genomic_locations || []).find(l => /^NC_/.test(l.genomic_accession_version || ""));
+        const codingTxs = (product?.transcripts || []).filter(t => t.cds?.range?.length && primaryLoc(t) && /^NM_/.test(t.accession_version));
+        if (codingTxs.length > 1) {
+          const maneTx = codingTxs.find(t => t.select_category === "MANE_SELECT") || codingTxs[0];
+          const mLoc = primaryLoc(maneTx);
+          const orient = mLoc.genomic_range?.orientation === "minus" ? -1 : 1;
+          const toSenseOrder = (segs) => orient === -1 ? [...segs].sort((a, b) => b[0] - a[0]) : [...segs].sort((a, b) => a[0] - b[0]);
+          const mainGenomic = toSenseOrder(
+            cdsToGenomic(
+              mLoc.exons.map(e => [Number(e.begin), Number(e.end)]),
+              orient,
+              Number(maneTx.cds.range[0].begin),
+              Number(maneTx.cds.range[maneTx.cds.range.length - 1].end)
+            )
+          );
+          if (mainGenomic.length === mainSegs.length) {
+            const allIsoformSegs = codingTxs.map(t => {
+              const l = primaryLoc(t);
+              return cdsToGenomic(
+                l.exons.map(e => [Number(e.begin), Number(e.end)]),
+                orient,
+                Number(t.cds.range[0].begin),
+                Number(t.cds.range[t.cds.range.length - 1].end)
+              );
+            });
+            totalIsoforms = codingTxs.length;
+            isoformIds = codingTxs.map(t => t.accession_version);
+            source = `NCBI RefSeq (${codingTxs.length} NM_ coding isoforms)`;
+            mainGenomic.forEach(([gs, ge], idx) => {
+              const minOverlap = Math.min(20, ge - gs + 1);
+              sharingCounts[idx] = allIsoformSegs.filter(segs =>
+                segs.some(([a, b]) => Math.min(ge, b) - Math.max(gs, a) + 1 >= minOverlap)
+              ).length;
+            });
+          }
+        }
+      }
+    } catch {
+      // Keep in-record isoform counts if offline or mock fetch does not include NCBI Datasets
+    }
+  }
+
+  const nonTerminalCounts = mainSegs.length > 1 ? sharingCounts.slice(0, -1) : sharingCounts;
+  const maxNonTerminalSharing = Math.max(...nonTerminalCounts, 1);
+
+  const exons = mainSegs.map(([s, e], idx) => {
+    const shared = sharingCounts[idx];
+    const coveragePct = Math.round((shared / totalIsoforms) * 100);
+    const isTerminalExon = mainSegs.length > 1 && idx === mainSegs.length - 1;
+    const isCommonAll = shared === totalIsoforms;
+    const recommendedForKo = !isTerminalExon && shared === maxNonTerminalSharing;
+    return {
+      codingExon: idx + 1,
+      start: s + 1,
+      end: e,
+      lengthBp: e - s,
+      sharedIsoforms: shared,
+      totalIsoforms,
+      coveragePct,
+      isCommonExon: isCommonAll,
+      isTerminalExon,
+      recommendedForKo,
+    };
+  });
+
+  const commonCodingExons = exons.filter(x => x.isCommonExon).map(x => x.codingExon);
+  const recommendedCommonKoExons = exons.filter(x => x.recommendedForKo).map(x => x.codingExon);
+
+  return {
+    ok: true,
+    gene: sym,
+    source,
+    totalIsoforms,
+    isoformIds: isoformIds.slice(0, 12),
+    commonCodingExons,
+    recommendedCommonKoExons,
+    exons,
+  };
+}
+
+/**
  * Compute binomial clonal screening power (minimum 96-well clones to screen for >=95% probability of >=2 target clones).
  */
 export function computeClonalScreeningPower({ editType, lindelTopGuide, deliveryEfficiency = 0.8 }) {
@@ -450,6 +580,7 @@ export async function runBiomniCoScientist(
 
   let genbankRaw = "";
   let geneMeta = null;
+  let isoformAnalysis = null;
   let uniprot = null;
   let clinvar = null;
   let designResult = null;
@@ -490,6 +621,9 @@ export async function runBiomniCoScientist(
             sequenceLength: fetched.sequenceLength || genbankRaw.length,
           };
         }
+      } else if (item.tool === "analyze_common_isoform_exons") {
+        isoformAnalysis = await analyzeCommonIsoformExons(intent.gene, genbankRaw, fetchFn);
+        output = isoformAnalysis;
       } else if (item.tool === "query_uniprot_protein") {
         uniprot = await queryUniprotProtein(intent.gene, fetchFn);
         output = uniprot;
@@ -512,13 +646,64 @@ export async function runBiomniCoScientist(
           expectedGene: intent.gene,
           ensureGuidePair: true,
           allowNonCodingBlockers: true,
-          ...(loadedLindel ? { lindel: loadedLindel } : {}),
+          ...(loadedLindel ? { koLindel: loadedLindel } : {}),
         };
         const armLen = ["ct", "nt"].includes(intent.editType) ? Number(currentProject?.homologyArmLength || 400) : "";
-        const res = designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
+        let res = designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
+
+        // If KO design picked an exon that is not in recommendedCommonKoExons, check if a recommended common exon has a valid 2-guide pair
+        if (
+          intent.editType === "ko" &&
+          res &&
+          !res.err &&
+          isoformAnalysis?.recommendedCommonKoExons?.length > 0 &&
+          loadedLindel
+        ) {
+          const exonMatch = String(res.exon || "").match(/Exon\s+(\d+)/i);
+          const chosenExon = exonMatch ? Number(exonMatch[1]) : null;
+          if (chosenExon && !isoformAnalysis.recommendedCommonKoExons.includes(chosenExon)) {
+            try {
+              const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
+              const allRows = rankKoGuides(model, loadedLindel).filter(
+                r =>
+                  isoformAnalysis.recommendedCommonKoExons.includes(r.coding_exon) &&
+                  r.gc_percent >= 40 &&
+                  r.gc_percent <= 60 &&
+                  r.panel_tier === "robust"
+              );
+              for (let a = 0; a < allRows.length; a += 1) {
+                let foundCommonPair = null;
+                for (let b = a + 1; b < allRows.length; b += 1) {
+                  if (allRows[a].coding_exon !== allRows[b].coding_exon) continue;
+                  const dist = Math.abs(allRows[a].cut_after_exon_nt - allRows[b].cut_after_exon_nt);
+                  if (dist >= 20 && dist <= 140) {
+                    const candidateRes = designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, {
+                      ...options,
+                      customGuides: [allRows[a].spacer, allRows[b].spacer],
+                    });
+                    if (candidateRes && !candidateRes.err) {
+                      foundCommonPair = candidateRes;
+                      break;
+                    }
+                  }
+                }
+                if (foundCommonPair) {
+                  res = foundCommonPair;
+                  break;
+                }
+              }
+            } catch {
+              // Keep primary design result
+            }
+          }
+        }
+
         if (res && !res.err) {
           res.procurement = summarizeProcurementReadiness(res);
           designResult = res;
+          const exonMatch = String(res.exon || "").match(/Exon\s+(\d+)/i);
+          const targetCodingExon = exonMatch ? Number(exonMatch[1]) : null;
+          const exonMeta = isoformAnalysis?.exons?.find(x => x.codingExon === targetCodingExon) || null;
           output = {
             ok: true,
             enzyme: config.name,
@@ -529,7 +714,10 @@ export async function runBiomniCoScientist(
             releaseStatus: res.procurement?.status || "review",
             topGuides: (res.gs || []).slice(0, 2).map(g => ({ spacer: g.sp, pam: g.pam, strand: g.str, score: g.sc })),
             koTier: res.koAssessment?.tier || null,
-            minLofPct: res.koAssessment?.outcomes?.minLofPct ?? null,
+            minLofPct: res.koOutcomes?.minLofPct ?? res.koAssessment?.outcomes?.minLofPct ?? null,
+            targetCodingExon,
+            isCommonExon: exonMeta ? exonMeta.recommendedForKo || exonMeta.isCommonExon : true,
+            isoformCoverageLabel: exonMeta ? `${exonMeta.sharedIsoforms}/${exonMeta.totalIsoforms} isoforms (${exonMeta.coveragePct}%)` : null,
           };
         } else {
           output = { ok: false, error: res?.err || "Design returned no candidates." };
@@ -539,15 +727,39 @@ export async function runBiomniCoScientist(
           loadedLindel = await lindelLoader();
         }
         const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
-        const rows = rankKoGuides(model, loadedLindel);
+        const rawRows = rankKoGuides(model, loadedLindel);
+        const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
+        const rows = rawRows.map(r => {
+          const ex = exonLookup.get(r.coding_exon);
+          const inRecordDisruptedPct = Math.max(0, 100 - (r.other_isoform_not_disrupted_pct || 0));
+          const coveragePct = ex ? Math.min(ex.coveragePct, inRecordDisruptedPct) : inRecordDisruptedPct;
+          const isCommon = Boolean((ex ? ex.recommendedForKo : true) && (r.other_isoform_not_disrupted_pct || 0) === 0);
+          return {
+            ...r,
+            isoform_coverage_pct: coveragePct,
+            shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${coveragePct}%)` : `${coveragePct}%`,
+            is_common_exon: isCommon,
+          };
+        });
+        // Prioritize Common-Exon NMD-Safe (robust) guides first, then isoform coverage %, then Lindel LoF %
+        rows.sort(
+          (a, b) =>
+            Number(b.is_common_exon && b.panel_tier === "robust") - Number(a.is_common_exon && a.panel_tier === "robust") ||
+            Number(b.is_common_exon) - Number(a.is_common_exon) ||
+            b.isoform_coverage_pct - a.isoform_coverage_pct ||
+            b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct ||
+            b.gc_percent - a.gc_percent
+        );
         lindelRanking = {
           ok: true,
           totalCandidates: rows.length,
+          commonExonCandidates: rows.filter(r => r.is_common_exon).length,
           topGuides: rows.slice(0, 8),
         };
         output = {
           ok: true,
           totalCandidates: rows.length,
+          commonExonCandidates: rows.filter(r => r.is_common_exon).length,
           topGuide: rows[0] || null,
           topGuides: rows.slice(0, 5),
         };
@@ -604,6 +816,7 @@ export async function runBiomniCoScientist(
     steps,
     geneMeta,
     genbankRaw,
+    isoformAnalysis,
     uniprot,
     clinvar,
     designResult,

@@ -222,6 +222,40 @@ export function WorkflowAgent({ project, onUpdateProject }) {
             </ol>
           </details>
 
+          {biomniResult.isoformAnalysis?.ok && (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.88rem", padding: "0.5rem 0.65rem", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+              <strong>🧬 Pan-Isoform Common Exon Analysis ({biomniResult.isoformAnalysis.totalIsoforms} Coding Isoform{biomniResult.isoformAnalysis.totalIsoforms === 1 ? "" : "s"} · {biomniResult.isoformAnalysis.source}):</strong>
+              <div style={{ marginTop: "0.25rem" }}>
+                Recommended NMD-Safe Common Coding Exon(s):{" "}
+                <strong>
+                  {biomniResult.isoformAnalysis.recommendedCommonKoExons?.length
+                    ? biomniResult.isoformAnalysis.recommendedCommonKoExons.map(n => `Exon ${n}`).join(", ")
+                    : "Exon 1"}
+                </strong>
+                {biomniResult.designResult?.exon && (
+                  <span> · Selected Workbench Target: <code>{biomniResult.designResult.exon}</code></span>
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.35rem" }}>
+                {(biomniResult.isoformAnalysis.exons || []).map(ex => (
+                  <span
+                    key={ex.codingExon}
+                    style={{
+                      fontSize: "0.76rem",
+                      padding: "0.15rem 0.45rem",
+                      borderRadius: "4px",
+                      background: ex.recommendedForKo ? "#dcfce7" : ex.isTerminalExon ? "#fef3c7" : "#e2e8f0",
+                      border: ex.recommendedForKo ? "1px solid #22c55e" : "1px solid #cbd5e1",
+                    }}
+                  >
+                    <strong>Exon {ex.codingExon}</strong> ({ex.lengthBp} bp): {ex.sharedIsoforms}/{ex.totalIsoforms} ({ex.coveragePct}%)
+                    {ex.recommendedForKo ? " ✅ Common" : ex.isTerminalExon ? " ⚠ Terminal" : ""}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {biomniResult.designResult?.gs?.length > 0 && (
             <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
               <strong>Selected ASSURED Guides ({biomniResult.designResult.gs.length}):</strong>{" "}
@@ -233,8 +267,8 @@ export function WorkflowAgent({ project, onUpdateProject }) {
               {biomniResult.designResult.koAssessment && (
                 <span>
                   {" "}· <strong>KO Protein-Loss Tier:</strong> <code>{biomniResult.designResult.koAssessment.tier.toUpperCase()}</code>
-                  {biomniResult.designResult.koAssessment.outcomes?.minLofPct != null && (
-                    <span> (Min Lindel LoF: <strong>{biomniResult.designResult.koAssessment.outcomes.minLofPct}%</strong>)</span>
+                  {(biomniResult.designResult.koOutcomes?.minLofPct ?? biomniResult.designResult.koAssessment.outcomes?.minLofPct) != null && (
+                    <span> (Min Lindel LoF: <strong>{biomniResult.designResult.koOutcomes?.minLofPct ?? biomniResult.designResult.koAssessment.outcomes?.minLofPct}%</strong>)</span>
                   )}
                 </span>
               )}
@@ -261,7 +295,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
 
           {biomniResult.lindelRanking?.topGuides?.length > 0 && (
             <details style={{ marginTop: "0.5rem" }} open>
-              <summary><strong>Lindel KO Repair Outcome Ranking (Top {Math.min(5, biomniResult.lindelRanking.topGuides.length)} of {biomniResult.lindelRanking.totalCandidates} Exon Guides)</strong></summary>
+              <summary><strong>Lindel KO Repair Outcome Ranking (Common-Exon Prioritized · Top {Math.min(5, biomniResult.lindelRanking.topGuides.length)} of {biomniResult.lindelRanking.totalCandidates} Guides)</strong></summary>
               <div style={{ overflowX: "auto", marginTop: "0.4rem" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>
@@ -269,6 +303,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                       <th style={{ padding: "0.25rem" }}>Rank</th>
                       <th style={{ padding: "0.25rem" }}>Spacer</th>
                       <th style={{ padding: "0.25rem" }}>Exon</th>
+                      <th style={{ padding: "0.25rem" }}>Isoform Coverage</th>
                       <th style={{ padding: "0.25rem" }}>Tier</th>
                       <th style={{ padding: "0.25rem" }}>Lindel FS %</th>
                       <th style={{ padding: "0.25rem" }}>Predicted LoF Allele %</th>
@@ -281,6 +316,10 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                         <td style={{ padding: "0.25rem" }}>#{idx + 1}</td>
                         <td style={{ padding: "0.25rem" }}><code>{g.spacer}</code></td>
                         <td style={{ padding: "0.25rem" }}>Exon {g.coding_exon}</td>
+                        <td style={{ padding: "0.25rem" }}>
+                          {g.shared_isoforms_label || `${g.isoform_coverage_pct ?? 100}%`}
+                          {g.is_common_exon ? " ✅ Common" : ""}
+                        </td>
                         <td style={{ padding: "0.25rem" }}>{g.panel_tier}</td>
                         <td style={{ padding: "0.25rem" }}>{g.lindel_frameshift_pct}%</td>
                         <td style={{ padding: "0.25rem" }}><strong>{g.predicted_LoF_allele_pct}%</strong></td>
