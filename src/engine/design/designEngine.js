@@ -3708,7 +3708,7 @@ export function designKO(gb, options = {}) {
   const guideOutcomes = koScorer && koAssessment ? selectedPair.guides.map((guide) => koScorer(guide)) : null;
   const koOutcomes = guideOutcomes && guideOutcomes.every(Boolean) ? { model: "Lindel (Chen et al. 2019) with the Assured QC NMD and truncation rules", guides: guideOutcomes, minLofPct: Math.min(...guideOutcomes.map((o) => o.lofPct)) } : null;
   // the ranked guides for choosing a pair by hand, and how the pair used here relates to the selector's recommendation
-  let koPicker = null; let koPairChoice = null;
+  let koPicker = null; let koPairChoice = null; let koPickerError = null;
   try {
     koPicker = buildKoPicker(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, include: selectedPair.guides.map(guide => guide.sp) });
     const userPair = Boolean(options.customGuides?.length);
@@ -3721,7 +3721,7 @@ export function designKO(gb, options = {}) {
     const same = recommendedKoPair && [...recommendedKoPair].sort().join("|") === [...chosenSpacers].sort().join("|");
     koPairChoice = { source: userPair && !same ? "user" : "selector", pair: chosenSpacers, minLofPct: minLof(chosenSpacers),
       recommended: recommendedKoPair ? { pair: recommendedKoPair, minLofPct: minLof(recommendedKoPair) } : null };
-  } catch { koPicker = null; koPairChoice = null; }
+  } catch (error) { koPicker = null; koPairChoice = null; koPickerError = String(error?.message || error).slice(0, 160); }
   const deletionOutcome = {
     deletionSize: selectedPair.spacing,
     deletionMod3: ((selectedPair.spacing % 3) + 3) % 3,
@@ -3762,6 +3762,7 @@ export function designKO(gb, options = {}) {
     deletionOutcome,
     koSelection,
     koPicker,
+    koPickerError,
     koPairChoice,
     koAssessment: koAssessment ? { ...koAssessment, summary: describeKoTier(koAssessment.tier), outcomes: koOutcomes, outcomesUnavailable: !koOutcomes && !configured && options.koOutcomesUnavailable ? String(options.koOutcomesUnavailable) : undefined } : null,
     strat: configured ? `NHEJ-mediated disruption using two ${enzyme.name} guides. Nominal deletion ${selectedPair.spacing} bp uses target-strand cut boundaries; staggered ends and end processing can change the repaired junction. Screen WT/deletion PCR products, sequence the junction, and confirm protein loss.` : longDeletion

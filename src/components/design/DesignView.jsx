@@ -1017,6 +1017,33 @@ export function DesignView({
 
       {designResult && (
         <>
+          {designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 && (
+            <details id="bench-ko-picker" className="card" style={{ marginBottom: "1rem", borderColor: designResult.koPairChoice?.source === "user" ? "var(--primary)" : undefined }} open>
+              <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
+                Choose the guide pair ({designResult.koPicker.listed} guides ranked by predicted loss of function)
+              </summary>
+              <div style={{ marginTop: "1rem" }}>
+                <KoGuidePicker
+                  result={designResult}
+                  genbankRaw={currentProject.genbankRaw || genbankRaw}
+                  geneSymbol={geneMeta?.geneSymbol || geneInput.trim()}
+                  busy={isDesigning}
+                  onUsePair={handleUsePair}
+                  onUseRecommended={handleRunDesign}
+                />
+              </div>
+            </details>
+          )}
+
+          {designResult.type === "ko" && !(designResult.koPicker?.rows?.length > 0) && (
+            <div id="bench-ko-picker" className="card" role="note" style={{ marginBottom: "1rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              <strong style={{ color: "var(--text-main)" }}>Guide list not available for this design.</strong>{" "}
+              {designResult.koPickerError
+                ? `It could not be built (${designResult.koPickerError}).`
+                : "It was made before the guide list existed, or from a saved project; click Generate design to list and choose guides."}
+            </div>
+          )}
+
           <div id="bench-design-report" tabIndex={-1} className="card" style={{ padding: 0, overflow: "hidden", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--border-light)" }}>
             {/* Integrated Report Header Toolbar */}
             <div style={{ padding: "0.85rem 1.25rem", background: "linear-gradient(90deg, #f0f6fc 0%, #f8fbfe 100%)", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
@@ -1106,24 +1133,6 @@ export function DesignView({
               />
             </div>
           </div>
-
-          {designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 && (
-            <details className="card" style={{ marginTop: "1rem" }} open={designResult.koPairChoice?.source === "user"}>
-              <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-                Choose the guide pair ({designResult.koPicker.listed} guides ranked by predicted loss of function)
-              </summary>
-              <div style={{ marginTop: "1rem" }}>
-                <KoGuidePicker
-                  result={designResult}
-                  genbankRaw={currentProject.genbankRaw || genbankRaw}
-                  geneSymbol={geneMeta?.geneSymbol || geneInput.trim()}
-                  busy={isDesigning}
-                  onUsePair={handleUsePair}
-                  onUseRecommended={handleRunDesign}
-                />
-              </div>
-            </details>
-          )}
 
           {designResult.guideAlternatives?.candidates?.length > 0 && (
             <details className="card" style={{ marginTop: "1rem" }}>

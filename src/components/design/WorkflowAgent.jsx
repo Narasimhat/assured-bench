@@ -360,6 +360,15 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                   )}
                 </span>
               )}
+              {biomniResult.designResult.koPicker?.rows?.length > 0 && (
+                <span>
+                  {" "}·{" "}
+                  <button type="button" className="btn btn-secondary" style={{ padding: "0.1rem 0.5rem", fontSize: "0.8rem" }}
+                    onClick={() => document.getElementById("bench-ko-picker")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                    Choose a different guide pair
+                  </button>
+                </span>
+              )}
             </div>
           )}
 
