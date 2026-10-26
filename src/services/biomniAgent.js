@@ -623,6 +623,27 @@ export function computeClonalScreeningPower({ editType, lindelTopGuide, delivery
 }
 
 /**
+ * Build a descriptive Biomni Co-Scientist mission prompt from Manual Design inputs.
+ */
+export function buildManualBiomniPrompt({ gene, editType = "ko", mutation = "", tag = "FLAG", enzyme = "spcas9" } = {}) {
+  const g = (gene || "TP53").trim().toUpperCase();
+  const enzName = ENZYMES[enzyme]?.name || enzyme || "SpCas9";
+  if (editType === "pm") {
+    return `Design ${enzName} ${mutation || "point mutation"} knock-in for ${g}, check ClinVar & UniProt domains, and model clonal screening power`;
+  }
+  if (editType === "ct") {
+    return `Design C-terminal ${tag || "mNeonGreen"} knock-in for ${g} with ${enzName}, inspect UniProt C-terminus, and model clonal screening power`;
+  }
+  if (editType === "nt") {
+    return `Design N-terminal ${tag || "FLAG"} knock-in for ${g} with ${enzName}, inspect UniProt N-terminus, and model clonal screening power`;
+  }
+  if (editType === "it") {
+    return `Design internal ${tag || "SPOT"} tag knock-in at ${mutation || "target site"} for ${g} with ${enzName}`;
+  }
+  return `Design ${enzName} knockout for ${g}, select NMD-safe common coding exon across isoforms, rank guides with Lindel & Brunello library, and compute clonal screening power`;
+}
+
+/**
  * Execute the autonomous Biomni Co-Scientist workflow in the browser or Node.
  */
 export async function runBiomniCoScientist(
@@ -634,9 +655,20 @@ export async function runBiomniCoScientist(
     geneFetcher = resolveBiomniGeneReference,
     designRunner = runDesign,
     lindelLoader = defaultLindelLoader,
+    intentOverride = null,
+    initialDesignResult = null,
+    preloadedLindel = null,
+    preserveCustomGuides = false,
   } = {}
 ) {
-  const intent = parseBiomniPrompt(prompt, currentProject);
+  const parsedIntent = parseBiomniPrompt(prompt, currentProject);
+  const intent = intentOverride
+    ? {
+        ...parsedIntent,
+        ...intentOverride,
+        gene: String(intentOverride.gene || parsedIntent.gene || "TP53").trim().toUpperCase(),
+      }
+    : parsedIntent;
   const plan = buildBiomniPlan(intent);
   const steps = [];
 
@@ -649,7 +681,7 @@ export async function runBiomniCoScientist(
   let lindelRanking = null;
   let enzymeComparison = null;
   let screeningPower = null;
-  let loadedLindel = null;
+  let loadedLindel = preloadedLindel || null;
 
   const currentGeneUpper = (currentProject?.geneMeta?.geneSymbol || currentProject?.gene || "").trim().toUpperCase();
 
@@ -693,7 +725,7 @@ export async function runBiomniCoScientist(
         clinvar = await searchClinvarVariants(intent.gene, intent.mutation, fetchFn);
         output = clinvar;
       } else if (item.tool === "design_crispr_edit") {
-        if (intent.editType === "ko" && intent.enzyme === "spcas9") {
+        if (!loadedLindel && intent.editType === "ko" && intent.enzyme === "spcas9") {
           try {
             loadedLindel = await lindelLoader();
           } catch {
@@ -711,10 +743,14 @@ export async function runBiomniCoScientist(
           ...(loadedLindel ? { koLindel: loadedLindel } : {}),
         };
         const armLen = ["ct", "nt"].includes(intent.editType) ? Number(currentProject?.homologyArmLength || 400) : "";
-        let res = designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
+        let res =
+          initialDesignResult && !initialDesignResult.err
+            ? initialDesignResult
+            : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
 
         // If KO design picked an exon that is not in recommendedCommonKoExons, check if a recommended common exon has a valid 2-guide pair
         if (
+          !preserveCustomGuides &&
           intent.editType === "ko" &&
           res &&
           !res.err &&
@@ -767,10 +803,21 @@ export async function runBiomniCoScientist(
 
         if (res && !res.err) {
           res.procurement = summarizeProcurementReadiness(res);
-          designResult = res;
           const exonMatch = String(res.exon || "").match(/Exon\s+(\d+)/i);
           const targetCodingExon = exonMatch ? Number(exonMatch[1]) : null;
           const exonMeta = isoformAnalysis?.exons?.find(x => x.codingExon === targetCodingExon) || null;
+          if (exonMeta) {
+            res.panIsoformMeta = {
+              targetCodingExon,
+              sharedIsoforms: exonMeta.sharedIsoforms,
+              totalIsoforms: exonMeta.totalIsoforms,
+              coveragePct: exonMeta.coveragePct,
+              isCommonExon: Boolean(exonMeta.recommendedForKo || exonMeta.isCommonExon),
+              isTerminalExon: Boolean(exonMeta.isTerminalExon),
+              singleCdsDefault: res.singleCdsDefault || null,
+            };
+          }
+          designResult = res;
           output = {
             ok: true,
             enzyme: config.name,

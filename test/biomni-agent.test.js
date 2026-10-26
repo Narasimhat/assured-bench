@@ -4,9 +4,12 @@ import { readFileSync } from "node:fs";
 import {
   parseBiomniPrompt,
   buildBiomniPlan,
+  buildManualBiomniPrompt,
   computeClonalScreeningPower,
   runBiomniCoScientist,
 } from "../src/services/biomniAgent.js";
+import { runDesign } from "../src/engine/design/designEngine.js";
+import { generateReportHtml } from "../src/services/designExport.js";
 
 const tp53Raw = readFileSync(new URL("../public/references/tp53-NG_017013.2.gb", import.meta.url), "utf8");
 const apoeRaw = readFileSync(new URL("./fixtures/reference_demo.gb", import.meta.url), "utf8");
@@ -114,4 +117,28 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.equal(pmRes.intent.mutation, "R175H");
   assert.ok(pmRes.designResult && pmRes.designResult.gs.length > 0);
   assert.ok(pmRes.enzymeComparison && pmRes.enzymeComparison.candidates.length === 7);
+
+  // Manual Design Integration (intentOverride + initialDesignResult + generateReportHtml)
+  const manualPrompt = buildManualBiomniPrompt({ gene: "DIPK2A", editType: "ko", enzyme: "spcas9" });
+  const initialDipk = runDesign("ko", dipk2aRaw, "", "", "", { enzyme: "spcas9", expectedGene: "DIPK2A", ensureGuidePair: true });
+  const manualBiomni = await runBiomniCoScientist(
+    manualPrompt,
+    { id: "p3", gene: "DIPK2A", genbankRaw: dipk2aRaw, editType: "ko", options: { enzyme: "spcas9" } },
+    {
+      fetchFn: mockFetch,
+      intentOverride: { gene: "DIPK2A", editType: "ko", mutation: "", tag: "", enzyme: "spcas9", compareAllEnzymes: false },
+      initialDesignResult: initialDipk,
+      preserveCustomGuides: false,
+    }
+  );
+  assert.ok(manualBiomni.designResult?.panIsoformMeta);
+  assert.equal(manualBiomni.designResult.panIsoformMeta.targetCodingExon, 2);
+  assert.equal(manualBiomni.designResult.panIsoformMeta.isCommonExon, true);
+  const reportHtml = generateReportHtml(
+    { gene: "DIPK2A", editType: "ko", biomniReport: manualBiomni },
+    manualBiomni.designResult
+  );
+  assert.match(reportHtml, /ASSURED-Biomni Co-Scientist Integrated Verification/);
+  assert.match(reportHtml, /Coding Exon 2/);
+  assert.match(reportHtml, /Broad GPP Brunello Library/);
 });

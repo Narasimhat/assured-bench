@@ -28,6 +28,7 @@ import {
   downloadSchemeSvg
 } from "../../services/designExport.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
+import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
 import {
@@ -438,7 +439,7 @@ export function DesignView({
         ...(customGuidesOverride?.length ? { customGuides: customGuidesOverride } : {})
       };
 
-      const result = runDesign(
+      let result = runDesign(
         editType,
         genbankRaw,
         mutation,
@@ -448,12 +449,57 @@ export function DesignView({
       );
 
       if (result.err) throw new Error(result.err);
+      const resolvedGene = geneMeta?.geneSymbol || geneInput.trim() || result.gene || "TP53";
+
+      let biomniReport = null;
+      try {
+        const manualPrompt = buildManualBiomniPrompt({
+          gene: resolvedGene,
+          editType,
+          mutation,
+          tag: resolvedTag,
+          enzyme
+        });
+        biomniReport = await runBiomniCoScientist(
+          manualPrompt,
+          {
+            ...currentProject,
+            gene: resolvedGene,
+            geneMeta: geneMeta || { geneSymbol: resolvedGene },
+            genbankRaw,
+            editType,
+            mutation,
+            tag: resolvedTag,
+            homologyArmLength,
+            options
+          },
+          {
+            intentOverride: {
+              gene: resolvedGene,
+              editType,
+              mutation,
+              tag: resolvedTag,
+              enzyme: enzyme || "spcas9",
+              compareAllEnzymes: false
+            },
+            initialDesignResult: result,
+            preloadedLindel: koLindel || null,
+            preserveCustomGuides: Boolean(customGuidesOverride?.length)
+          }
+        );
+        if (biomniReport?.designResult && !biomniReport.designResult.err) {
+          result = biomniReport.designResult;
+        }
+      } catch {
+        // Keep primary design result if Biomni enrichment fails
+      }
+
       result.procurement = summarizeProcurementReadiness(result);
       const svgScheme = buildDesignSchemeSvg(result);
       const caption = buildDesignSchemeCaption(result);
 
       const updated = {
-        gene: geneMeta?.geneSymbol || geneInput.trim(),
+        gene: resolvedGene,
         editType,
         mutation,
         tag: resolvedTag,
@@ -463,7 +509,8 @@ export function DesignView({
         designResult: result,
         svgScheme,
         caption,
-        status: result.procurement?.status || "review"
+        status: result.procurement?.status || "review",
+        ...(biomniReport ? { biomniReport } : {})
       };
 
       onUpdateProject(updated);
@@ -1003,6 +1050,33 @@ export function DesignView({
                 </button>
               </div>
             </div>
+
+            {(currentProject?.biomniReport || designResult?.panIsoformMeta) && (
+              <div style={{ padding: "0.65rem 1.25rem", background: "#f0f9ff", borderBottom: "1px solid #bae6fd", fontSize: "0.84rem", color: "#0f172a", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem" }}>
+                <span style={{ fontWeight: 700, color: "#0369a1" }}>🧬 Biomni Co-Scientist Integrated:</span>
+                {designResult?.panIsoformMeta && (
+                  <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: designResult.panIsoformMeta.isCommonExon ? "#dcfce7" : "#fef3c7", color: designResult.panIsoformMeta.isCommonExon ? "#166534" : "#92400e", fontWeight: 600 }}>
+                    Coding Exon {designResult.panIsoformMeta.targetCodingExon} · {designResult.panIsoformMeta.sharedIsoforms}/{designResult.panIsoformMeta.totalIsoforms} isoforms ({designResult.panIsoformMeta.coveragePct}%)
+                    {designResult.panIsoformMeta.isCommonExon ? " · ✓ NMD-Safe Common Exon" : ""}
+                  </span>
+                )}
+                {designResult?.singleCdsDefault && (
+                  <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1", fontWeight: 600 }}>
+                    Upgraded from single-CDS {designResult.singleCdsDefault.exon} → Pan-isoform {designResult.exon}
+                  </span>
+                )}
+                {currentProject?.biomniReport?.lindelRanking?.brunelloComparison?.some(b => b.selectedInAssuredPair) && (
+                  <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: "#f3e8ff", color: "#6b21a8", fontWeight: 600 }}>
+                    📚 Matches Broad GPP Brunello Library
+                  </span>
+                )}
+                {currentProject?.biomniReport?.screeningPower?.ok && (
+                  <span style={{ color: "#334155" }}>
+                    <strong>Screening Power:</strong> ~{currentProject.biomniReport.screeningPower.predictedBiallelicClonePct}% biallelic → screen <strong>{currentProject.biomniReport.screeningPower.recommendedClonesToScreen} clones</strong> ({currentProject.biomniReport.screeningPower.plates96Well} × 96-well plate)
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Single Authoritative ASSURED Design Report */}
             <div style={{ padding: "0.4rem" }}>

@@ -44,10 +44,60 @@ export function generateReportHtml(project, designResult) {
     reviewItems,
     null
   );
-  return appendWorkflowRecommendation(html, designResult.workflowRecommendation);
+  const withBiomni = appendBiomniSummary(html, project?.biomniReport, designResult);
+  return appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation);
 }
 
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+export function appendBiomniSummary(html, biomniReport, designResult) {
+  const panMeta = designResult?.panIsoformMeta;
+  if (!biomniReport && !panMeta) return html;
+  const iso = biomniReport?.isoformAnalysis;
+  const sp = biomniReport?.screeningPower;
+  const brunello = biomniReport?.lindelRanking?.brunelloComparison || [];
+  const rescue = biomniReport?.lindelRanking?.nmdEscapeRescue;
+  const upg = designResult?.singleCdsDefault || panMeta?.singleCdsDefault;
+
+  const lines = [];
+  if (panMeta) {
+    lines.push(
+      `<p style="margin:4px 0"><strong>Pan-Isoform Target Exon:</strong> Coding Exon ${escapeHtml(panMeta.targetCodingExon)} — shared across <strong>${escapeHtml(panMeta.sharedIsoforms)}/${escapeHtml(panMeta.totalIsoforms)} (${escapeHtml(panMeta.coveragePct)}%)</strong> protein-coding isoforms (${panMeta.isCommonExon ? "✓ NMD-Safe Common Exon" : panMeta.isTerminalExon ? "⚠ Terminal Exon" : "⚠ Partial/Escape Exon"}).</p>`
+    );
+  } else if (iso?.ok) {
+    lines.push(
+      `<p style="margin:4px 0"><strong>Isoform Exon Architecture:</strong> Evaluated ${escapeHtml(iso.codingExonCount)} coding exons across ${escapeHtml(iso.isoformCount)} protein-coding isoforms (${escapeHtml(iso.source)}); NMD-safe common KO exons: ${escapeHtml((iso.recommendedCommonKoExons || []).map(n => `Exon ${n}`).join(", ") || "none")}.</p>`
+    );
+  }
+  if (upg) {
+    lines.push(
+      `<p style="margin:4px 0;color:#0369a1"><strong>Biomni Pan-Isoform Upgrade Applied:</strong> Single-transcript default selected ${escapeHtml(upg.exon)} (${escapeHtml((upg.guides || []).join(" + "))}); automatically upgraded to pan-isoform NMD-safe ${escapeHtml(designResult?.exon || "")}.</p>`
+    );
+  }
+  if (brunello.length > 0) {
+    const matched = brunello.filter(b => b.selectedInAssuredPair);
+    lines.push(
+      `<p style="margin:4px 0"><strong>Broad GPP Brunello Library (Addgene #73178) Cross-Reference:</strong> ${
+        matched.length > 0
+          ? `${matched.length} selected guide(s) directly match Brunello whole-genome library (${escapeHtml(matched.map(m => `${m.spacer} [Brunello #${m.brunelloRank}]`).join(", "))}).`
+          : `Evaluated ${brunello.length} Brunello reference guides (${escapeHtml(brunello.map(b => `${b.spacer} [Exon ${b.exon}, ${b.panelTier}]`).join("; "))}).`
+      }</p>`
+    );
+  }
+  if (rescue?.isNmdBlindLocus) {
+    lines.push(
+      `<p style="margin:4px 0;color:#92400e"><strong>NMD-Escape Locus Rescue:</strong> ${escapeHtml(rescue.reason)} Use dual-guide excision or 5′ terminal-exon early truncation (&lt;50% retained CDS).</p>`
+    );
+  }
+  if (sp?.ok) {
+    lines.push(
+      `<p style="margin:4px 0"><strong>Clonal Screening Power (${escapeHtml(sp.mode)}):</strong> Predicted biallelic clone yield ~<strong>${escapeHtml(sp.predictedBiallelicClonePct)}%</strong> → Screen <strong>${escapeHtml(sp.recommendedClonesToScreen)} clones</strong> (${escapeHtml(sp.plates96Well)} × 96-well plate) for ≥95% probability of recovering ≥2 verified clones.</p>`
+    );
+  }
+  if (!lines.length) return html;
+  const section = `<section style="margin:16px 20px;padding:12px 16px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;font-family:system-ui,sans-serif;font-size:13px;color:#0f172a"><div style="font-weight:700;color:#0369a1;margin-bottom:4px">🧬 ASSURED-Biomni Co-Scientist Integrated Verification</div>${lines.join("")}</section>`;
+  return html.replace(/<body[^>]*>/i, body => body + section);
+}
 export function appendWorkflowRecommendation(html, audit) {
   if (!isAgentAudit(audit)) return html;
   const selected = audit.candidates.find(c => c.enzyme === audit.selectedEnzyme);

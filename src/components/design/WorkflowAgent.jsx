@@ -10,10 +10,10 @@ export function WorkflowAgent({ project, onUpdateProject }) {
   const [report, setReport] = useState(null);
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
-  const [biomniPrompt, setBiomniPrompt] = useState(() => BIOMNI_PRESET_MISSIONS[0].prompt);
+  const [biomniPrompt, setBiomniPrompt] = useState(() => project?.biomniReport?.prompt || BIOMNI_PRESET_MISSIONS[0].prompt);
   const [biomniRunning, setBiomniRunning] = useState(false);
   const [biomniProgress, setBiomniProgress] = useState(null);
-  const [biomniResult, setBiomniResult] = useState(null);
+  const [biomniResult, setBiomniResult] = useState(() => project?.biomniReport || null);
   const [biomniError, setBiomniError] = useState("");
   const worker = useRef(null);
   const panel = useRef(null);
@@ -29,31 +29,18 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     return () => { worker.current?.terminate(); worker.current = null; };
   }, [requestKey]);
 
-  const runCoScientist = async (customPrompt) => {
-    const activePrompt = (typeof customPrompt === "string" ? customPrompt : biomniPrompt).trim();
-    if (!activePrompt || biomniRunning) return;
-    if (typeof customPrompt === "string") setBiomniPrompt(customPrompt);
-    setBiomniRunning(true);
-    setBiomniError("");
-    setBiomniResult(null);
-    setBiomniProgress({ completedSteps: [], currentStep: { title: "Initializing ASSURED-E1 Biomedical Environment..." }, totalSteps: 5 });
-    try {
-      const res = await runBiomniCoScientist(activePrompt, project, {
-        onStep: (stepState) => setBiomniProgress(stepState),
-      });
-      setBiomniResult(res);
-      setBiomniProgress(null);
-    } catch (e) {
-      setBiomniError(e.message || String(e));
-      setBiomniProgress(null);
-    } finally {
-      setBiomniRunning(false);
+  useEffect(() => {
+    if (project?.biomniReport) {
+      setBiomniResult(project.biomniReport);
+      if (project.biomniReport.prompt) setBiomniPrompt(project.biomniReport.prompt);
+    } else {
+      setBiomniResult(null);
     }
-  };
+  }, [project?.biomniReport]);
 
-  const applyBiomniToWorkbench = () => {
-    if (!biomniResult?.designResult) return;
-    const { intent, geneMeta, genbankRaw, designResult, enzymeComparison } = biomniResult;
+  const syncBiomniResultToProject = (res, scrollToReport = false) => {
+    if (!res?.designResult || res.designResult.err) return;
+    const { intent, geneMeta, genbankRaw, designResult, enzymeComparison } = res;
     const config = ENZYMES[intent.enzyme] || ENZYMES.spcas9;
     const audit = enzymeComparison ? agentAudit(enzymeComparison, intent.enzyme) : null;
     const result = audit ? { ...designResult, workflowRecommendation: audit } : designResult;
@@ -77,13 +64,43 @@ export function WorkflowAgent({ project, onUpdateProject }) {
       svgScheme: buildDesignSchemeSvg(result),
       caption: buildDesignSchemeCaption(result),
       status: result.procurement?.status || "review",
+      biomniReport: res,
       ...(audit ? { workflowRecommendation: audit } : {}),
     });
-    requestAnimationFrame(() => {
-      const target = document.getElementById("bench-design-report");
-      target?.focus({ preventScroll: true });
-      target?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-    });
+    if (scrollToReport) {
+      requestAnimationFrame(() => {
+        const target = document.getElementById("bench-design-report");
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+      });
+    }
+  };
+
+  const runCoScientist = async (customPrompt) => {
+    const activePrompt = (typeof customPrompt === "string" ? customPrompt : biomniPrompt).trim();
+    if (!activePrompt || biomniRunning) return;
+    if (typeof customPrompt === "string") setBiomniPrompt(customPrompt);
+    setBiomniRunning(true);
+    setBiomniError("");
+    setBiomniResult(null);
+    setBiomniProgress({ completedSteps: [], currentStep: { title: "Initializing ASSURED-E1 Biomedical Environment..." }, totalSteps: 5 });
+    try {
+      const res = await runBiomniCoScientist(activePrompt, project, {
+        onStep: (stepState) => setBiomniProgress(stepState),
+      });
+      setBiomniResult(res);
+      setBiomniProgress(null);
+      syncBiomniResultToProject(res, false);
+    } catch (e) {
+      setBiomniError(e.message || String(e));
+      setBiomniProgress(null);
+    } finally {
+      setBiomniRunning(false);
+    }
+  };
+
+  const applyBiomniToWorkbench = () => {
+    syncBiomniResultToProject(biomniResult, true);
   };
 
   const compare = () => {
@@ -255,10 +272,9 @@ export function WorkflowAgent({ project, onUpdateProject }) {
               </div>
               {biomniResult.designResult?.singleCdsDefault && (
                 <div className="muted" style={{ marginTop: "0.3rem", fontSize: "0.78rem" }}>
-                  <strong>Why Biomni differs from Single-Transcript Manual Selection:</strong> Manual design evaluates only the single canonical CDS in the GenBank file and selects{" "}
-                  <code>{biomniResult.designResult.singleCdsDefault.exon}</code> ({biomniResult.designResult.singleCdsDefault.guides.join(" + ")}), whereas Biomni queries all{" "}
-                  {biomniResult.isoformAnalysis.totalIsoforms} RefSeq isoforms and upgrades to{" "}
-                  <code>{biomniResult.designResult.exon}</code> for higher pan-isoform NMD coverage.
+                  <strong>Biomni Pan-Isoform Exon Upgrade Applied:</strong> Single-transcript GenBank CDS analysis initially selected{" "}
+                  <code>{biomniResult.designResult.singleCdsDefault.exon}</code> ({biomniResult.designResult.singleCdsDefault.guides.join(" + ")}), and Biomni automatically upgraded the design to{" "}
+                  <code>{biomniResult.designResult.exon}</code> across all {biomniResult.isoformAnalysis.totalIsoforms} RefSeq isoforms for higher pan-isoform NMD coverage.
                 </div>
               )}
             </div>
