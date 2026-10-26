@@ -92,7 +92,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
           {Object.entries(AGENT_PRIORITIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>
       </label>
-      {project.editType === "ko" && <p>SpCas9 guide pairs use Lindel repair outcomes when available. Cross-enzyme ordering uses nominal frameshift and exon-skipping evidence, then primer checks; it does not compare Lindel percentages. Repair outcomes can differ.</p>}
+      {project.editType === "ko" && <p>Knockout options are prioritized by predicted functional protein loss for both guides and their joint deletion, then coverage of annotated isoforms. SpCas9 guide-pair selection also uses Lindel when available. Geometry breaks later ties; Lindel percentages are not compared across enzymes.</p>}
       <p className="muted">Blocked or incomplete designs are excluded first. Activity scores are not compared across enzymes. Custom guides and previous risk acceptance are not reused.</p>
     </details>
     {inputError && <p className="muted">{inputError}</p>}
@@ -106,6 +106,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
       <div className="agent-summary" aria-live="polite">
         <h3>{recommended.length ? `Recommended for design review: ${recommended.map(c => c.name).join(", ")}` : "No option can be recommended with these inputs"}</h3>
         {recommended.length > 1 && <p><strong>Equally supported options.</strong> These designs are tied; numbers indicate display order.</p>}
+        {project.editType === "ko" && report?.requestKey === requestKey && recommended.length > 0 && !recommended.some(c => c.metrics?.knockoutFunctionalTier === "robust") && <p>No robust two-guide protein-loss plan was found among these options. Review the weaker assessments before proceeding.</p>}
         <p className="agent-review-note">Design review only. Experimental performance and genome-wide specificity remain unverified.</p>
         {report?.requestKey !== requestKey && <p className="muted">Saved recommendation. Compare again to evaluate changed settings.</p>}
       </div>

@@ -3,9 +3,10 @@ import { runDesign, summarizeProcurementReadiness, summarizePrimerReadiness } fr
 import { isTwoGuidePolicy } from "../engine/design/genomicBlocking.js";
 import { designGenomicSnp } from "../engine/design/genomicSnp.js";
 import { normalizeGenomicDesign } from "./genomicDesignResult.js";
+import { KO_TIER_RANK, describeKoTier } from "../engine/design/koOutcomes.js";
 import { getReleaseVerdict } from "../engine/design/releaseVerdict.js";
 
-export const WORKFLOW_AGENT_VERSION = "1.2.0";
+export const WORKFLOW_AGENT_VERSION = "1.3.0";
 export const AGENT_EVIDENCE_GAPS = Object.freeze([
   "Measured editing or HDR efficiency in your cell type and delivery conditions.",
   "Calibrated experimental activity comparisons between these enzymes.",
@@ -65,6 +66,10 @@ export function summarizeAgentCandidate(enzyme, result, type) {
     distance: type === "ko" ? null : distances.length ? Math.min(...distances) : null,
     strongPairs: strong, totalPairs: pairs.length,
     protectionPenalty: type === "ko" ? 0 : pairs.length ? 1 - strong / pairs.length : 1,
+    knockoutFunctionalTier: type === "ko" ? result.koAssessment?.tier || "unmodelled" : null,
+    knockoutTierRank: type === "ko" ? KO_TIER_RANK[result.koAssessment?.tier] ?? KO_TIER_RANK.unmodelled : null,
+    knockoutIsoformGapScore: type === "ko" && Number.isFinite(result.koAssessment?.isoformGapScore) ? result.koAssessment.isoformGapScore : null,
+    knockoutIsoformGaps: type === "ko" ? result.koAssessment?.isoformGaps || [] : [],
     knockoutPenalty: type === "ko" ? result.deletionOutcome?.frameshiftPredicted ? 0
       : result.deletionOutcome?.spliceDonorRemoved && result.deletionOutcome?.exonSkippingFrameshiftPredicted ? 1 : 2 : null,
     spacerLength: guides[0]?.sp?.length || config.spacer_len.default,
@@ -88,6 +93,11 @@ export function summarizeAgentCandidate(enzyme, result, type) {
       ? `SpCas9 guide pairs were selected using Lindel repair outcomes and protein-loss rules. The weaker guide has ${outcomes.minLofPct}% predicted loss-of-function alleles; this is not cutting efficiency or a cross-enzyme performance score.`
       : `Repair-outcome ranking was not applied: ${repairOutcomeModel.reason}`);
   }
+  if (type === "ko") {
+    const assessment = result.koAssessment;
+    reasons.unshift(`Functional knockout assessment: ${metrics.knockoutFunctionalTier}. ${describeKoTier(metrics.knockoutFunctionalTier)} Both guides acting alone and the deletion between them are assessed.${assessment?.isoformGaps?.length ? " Potential escape among annotated isoforms: " + assessment.isoformGaps.join(", ") + "." : " No isoform escape was identified in the available annotations."}`);
+    if (!assessment) reasons[0] = "Functional knockout assessment is unavailable; this plan has not been evaluated for protein loss.";
+  }
   return { enzyme, name: config.name, pam: config.pam_pattern, eligible, status: verdict.status,
     repairOutcomeModel, reasons, warnings: verdict.warnings, standingRequirements: verdict.standingRequirements, metrics, result };
 }
@@ -96,7 +106,12 @@ function rankKey(candidate, priority) {
   const m = candidate.metrics;
   if (!m) return [2];
   const readiness = candidate.status === "ready" ? 0 : candidate.status === "review" ? 1 : 2;
-  if (candidate.result?.type === "ko") return [candidate.eligible ? 0 : 1, readiness, m.knockoutPenalty ?? 2, m.primersReady ? 0 : 1];
+  if (candidate.result?.type === "ko") return [
+    candidate.eligible ? 0 : 1,
+    m.knockoutTierRank ?? KO_TIER_RANK.unmodelled,
+    m.knockoutIsoformGapScore ?? Infinity,
+    readiness, m.knockoutPenalty ?? 2, m.primersReady ? 0 : 1,
+  ];
   const distance = m.distance ?? (candidate.result?.type === "ko" ? 0 : Infinity);
   const order = priority === "closest" ? [distance, m.protectionPenalty, m.extraChanges]
     : priority === "minimalChanges" ? [m.extraChanges, distance, m.protectionPenalty]
@@ -165,7 +180,7 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
     inputs: { gene: request.gene, editType: request.editType, mutation: request.mutation, tag: request.tag,
       homologyArmLength: request.homologyArmLength, options: request.options, ...(request.variant ? { variant: request.variant } : {}) },
     knockoutPairSelection: "SpCas9 uses the shared protein-loss assessment and Lindel repair-outcome ranking when its model is available. Missing Lindel predictions are recorded, not assigned zero. Other enzymes do not receive SpCas9-trained repair predictions.",
-    knockoutRanking: "Cross-enzyme ordering does not compare Lindel percentages. Within release gates: nominal frameshift, then splice-donor removal with frame-disrupting exon skipping, then other two-guide plans; then primer checks. This is mechanistic evidence, not a knockout probability.",
+    knockoutRanking: "Exclude blocked or incomplete plans, then prefer the shared functional protein-loss tier of the whole pair, then fewer gaps among annotated isoforms. Release status, nominal deletion geometry and primer checks break remaining ties. The pair tier includes each guide acting alone and the deletion between the cuts. Lindel percentages are not compared across enzymes.",
     rankingRule: "Eligible designs and configured release gates first; then selected priority; then primer readiness. Exact ties are retained.",
     priority: request.priority, enzymesCompared: request.enzymes,
     excludedEnzymes: Object.keys(ENZYMES).filter(id => !request.enzymes.includes(id)),

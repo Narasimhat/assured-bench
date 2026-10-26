@@ -22,8 +22,10 @@ test("agent loads Lindel for SpCas9 and selects exactly the standard outcome-ran
   assert.deepEqual(candidate.result.gs.map(g => g.sp), standard.gs.map(g => g.sp));
   assert.ok(candidate.result.koAssessment.outcomes.minLofPct > 85);
   assert.equal(candidate.repairOutcomeModel.status, "applied");
+  assert.equal(candidate.metrics.knockoutFunctionalTier, candidate.result.koAssessment.tier);
+  assert.equal(candidate.metrics.knockoutIsoformGapScore, candidate.result.koAssessment.isoformGapScore);
   assert.equal(candidate.metrics.koMinLofPct, standard.koAssessment.outcomes.minLofPct);
-  assert.ok(candidate.reasons[0].includes("not cutting efficiency"));
+  assert.ok(candidate.reasons.some(reason => reason.includes("not cutting efficiency")));
   assert.ok(progress.some(p => p.phase === "loading_model"));
   assert.equal(agentAudit(report, "spcas9").candidates[0].repairOutcomeModel.status, "applied");
   const checked = validateDesignSpec(buildQcDesignSpec(candidate.result));
