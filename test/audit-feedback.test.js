@@ -14,6 +14,7 @@ import { makeCutMapper, coverageAtCut, genomicPositionOfCut, summariseCutCoverag
 import { runBiomniCoScientist } from "../src/services/biomniAgent.js";
 import { appendBiomniSummary } from "../src/services/designExport.js";
 import { buildCasOffinderInput } from "../src/services/offTargetExport.js";
+import { exonLabel, exonListLabel, exonOffset } from "../src/services/exonLabels.js";
 
 const fixtures = JSON.parse(fs.readFileSync(new URL("./fixtures/isoform-evidence.json", import.meta.url), "utf8")).genes;
 const record = gene => fs.readFileSync(new URL(`../public/references/${fixtures[gene].file}`, import.meta.url), "utf8");
@@ -40,16 +41,23 @@ function replayFetch(gene) {
   };
 }
 
-test("exon numbering: the banner names the coding exon and the annotated transcript exon separately", () => {
+test("exon numbering: the banner, the guide notes and the picker name the same exon, annotated transcript exon first", () => {
   const result = runDesign("ko", record("TP53"), "", "", "", koOptions("TP53"));
   assert.ok(!result.err, result.err);
-  const m = /^Exon (\d+) \(coding exon; exon (\d+) of the annotated transcript, \d+-\d+, \d+ bp\)$/.exec(result.exon);
+  const m = /^Exon (\d+) \(coding exon (\d+), \d+-\d+, \d+ bp\)$/.exec(result.exon);
   assert.ok(m, `unexpected banner: ${result.exon}`);
-  assert.equal(result.codingExon, Number(m[1]));
-  assert.equal(result.transcriptExon, Number(m[2]));
+  assert.equal(result.transcriptExon, Number(m[1]));
+  assert.equal(result.codingExon, Number(m[2]));
   // TP53's first coding exon is the second exon of the transcript
   assert.equal(result.transcriptExon, result.codingExon + 1);
-  assert.ok(result.gs.every(g => !/coding exon/.test(g.nt || "") || new RegExp(`coding exon ${result.codingExon}\\)`).test(g.nt)), "guide notes use the same numbering");
+  // the guides' notes lead with the same number and carry the same bracket (a guide pair may span two exons only if the user chose it)
+  for (const g of result.gs) assert.match(g.note, new RegExp(`exon ${result.transcriptExon} \\(coding exon ${result.codingExon}\\)`), g.note);
+  // the picker rows lead with the annotated number too
+  const row = result.koPicker.rows.find(r => r.spacer === result.gs[0].sp);
+  assert.equal(row.transcriptExon, result.transcriptExon); assert.equal(row.exon, result.codingExon);
+  assert.equal(exonLabel(2, 1), "exon 3 (coding exon 2)"); assert.equal(exonLabel(2, null), "coding exon 2");
+  assert.equal(exonListLabel([3, 4, 5], 1), "exons 4, 5, 6 (coding exons 3, 4, 5)"); assert.equal(exonListLabel([2], 0), "exon 2 (coding exon 2)"); assert.equal(exonListLabel([], 1), "");
+  assert.equal(exonOffset(result), 1); assert.equal(exonOffset({}), null);
 });
 
 test("a knockout is never 'ready' for procurement, including a pair chosen by hand", () => {

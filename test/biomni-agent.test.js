@@ -172,7 +172,7 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
     manualBiomni.designResult
   );
   assert.match(reportHtml, /ASSURED-Biomni Co-Scientist Integrated Verification/);
-  assert.match(reportHtml, /coding exon 2 is present in \d+ of \d+ RefSeq coding isoforms/);
+  assert.match(reportHtml, /exon 2 \(coding exon 2\) is present in \d+ of \d+ RefSeq coding isoforms/);
   assert.doesNotMatch(reportHtml, /\(100%\)/, "an exon-level share is not reported as a percentage of isoforms covered");
   assert.match(reportHtml, /Broad GPP Brunello Library/);
   assert.match(reportHtml, /Wet-Lab Pre-Sequencing Genotyping Assay/);

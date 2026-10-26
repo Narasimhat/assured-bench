@@ -992,7 +992,7 @@ export async function runBiomniCoScientist(
             return Math.min(...parts.map(c => (c.total ? c.covered / c.total : 1)));
           };
         })();
-        const exonOf = (design) => { const m = String(design?.exon || "").match(/Exon\s+(\d+)/i); return m ? Number(m[1]) : null; };
+        const exonOf = (design) => (Number.isFinite(design?.codingExon) ? design.codingExon : null);
         const informedOptions = { ...options, ...(commonKoExons ? { commonKoExons } : {}), ...(cutCoverageFn ? { cutCoverage: cutCoverageFn } : {}) };
         const handedOver = initialDesignResult && !initialDesignResult.err;
         // One selector (koSelection.js) chooses the guides; the pan-isoform exons and the per-cut isoform coverage are inputs to it. A design handed over by Manual Design was
@@ -1019,12 +1019,12 @@ export async function runBiomniCoScientist(
 
         if (res && !res.err) {
           res.procurement = summarizeProcurementReadiness(res);
-          const exonMatch = String(res.exon || "").match(/Exon\s+(\d+)/i);
-          const targetCodingExon = exonMatch ? Number(exonMatch[1]) : null;
+          const targetCodingExon = Number.isFinite(res.codingExon) ? res.codingExon : null;
           const exonMeta = isoformAnalysis?.exons?.find(x => x.codingExon === targetCodingExon) || null;
           if (exonMeta) {
             res.panIsoformMeta = {
               targetCodingExon,
+              transcriptExon: res.transcriptExon ?? null,
               sharedIsoforms: exonMeta.sharedIsoforms,
               totalIsoforms: exonMeta.totalIsoforms,
               coveragePct: exonMeta.coveragePct,

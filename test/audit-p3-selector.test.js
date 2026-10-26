@@ -130,7 +130,7 @@ test("Co-Scientist, one selector: the design is the selector's own pair, the tab
 
 test("Manual Design hands over a design made before the isoform analysis: when its exon is not a common one the same selector runs again with that evidence, and the report says so", async () => {
   const initial = runDesign("ko", TP53, "", "", "", { enzyme: "spcas9", expectedGene: "TP53", koLindel: lindel });
-  const exonNow = Number(/Exon\s+(\d+)/.exec(initial.exon)[1]);
+  const exonNow = initial.codingExon;
   const calls = [];
   const spy = (...args) => { calls.push(args[5]?.commonKoExons ?? null); return runDesign(...args); };
   // a record whose pan-isoform analysis recommends only exons other than the one chosen

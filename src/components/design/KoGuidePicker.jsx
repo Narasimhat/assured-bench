@@ -63,7 +63,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
           <thead style={{ position: "sticky", top: 0, background: "var(--bg-card, #fff)" }}>
             <tr>
-              {["", "Rank", "Spacer (5\u2032 \u2192 3\u2032)", "Strand", "Cut (coding exon + nt)", "GC", "Tier", "Predicted LoF", "Frameshift", "+1 insertion", "In-frame", "Other isoforms left intact", ...(hasCoverage ? ["Annotated transcripts with the cut"] : []), ""].map((label, i) => (
+              {["", "Rank", "Spacer (5\u2032 \u2192 3\u2032)", "Strand", "Cut (exon + nt)", "GC", "Tier", "Predicted LoF", "Frameshift", "+1 insertion", "In-frame", "Other isoforms left intact", ...(hasCoverage ? ["Annotated transcripts with the cut"] : []), ""].map((label, i) => (
                 <th key={i} style={{ padding: 6, textAlign: "left", whiteSpace: "nowrap" }} title={label === "Other isoforms left intact" ? OTHER_ISOFORMS_NOTE : undefined}>{label}</th>
               ))}
             </tr>
@@ -77,7 +77,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
                   <td style={{ padding: 6 }}>#{row.rank}</td>
                   <td style={{ padding: 6, fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{row.spacer} <span style={{ color: "var(--warning)" }}>{row.pam}</span></td>
                   <td style={{ padding: 6 }}>{row.strand}</td>
-                  <td style={{ padding: 6, whiteSpace: "nowrap" }} title="Coding exon: counted from the first exon of the coding sequence, not the annotated transcript exon number">Exon {row.exon} +{row.offsetInExon}</td>
+                  <td style={{ padding: 6, whiteSpace: "nowrap" }} title="Exon number of the annotated transcript, with the coding-exon index (counted from the first exon that has coding sequence) in brackets; then the bases into that coding exon">{row.transcriptExon ? <>Exon {row.transcriptExon} (coding {row.exon})</> : <>Coding exon {row.exon}</>} +{row.offsetInExon}</td>
                   <td style={{ padding: 6, whiteSpace: "nowrap" }}>{row.gc}%{row.gcPenaltyPts ? <span className="muted" title="Points subtracted from the predicted loss of function for ranking"> (&minus;{row.gcPenaltyPts})</span> : null}</td>
                   <td style={{ padding: 6 }} title={TIER_NOTE[row.tier]}>{row.tier}</td>
                   <td style={{ padding: 6 }}><strong>{fmt(row.lofPct)}</strong></td>

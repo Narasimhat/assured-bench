@@ -30,7 +30,7 @@ When transcript evidence changes the pair, the report names the pair without it,
 
 ## Exon numbering
 
-A result names the exon twice: `Exon N (coding exon; exon M of the annotated transcript, a-b, L bp)`. N counts coding exons from the first exon with coding sequence; M is the exon number in the annotated transcript, so for a gene whose first exon is untranslated M = N + 1. The guide picker and the isoform text use the coding-exon number.
+One convention everywhere (`src/services/exonLabels.js`): the exon number of the annotated transcript first, the coding-exon index in brackets: `Exon 3 (coding exon 2, 20259-20377, 119 bp)` in the banner and report, `exon 3 (coding exon 2)` in the guide notes, `Exon 3 (coding 2)` in the picker, `exon 3 (coding exon 2) is present in 9 of 10 RefSeq coding isoforms` in the isoform text. The coding-exon index counts from the first exon that has coding sequence, so for a gene whose first exon is untranslated the annotated number is the index plus one (SCN5A coding exon 2 is exon 3; TP53 coding exon 4 is exon 5). The annotated number is the one used in papers, ClinVar and the Brunello library ("library exon" in the Co-Scientist table). Results carry both as `transcriptExon` and `codingExon`; code reads those fields, never the banner text. Without an annotated exon number in the record the label is `Coding exon N`. Lists of common exons from the isoform analysis are coding-exon indices and are shown with their annotated numbers (`exons 4, 5, 6 (coding exons 3, 4, 5)`).
 
 ## Reports and traceability
 

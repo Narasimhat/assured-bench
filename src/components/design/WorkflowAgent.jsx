@@ -6,6 +6,7 @@ import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentA
 import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAssay, parseBiomniPrompt } from "../../services/biomniAgent.js";
 import { screenTargetVariants } from "../../services/variantScreen.js";
 import { describeViability } from "../../services/geneViability.js";
+import { exonListLabel, exonOffset } from "../../services/exonLabels.js";
 import { describeCutCoverage } from "../../services/isoformCoverage.js";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 
@@ -309,11 +310,11 @@ export function WorkflowAgent({ project, onUpdateProject }) {
             <div style={{ marginTop: "0.5rem", fontSize: "0.88rem", padding: "0.5rem 0.65rem", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
               <strong>🧬 Pan-Isoform Common Exon Analysis ({biomniResult.isoformAnalysis.totalIsoforms} Coding Isoform{biomniResult.isoformAnalysis.totalIsoforms === 1 ? "" : "s"} · {biomniResult.isoformAnalysis.source}):</strong>
               <div style={{ marginTop: "0.25rem" }}>
-                Recommended NMD-Safe Common Coding Exon(s):{" "}
+                Recommended NMD-safe common exon(s):{" "}
                 <strong>
                   {biomniResult.isoformAnalysis.recommendedCommonKoExons?.length
-                    ? biomniResult.isoformAnalysis.recommendedCommonKoExons.map(n => `Exon ${n}`).join(", ")
-                    : "Exon 1"}
+                    ? exonListLabel(biomniResult.isoformAnalysis.recommendedCommonKoExons, exonOffset(biomniResult.designResult))
+                    : "none found"}
                 </strong>
                 {biomniResult.designResult?.exon && (
                   <span> · Selected Workbench Target: <code>{biomniResult.designResult.exon}</code></span>

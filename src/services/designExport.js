@@ -12,6 +12,7 @@ import { buildGenomicSnpReport } from "../engine/design/genomicSnp.js";
 import { describeViability } from "./geneViability.js";
 import { describeCutCoverage } from "./isoformCoverage.js";
 import { buildCasOffinderInput } from "./offTargetExport.js";
+import { exonLabel, exonListLabel, exonOffset } from "./exonLabels.js";
 
 /**
  * Generate full standalone HTML report string
@@ -65,11 +66,11 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   const lines = [];
   if (panMeta) {
     lines.push(
-      `<p style="margin:4px 0"><strong>Exon-level isoform sharing:</strong> coding exon ${escapeHtml(panMeta.targetCodingExon)} is present in ${escapeHtml(panMeta.sharedIsoforms)} of ${escapeHtml(panMeta.totalIsoforms)} RefSeq coding isoforms in the reference used (${panMeta.isCommonExon ? "an exon shared by all of them" : panMeta.isTerminalExon ? "terminal exon: nonsense-mediated decay is not expected" : "not shared by all of them"}). This is a property of the exon; whether each guide cuts inside every annotated transcript is listed separately below.</p>`
+      `<p style="margin:4px 0"><strong>Exon-level isoform sharing:</strong> ${escapeHtml(exonLabel(panMeta.targetCodingExon, Number.isFinite(panMeta.transcriptExon) ? panMeta.transcriptExon - panMeta.targetCodingExon : null))} is present in ${escapeHtml(panMeta.sharedIsoforms)} of ${escapeHtml(panMeta.totalIsoforms)} RefSeq coding isoforms in the reference used (${panMeta.isCommonExon ? "an exon shared by all of them" : panMeta.isTerminalExon ? "terminal exon: nonsense-mediated decay is not expected" : "not shared by all of them"}). This is a property of the exon; whether each guide cuts inside every annotated transcript is listed separately below.</p>`
     );
   } else if (iso?.ok) {
     lines.push(
-      `<p style="margin:4px 0"><strong>Isoform Exon Architecture:</strong> Evaluated ${escapeHtml(iso.codingExonCount)} coding exons across ${escapeHtml(iso.isoformCount)} protein-coding isoforms (${escapeHtml(iso.source)}); NMD-safe common KO exons: ${escapeHtml((iso.recommendedCommonKoExons || []).map(n => `Exon ${n}`).join(", ") || "none")}.</p>`
+      `<p style="margin:4px 0"><strong>Isoform Exon Architecture:</strong> Evaluated ${escapeHtml(iso.codingExonCount)} coding exons across ${escapeHtml(iso.isoformCount)} protein-coding isoforms (${escapeHtml(iso.source)}); NMD-safe common KO exons: ${escapeHtml(exonListLabel(iso.recommendedCommonKoExons, exonOffset(designResult)) || "none")}.</p>`
     );
   }
   if (upg) {

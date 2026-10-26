@@ -30,6 +30,7 @@ import {
 } from "../../services/designExport.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
+import { exonLabel } from "../../services/exonLabels.js";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
@@ -1104,7 +1105,7 @@ export function DesignView({
                 <span style={{ fontWeight: 700, color: "#0369a1" }}>🧬 Biomni Co-Scientist Integrated:</span>
                 {designResult?.panIsoformMeta && (
                   <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: designResult.panIsoformMeta.isCommonExon ? "#dcfce7" : "#fef3c7", color: designResult.panIsoformMeta.isCommonExon ? "#166534" : "#92400e", fontWeight: 600 }}>
-                    Coding exon {designResult.panIsoformMeta.targetCodingExon} is in {designResult.panIsoformMeta.sharedIsoforms}/{designResult.panIsoformMeta.totalIsoforms} RefSeq isoforms
+                    {(() => { const text = exonLabel(designResult.panIsoformMeta.targetCodingExon, Number.isFinite(designResult.panIsoformMeta.transcriptExon) ? designResult.panIsoformMeta.transcriptExon - designResult.panIsoformMeta.targetCodingExon : null); return text.charAt(0).toUpperCase() + text.slice(1); })()} is in {designResult.panIsoformMeta.sharedIsoforms}/{designResult.panIsoformMeta.totalIsoforms} RefSeq isoforms
                     {designResult.panIsoformMeta.isCommonExon ? " · shared exon" : ""}
                   </span>
                 )}
