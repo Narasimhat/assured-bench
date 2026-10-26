@@ -65,6 +65,11 @@ test("coordinates are verified against dbSNP's reference alleles: a record place
   assert.equal(r.status, "not_assessed"); assert.match(r.reason, /did not agree with the record/);
 });
 
+test("an empty answer from dbSNP is not read as 'no variants': the coordinates cannot be verified, so nothing is claimed", async () => {
+  const empty = async (url) => ({ ok: true, status: 200, json: async () => (/esearch/.test(url) ? { esearchresult: { count: "0", idlist: [] } } : { result: {} }) });
+  const r = await screen({ fetchFn: empty }); assert.equal(r.status, "not_assessed"); assert.match(r.reason, /too few single-base variants/);
+});
+
 test("records without stated GRCh38 coordinates are not assessed, with the reason", async () => {
   const tp53 = read("public/references/tp53-NG_017013.2.gb");
   const d = runDesign("ko", tp53, "", "", 400, { deliveryMethod: "rnp", expectedGene: "TP53" });

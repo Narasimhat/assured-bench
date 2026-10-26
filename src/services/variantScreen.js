@@ -180,7 +180,11 @@ export async function screenTargetVariants({ gene, genbankRaw, designResult, fet
       lastTried = await attempt(orientation);
       if (lastTried.agree >= 3 && lastTried.disagree === 0) { chosen = lastTried; break; }
     }
-    if (!chosen) return notAssessed(`the reference bases dbSNP reports in these windows did not agree with the record (${lastTried?.agree ?? 0} agree, ${lastTried?.disagree ?? 0} differ), so the genomic coordinates could not be verified`);
+    if (!chosen) {
+      const seen = (lastTried?.agree ?? 0) + (lastTried?.disagree ?? 0);
+      return notAssessed(seen === 0 ? "dbSNP returned too few single-base variants in these windows to verify the genomic coordinates of the record"
+        : `the reference bases dbSNP reports in these windows did not agree with the record (${lastTried.agree} agree, ${lastTried.disagree} differ), so the genomic coordinates could not be verified`);
+    }
 
     const checkFor = (site) => {
       const list = chosen.windowIds.get(site) || []; const variants = [];

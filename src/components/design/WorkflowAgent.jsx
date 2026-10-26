@@ -351,21 +351,12 @@ export function WorkflowAgent({ project, onUpdateProject }) {
           {biomniResult.uniprot?.found && (
             <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
               <strong>UniProtKB ({biomniResult.uniprot.accession}):</strong> {biomniResult.uniprot.proteinName} ({biomniResult.uniprot.lengthAa} aa)
-              {biomniResult.uniprot.pLI != null && (
-                <span style={{ marginLeft: "0.45rem", padding: "0.1rem 0.45rem", borderRadius: "4px", fontSize: "0.78rem", background: biomniResult.uniprot.pLI >= 0.9 ? "#fef3c7" : "#dcfce7", color: biomniResult.uniprot.pLI >= 0.9 ? "#92400e" : "#166534", fontWeight: 600 }}>
-                  gnomAD pLI = {biomniResult.uniprot.pLI} · LOEUF = {biomniResult.uniprot.loeuf}
-                  {biomniResult.uniprot.depmapChronos != null ? ` · DepMap Chronos = ${biomniResult.uniprot.depmapChronos}` : ""}
-                </span>
-              )}
-              {biomniResult.uniprot.domains?.length > 0 && (
+              {biomniResult.uniprot.domains?.length > 0 ? (
                 <div className="muted">
-                  Domains/Sites: {biomniResult.uniprot.domains.map(d => `${d.description} (${d.start}–${d.end} aa)`).join(", ")}
+                  Domains/Sites annotated in UniProt: {biomniResult.uniprot.domains.map(d => `${d.description} (${d.start}–${d.end} aa)`).join(", ")}
                 </div>
-              )}
-              {biomniResult.uniprot.constraintSummary && (
-                <div style={{ fontSize: "0.8rem", color: "#334155", marginTop: "0.15rem" }}>
-                  🧬 <strong>Cell Fitness &amp; LoF Constraint:</strong> {biomniResult.uniprot.constraintSummary}
-                </div>
+              ) : (
+                <div className="muted">No domain, region or site is annotated in UniProt for this protein, so no cut is mapped to a domain. Gene constraint (gnomAD) and essentiality (DepMap) are not retrieved.</div>
               )}
             </div>
           )}
@@ -475,7 +466,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
               </div>
               {biomniResult.lindelRanking.brunelloComparison?.length > 0 && (
                 <div style={{ marginTop: "0.45rem", fontSize: "0.8rem", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "0.45rem 0.65rem" }}>
-                  <strong>📚 Broad GPP Brunello Whole-Genome CRISPRko Library Cross-Reference ({biomniResult.lindelRanking.brunelloComparison[0].libraryGene} · Addgene #73178):</strong>
+                  <strong>📚 Brunello library guides for {biomniResult.lindelRanking.brunelloComparison[0].libraryGene} (Addgene #73178; exon numbers and Rule Set 2 as given by the library; library guides are bundled for the genes with a reference record only):</strong>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.3rem" }}>
                     {biomniResult.lindelRanking.brunelloComparison.map(b => (
                       <span
@@ -487,7 +478,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                           border: b.selectedInAssuredPair ? "1px solid #16a34a" : "1px solid #fcd34d",
                         }}
                       >
-                        <strong>Brunello #{b.brunelloRank}</strong> <code>{b.spacer}</code> (Exon {b.exon}{b.isTerminalExon ? " · Terminal" : ""}{b.isoformCoverageLabel ? ` · ${b.isoformCoverageLabel}` : ""}, RS2 {b.ruleSet2}):{" "}
+                        <strong>Brunello #{b.brunelloRank}</strong> <code>{b.spacer}</code> (library exon {b.exon}{b.isTerminalExon ? " · Terminal" : ""}{b.isoformCoverageLabel ? ` · ${b.isoformCoverageLabel}` : ""}, RS2 {b.ruleSet2}):{" "}
                         {b.lindelRank ? (
                           <span>
                             ASSURED Rank <strong>#{b.lindelRank}</strong> · Tier <code>{b.panelTier}</code> · LoF <strong>{b.predictedLofPct}%</strong>

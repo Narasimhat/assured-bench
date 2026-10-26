@@ -135,9 +135,9 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.ok(manualBiomni.designResult?.panIsoformMeta);
   assert.equal(manualBiomni.designResult.panIsoformMeta.targetCodingExon, 2);
   assert.equal(manualBiomni.designResult.panIsoformMeta.isCommonExon, true);
-  // 1. Functional domain mapping + gnomAD constraint
-  assert.ok(manualBiomni.uniprot.pLI != null);
-  assert.ok(manualBiomni.uniprot.constraintSummary);
+  // 1. Domain mapping uses what UniProt returns; no constraint data is invented
+  assert.equal(manualBiomni.uniprot.pLI, null);
+  assert.equal(manualBiomni.uniprot.constraintSummary, null);
   assert.ok(manualBiomni.lindelRanking.topGuides[0].cut_aa > 0);
   // 2. Known-variant screen (dbSNP). This mock serves no E-utilities response, so the honest result is "not assessed", never "clean".
   assert.equal(manualBiomni.variantScreen?.ok, true);

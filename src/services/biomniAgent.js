@@ -16,6 +16,7 @@ import { cdsToGenomic, fetchGeneReference } from "../engine/design/geneFetch.js"
 import { fetchGeneGenbank } from "./ensembl.js";
 import { agentRequest, runWorkflowAgent } from "./workflowAgent.js";
 import { screenTargetVariants } from "./variantScreen.js";
+import { BRUNELLO_SUBSET } from "./data/brunelloSubset.js";
 
 async function defaultLindelLoader() {
   const { loadLindel } = await import("../engine/design/lindel/loadLindel.js");
@@ -28,148 +29,6 @@ const BUNDLED_REFERENCE_MAP = Object.freeze({
   DIPK2A: { file: "dipk2a-region.gb", ensemblId: "ENSG00000181744", transcriptId: "NM_173552.5", chr: "3", source: "Bundled NCBI RefSeq (NM_173552.5)" },
   NR2F2: { file: "nr2f2-ng016753.gb", ensemblId: "ENSG00000185551", transcriptId: "NM_021005.4", chr: "15", source: "Bundled NCBI RefSeqGene (NG_016753.1)" },
   INS: { file: "ins-ensg00000254647.gb", ensemblId: "ENSG00000254647", transcriptId: "ENST00000381330", chr: "11", source: "Bundled Reference (ENSG00000254647)" },
-});
-
-/**
- * Broad Institute GPP Brunello Human Genome-Wide CRISPRko Library (Doench et al., Nature Biotechnology 2016, Addgene #73178)
- * reference guides for benchmark loci (ordered by Rule Set 2 on-target score).
- */
-export const CURATED_BRUNELLO_LIBRARY = Object.freeze({
-  DIPK2A: [
-    { spacer: "TTTCCATTAATTGCCAAGCG", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6416, libraryGene: "C3orf58" },
-    { spacer: "AGTACACGTTCTTCACGTTG", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.6410, libraryGene: "C3orf58" },
-    { spacer: "GCAGACGCACGTCGCCGTTG", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.5818, libraryGene: "C3orf58" },
-    { spacer: "CAGTTCGTTGCGCTGCCAAG", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.5549, libraryGene: "C3orf58" },
-  ],
-  TP53: [
-    { spacer: "CCATTGTTCAATATCGTCCG", pam: "GGG", strand: "-", exon: 4, ruleSet2: 0.6899, libraryGene: "TP53" },
-    { spacer: "GAGCGCTGCTCAGATAGCGA", pam: "TGG", strand: "+", exon: 5, ruleSet2: 0.6542, libraryGene: "TP53" },
-    { spacer: "GGTGCCCTATGAGCCGCCTG", pam: "AGG", strand: "+", exon: 6, ruleSet2: 0.6259, libraryGene: "TP53" },
-    { spacer: "GATCCACTCACAGTTTCCAT", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6108, libraryGene: "TP53" },
-  ],
-  APOE: [
-    { spacer: "CATGCTCGGCCAGAGCACCG", pam: "AGG", strand: "+", exon: 3, ruleSet2: 0.6902, libraryGene: "APOE" },
-    { spacer: "AGCTGCGCCAGCAGACCGAG", pam: "TGG", strand: "+", exon: 2, ruleSet2: 0.6512, libraryGene: "APOE" },
-    { spacer: "GGCCTACAAATCGGAACTGG", pam: "AGG", strand: "+", exon: 3, ruleSet2: 0.6174, libraryGene: "APOE" },
-    { spacer: "GCGGACATGGAGGACGTGTG", pam: "CGG", strand: "+", exon: 3, ruleSet2: 0.6093, libraryGene: "APOE" },
-  ],
-  NR2F2: [
-    { spacer: "ACATTTGCGAACTGGCCGCG", pam: "AGG", strand: "+", exon: 2, ruleSet2: 0.7097, libraryGene: "NR2F2" },
-    { spacer: "TATATCCGGACAGGTACGAG", pam: "TGG", strand: "-", exon: 2, ruleSet2: 0.6898, libraryGene: "NR2F2" },
-    { spacer: "GTGTGCGGAGACAAGTCGAG", pam: "CGG", strand: "+", exon: 1, ruleSet2: 0.6876, libraryGene: "NR2F2" },
-    { spacer: "TGGGACAGTTCCGGTTGGCG", pam: "CGG", strand: "-", exon: 1, ruleSet2: 0.6113, libraryGene: "NR2F2" },
-  ],
-  INS: [
-    { spacer: "GCACAGGTGTTGGTTCACAA", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.6620, libraryGene: "INS" },
-    { spacer: "CGGGAGGCAGAGGACCTGCA", pam: "GGG", strand: "+", exon: 1, ruleSet2: 0.6522, libraryGene: "INS" },
-    { spacer: "GAAGCTCTCTACCTAGTGTG", pam: "CGG", strand: "+", exon: 1, ruleSet2: 0.5982, libraryGene: "INS" },
-    { spacer: "CTACACACCCAAGACCCGCC", pam: "GGG", strand: "+", exon: 1, ruleSet2: 0.5923, libraryGene: "INS" },
-  ],
-  SCN5A: [
-    { spacer: "TGAGTACGCCGACAGCCGCG", pam: "CGG", strand: "+", exon: 3, ruleSet2: 0.6741, libraryGene: "SCN5A" },
-    { spacer: "TCTTGCCTATACCCAGGGCC", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6518, libraryGene: "SCN5A" },
-    { spacer: "CCAGAGTCATGGGGCCAGCC", pam: "TGG", strand: "+", exon: 2, ruleSet2: 0.6389, libraryGene: "SCN5A" },
-    { spacer: "CGTCATCAAGCACGCCAAGG", pam: "GGG", strand: "+", exon: 4, ruleSet2: 0.6195, libraryGene: "SCN5A" },
-  ],
-});
-
-/**
- * Curated UniProt functional domains & gnomAD v4 / DepMap essentiality profiles
- * (Ensures offline-deterministic domain mapping and loss-of-function intolerance warnings).
- */
-export const CURATED_GENE_PROFILES = Object.freeze({
-  DIPK2A: {
-    accession: "Q8NDZ4",
-    proteinName: "Divergent protein kinase domain 2A",
-    lengthAa: 430,
-    pLI: 0.02,
-    loeuf: 0.89,
-    depmapChronos: -0.06,
-    essentialityTier: "non_essential",
-    constraintSummary: "LoF-tolerant in gnomAD (pLI = 0.02, LOEUF = 0.89) and non-essential across DepMap lines — homozygous KO clones are viable.",
-    domains: [
-      { type: "Signal", description: "ER / Golgi luminal signal region", start: 1, end: 48 },
-      { type: "Domain", description: "Divergent Protein Kinase Catalytic Domain", start: 52, end: 316 },
-    ],
-  },
-  TP53: {
-    accession: "P04637",
-    proteinName: "Cellular tumor antigen p53",
-    lengthAa: 393,
-    pLI: 0.53,
-    loeuf: 0.58,
-    depmapChronos: 0.24,
-    essentialityTier: "growth_advantage",
-    constraintSummary: "Tumor suppressor (DepMap Chronos +0.24) — TP53-null clones expand rapidly in culture; monitor genomic stability in iPSCs.",
-    domains: [
-      { type: "Domain", description: "Transactivation domain (TAD)", start: 1, end: 61 },
-      { type: "DNA binding", description: "Sequence-specific DNA-binding core domain", start: 102, end: 292 },
-      { type: "Domain", description: "Tetramerization domain", start: 325, end: 356 },
-    ],
-  },
-  APOE: {
-    accession: "P02649",
-    proteinName: "Apolipoprotein E",
-    lengthAa: 317,
-    pLI: 0.0,
-    loeuf: 0.96,
-    depmapChronos: -0.02,
-    essentialityTier: "non_essential",
-    constraintSummary: "LoF-tolerant in gnomAD (pLI = 0.00, LOEUF = 0.96) — homozygous KO clones are viable across iPSCs, astrocytes, and hepatocytes.",
-    domains: [
-      { type: "Signal", description: "Secretory signal peptide", start: 1, end: 18 },
-      { type: "Domain", description: "N-terminal 4-helix bundle receptor-binding region", start: 24, end: 164 },
-      { type: "Binding site", description: "LDL-receptor binding site", start: 140, end: 160 },
-      { type: "Domain", description: "C-terminal lipid-binding / oligomerization domain", start: 210, end: 299 },
-    ],
-  },
-  SCN5A: {
-    accession: "Q14524",
-    proteinName: "Sodium channel protein type 5 subunit alpha (Nav1.5)",
-    lengthAa: 2016,
-    pLI: 0.99,
-    loeuf: 0.26,
-    depmapChronos: -0.04,
-    essentialityTier: "haploinsufficient_organ",
-    constraintSummary: "Clinically haploinsufficient for Brugada syndrome (gnomAD pLI = 0.99, LOEUF = 0.26), but cell-viable in undifferentiated iPSCs/HEK293; affects action potential in iPSC-cardiomyocytes.",
-    domains: [
-      { type: "Domain", description: "N-terminal cytoplasmic regulator & DI S1-S2", start: 1, end: 175 },
-      { type: "Domain", description: "Ion transport repeat I (S1-S6 pore module)", start: 127, end: 416 },
-      { type: "Domain", description: "Ion transport repeat II (S1-S6)", start: 718, end: 939 },
-      { type: "Domain", description: "Ion transport repeat III (S1-S6)", start: 1207, end: 1466 },
-      { type: "Domain", description: "Ion transport repeat IV (S1-S6)", start: 1529, end: 1772 },
-    ],
-  },
-  NR2F2: {
-    accession: "P24468",
-    proteinName: "COUP transcription factor 2 (COUP-TFII)",
-    lengthAa: 414,
-    pLI: 0.99,
-    loeuf: 0.19,
-    depmapChronos: -0.38,
-    essentialityTier: "haploinsufficient",
-    constraintSummary: "Strongly LoF-constrained transcription factor (gnomAD pLI = 0.99, LOEUF = 0.19) — homozygous KO can impair lineage differentiation; consider dTAG/AID conditional degron or heterozygous clone banking.",
-    domains: [
-      { type: "Zinc finger", description: "NR C4-type Zinc-Finger DNA-binding domain", start: 79, end: 154 },
-      { type: "Domain", description: "Nuclear receptor ligand-binding domain (LBD)", start: 211, end: 403 },
-    ],
-  },
-  INS: {
-    accession: "P01308",
-    proteinName: "Insulin",
-    lengthAa: 110,
-    pLI: 0.11,
-    loeuf: 0.72,
-    depmapChronos: 0.01,
-    essentialityTier: "non_essential",
-    constraintSummary: "Cell-viable in vitro (non-essential in dividing cells; functional phenotype manifests in differentiated beta-like cells).",
-    domains: [
-      { type: "Signal", description: "Signal peptide", start: 1, end: 24 },
-      { type: "Domain", description: "Insulin B chain (disulfide-linked core)", start: 25, end: 54 },
-      { type: "Region", description: "C-peptide", start: 57, end: 87 },
-      { type: "Domain", description: "Insulin A chain", start: 90, end: 110 },
-    ],
-  },
 });
 
 /**
@@ -617,106 +476,45 @@ export function buildBiomniPlan(intent) {
 }
 
 /**
- * Query UniProtKB REST API for human protein metadata and domains (with curated domain & gnomAD/DepMap constraint enrichment).
+ * Query the UniProtKB REST API for a human protein: accession, length, function text and the annotated Domain, Region, Site, DNA-binding and Zinc-finger features.
+ * Only what UniProt returns is reported. There is no offline fallback and no constraint (gnomAD, DepMap) data: those fields stay null and the UI says so.
  */
 export async function queryUniprotProtein(geneSymbol, fetchFn = globalThis.fetch) {
   const sym = String(geneSymbol || "").trim().toUpperCase();
-  const curated = CURATED_GENE_PROFILES[sym] || null;
-  const attachConstraint = (base) => ({
-    ...base,
-    pLI: curated?.pLI ?? null,
-    loeuf: curated?.loeuf ?? null,
-    depmapChronos: curated?.depmapChronos ?? null,
-    essentialityTier: curated?.essentialityTier ?? "unknown",
-    constraintSummary: curated?.constraintSummary ?? null,
-  });
-
-  if (typeof fetchFn !== "function") {
-    if (curated) {
-      return attachConstraint({
-        ok: true,
-        found: true,
-        gene: sym,
-        accession: curated.accession,
-        proteinName: curated.proteinName,
-        lengthAa: curated.lengthAa,
-        functionSummary: curated.constraintSummary,
-        domains: curated.domains,
-        alphafoldUrl: `https://alphafold.ebi.ac.uk/entry/${curated.accession}`,
-        uniprotUrl: `https://www.uniprot.org/uniprotkb/${curated.accession}`,
-      });
-    }
-    return { ok: false, error: "Fetch API unavailable" };
-  }
+  const noConstraint = { pLI: null, loeuf: null, depmapChronos: null, essentialityTier: "unknown", constraintSummary: null };
+  if (typeof fetchFn !== "function") return { ok: false, found: false, gene: sym, error: "Fetch API unavailable", ...noConstraint };
   const url = `https://rest.uniprot.org/uniprotkb/search?query=${encodeURIComponent(`gene_exact:${sym} AND organism_id:9606 AND reviewed:true`)}&size=1`;
   try {
     const res = await fetchFn(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout?.(10000) });
-    if (!res.ok) {
-      if (curated) {
-        return attachConstraint({
-          ok: true,
-          found: true,
-          gene: sym,
-          accession: curated.accession,
-          proteinName: curated.proteinName,
-          lengthAa: curated.lengthAa,
-          functionSummary: curated.constraintSummary,
-          domains: curated.domains,
-          alphafoldUrl: `https://alphafold.ebi.ac.uk/entry/${curated.accession}`,
-          uniprotUrl: `https://www.uniprot.org/uniprotkb/${curated.accession}`,
-        });
-      }
-      return { ok: false, error: `UniProt HTTP ${res.status}` };
-    }
+    if (!res.ok) return { ok: false, found: false, gene: sym, error: `UniProt HTTP ${res.status}`, ...noConstraint };
     const data = await res.json();
     const entry = data?.results?.[0];
-    if (!entry) return attachConstraint({ ok: true, found: false, gene: sym, domains: curated?.domains || [] });
-    const acc = entry.primaryAccession || curated?.accession || "";
-    const proteinName = entry.proteinDescription?.recommendedName?.fullName?.value || curated?.proteinName || sym;
-    const lengthAa = entry.sequence?.length || curated?.lengthAa || 0;
+    if (!entry) return { ok: true, found: false, gene: sym, domains: [], ...noConstraint };
+    const acc = entry.primaryAccession || "";
     const funcText = (entry.comments || [])
       .filter(c => c.commentType === "FUNCTION")
       .flatMap(c => (c.texts || []).map(t => t.value))
       .join(" ")
       .slice(0, 400);
-    const liveDomains = (entry.features || [])
+    const domains = (entry.features || [])
       .filter(f => ["Domain", "Region", "Active site", "Binding site", "DNA binding", "Zinc finger"].includes(f.type))
       .slice(0, 8)
-      .map(f => ({
-        type: f.type,
-        description: f.description || f.type,
-        start: f.location?.start?.value,
-        end: f.location?.end?.value,
-      }));
-    const domains = liveDomains.length > 0 ? liveDomains : (curated?.domains || []);
-    return attachConstraint({
+      .map(f => ({ type: f.type, description: f.description || f.type, start: f.location?.start?.value, end: f.location?.end?.value }));
+    return {
       ok: true,
       found: true,
       gene: sym,
       accession: acc,
-      proteinName,
-      lengthAa,
+      proteinName: entry.proteinDescription?.recommendedName?.fullName?.value || sym,
+      lengthAa: entry.sequence?.length || 0,
       functionSummary: funcText,
       domains,
       alphafoldUrl: acc ? `https://alphafold.ebi.ac.uk/entry/${acc}` : "",
       uniprotUrl: acc ? `https://www.uniprot.org/uniprotkb/${acc}` : "",
-    });
+      ...noConstraint,
+    };
   } catch (err) {
-    if (curated) {
-      return attachConstraint({
-        ok: true,
-        found: true,
-        gene: sym,
-        accession: curated.accession,
-        proteinName: curated.proteinName,
-        lengthAa: curated.lengthAa,
-        functionSummary: curated.constraintSummary,
-        domains: curated.domains,
-        alphafoldUrl: `https://alphafold.ebi.ac.uk/entry/${curated.accession}`,
-        uniprotUrl: `https://www.uniprot.org/uniprotkb/${curated.accession}`,
-      });
-    }
-    return { ok: false, found: false, gene: sym, error: err.message || String(err) };
+    return { ok: false, found: false, gene: sym, error: err.message || String(err), ...noConstraint };
   }
 }
 
@@ -1250,16 +1048,13 @@ export async function runBiomniCoScientist(
         const selectedSpacers = new Set(
           (designResult?.gs || []).map(g => String(g.sp || g.spacer || "").toUpperCase())
         );
-        const brunelloList = CURATED_BRUNELLO_LIBRARY[String(intent.gene || "").toUpperCase()] || [];
-        const brunelloBySpacer = new Map(
-          brunelloList.map((b, idx) => [b.spacer.toUpperCase(), { ...b, brunelloRank: idx + 1 }])
-        );
+        // library guides for this gene, generated from the Brunello table (scripts/build_brunello_subset.mjs); genes outside the subset have none
+        const brunelloEntry = BRUNELLO_SUBSET[String(intent.gene || "").toUpperCase()] || null;
+        const brunelloList = (brunelloEntry?.guides || []).map(b => ({ ...b, libraryGene: brunelloEntry.libraryGene, brunelloRank: b.libraryRank, exon: b.libraryExon }));
+        const brunelloBySpacer = new Map(brunelloList.map(b => [b.spacer.toUpperCase(), b]));
         const KO_TIER_ORDER = { robust: 0, marginal: 1, truncation: 2, escape: 3 };
         const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
-        const activeDomains =
-          uniprot?.domains?.length > 0
-            ? uniprot.domains
-            : CURATED_GENE_PROFILES[String(intent.gene || "").toUpperCase()]?.domains || [];
+        const activeDomains = uniprot?.domains || [];
         const combinedRows = [...rawRows, ...terminalRows];
         const rows = combinedRows.map(r => {
           const ex = exonLookup.get(r.coding_exon);
@@ -1313,12 +1108,12 @@ export async function runBiomniCoScientist(
         }
         const brunelloEvaluated = brunelloList.map((b, idx) => {
           const matchedRow = rows.find(r => String(r.spacer || "").toUpperCase() === b.spacer.toUpperCase());
-          const ex = exonLookup.get(b.exon);
+          const ex = matchedRow ? exonLookup.get(matchedRow.coding_exon) : null;
           return {
             ...b,
             brunelloRank: idx + 1,
             lindelRank: matchedRow?.lindel_rank ?? null,
-            panelTier: matchedRow?.panel_tier ?? (ex?.isTerminalExon ? "terminal_exon_escape" : "unranked"),
+            panelTier: matchedRow?.panel_tier ?? "unranked",
             predictedLofPct: matchedRow?.predicted_LoF_allele_pct ?? null,
             isoformCoverageLabel: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : null,
             isCommonExon: Boolean(ex?.recommendedForKo),

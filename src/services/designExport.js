@@ -79,19 +79,14 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
     lines.push(
       `<p style="margin:4px 0"><strong>Broad GPP Brunello Library (Addgene #73178) Cross-Reference:</strong> ${
         matched.length > 0
-          ? `${matched.length} selected guide(s) directly match Brunello whole-genome library (${escapeHtml(matched.map(m => `${m.spacer} [Brunello #${m.brunelloRank}]`).join(", "))}).`
-          : `Evaluated ${brunello.length} Brunello reference guides (${escapeHtml(brunello.map(b => `${b.spacer} [Exon ${b.exon}, ${b.panelTier}]`).join("; "))}).`
+          ? `${matched.length} selected guide(s) directly match Brunello library guides (${escapeHtml(matched.map(m => `${m.spacer} [Brunello #${m.brunelloRank}]`).join(", "))}).`
+          : `Evaluated ${brunello.length} Brunello reference guides (${escapeHtml(brunello.map(b => `${b.spacer} [library exon ${b.exon}, ${b.panelTier}]`).join("; "))}).`
       }</p>`
     );
   }
   if (rescue?.isNmdBlindLocus) {
     lines.push(
       `<p style="margin:4px 0;color:#92400e"><strong>NMD-Escape Locus Rescue:</strong> ${escapeHtml(rescue.reason)} Use dual-guide excision or 5′ terminal-exon early truncation (&lt;50% retained CDS).</p>`
-    );
-  }
-  if (biomniReport?.uniprot?.constraintSummary) {
-    lines.push(
-      `<p style="margin:4px 0"><strong>Cell Fitness &amp; gnomAD Constraint:</strong> ${escapeHtml(biomniReport.uniprot.constraintSummary)}</p>`
     );
   }
   if (biomniReport?.variantScreen?.ok) {
