@@ -86,6 +86,10 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.equal(dipkRes.steps.every(s => s.status === "completed"), true);
   assert.ok(dipkRes.designResult && dipkRes.designResult.gs.length === 2);
   assert.ok(dipkRes.lindelRanking && dipkRes.lindelRanking.totalCandidates > 0);
+  assert.equal(dipkRes.lindelRanking.topGuides[0].coding_exon, 2);
+  assert.equal(dipkRes.lindelRanking.topGuides[0].panel_tier, "robust");
+  assert.equal(dipkRes.lindelRanking.topGuides[0].is_common_exon, true);
+  assert.ok(dipkRes.lindelRanking.topGuides[0].predicted_LoF_allele_pct > 80);
 
   const koRes = await runBiomniCoScientist(
     "Design a biallelic knockout for APOE and rank exon guides with Lindel",

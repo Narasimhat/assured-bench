@@ -728,26 +728,28 @@ export async function runBiomniCoScientist(
         }
         const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
         const rawRows = rankKoGuides(model, loadedLindel);
+        const KO_TIER_ORDER = { robust: 0, marginal: 1, truncation: 2, escape: 3 };
         const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
         const rows = rawRows.map(r => {
           const ex = exonLookup.get(r.coding_exon);
           const inRecordDisruptedPct = Math.max(0, 100 - (r.other_isoform_not_disrupted_pct || 0));
-          const coveragePct = ex ? Math.min(ex.coveragePct, inRecordDisruptedPct) : inRecordDisruptedPct;
-          const isCommon = Boolean((ex ? ex.recommendedForKo : true) && (r.other_isoform_not_disrupted_pct || 0) === 0);
+          const coveragePct = ex ? ex.coveragePct : inRecordDisruptedPct;
+          const isCommon = Boolean(ex ? ex.recommendedForKo : (r.other_isoform_not_disrupted_pct || 0) === 0);
           return {
             ...r,
             isoform_coverage_pct: coveragePct,
-            shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${coveragePct}%)` : `${coveragePct}%`,
+            shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : `${coveragePct}%`,
             is_common_exon: isCommon,
           };
         });
-        // Prioritize Common-Exon NMD-Safe (robust) guides first, then isoform coverage %, then Lindel LoF %
+        // Prioritize Common Non-Terminal Exon (e.g. 3/3 isoforms) + NMD-Safe ('robust') tier + highest Lindel LoF %
         rows.sort(
           (a, b) =>
-            Number(b.is_common_exon && b.panel_tier === "robust") - Number(a.is_common_exon && a.panel_tier === "robust") ||
             Number(b.is_common_exon) - Number(a.is_common_exon) ||
             b.isoform_coverage_pct - a.isoform_coverage_pct ||
+            (KO_TIER_ORDER[a.panel_tier] ?? 9) - (KO_TIER_ORDER[b.panel_tier] ?? 9) ||
             b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct ||
+            (a.other_isoform_not_disrupted_pct || 0) - (b.other_isoform_not_disrupted_pct || 0) ||
             b.gc_percent - a.gc_percent
         );
         lindelRanking = {
