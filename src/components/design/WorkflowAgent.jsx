@@ -338,6 +338,22 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                               ★ Selected Pair
                             </span>
                           ) : null}
+                          {g.brunello_match ? (
+                            <span
+                              style={{
+                                marginLeft: "0.35rem",
+                                padding: "0.08rem 0.35rem",
+                                borderRadius: "4px",
+                                background: "#fef3c7",
+                                color: "#92400e",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                              }}
+                              title={`Broad GPP Brunello Library (${g.brunello_match.libraryGene}) · Rule Set 2 = ${g.brunello_match.ruleSet2}`}
+                            >
+                              📚 Brunello #{g.brunello_match.brunelloRank} (RS2 {g.brunello_match.ruleSet2})
+                            </span>
+                          ) : null}
                         </td>
                         <td style={{ padding: "0.25rem" }}>Exon {g.coding_exon}</td>
                         <td style={{ padding: "0.25rem" }}>
@@ -354,6 +370,34 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                   </tbody>
                 </table>
               </div>
+              {biomniResult.lindelRanking.brunelloComparison?.length > 0 && (
+                <div style={{ marginTop: "0.45rem", fontSize: "0.8rem", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "6px", padding: "0.45rem 0.65rem" }}>
+                  <strong>📚 Broad GPP Brunello Whole-Genome CRISPRko Library Cross-Reference ({biomniResult.lindelRanking.brunelloComparison[0].libraryGene} · Addgene #73178):</strong>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.3rem" }}>
+                    {biomniResult.lindelRanking.brunelloComparison.map(b => (
+                      <span
+                        key={b.spacer}
+                        style={{
+                          padding: "0.15rem 0.45rem",
+                          borderRadius: "4px",
+                          background: b.selectedInAssuredPair ? "#dcfce7" : "#ffffff",
+                          border: b.selectedInAssuredPair ? "1px solid #16a34a" : "1px solid #fcd34d",
+                        }}
+                      >
+                        <strong>Brunello #{b.brunelloRank}</strong> <code>{b.spacer}</code> (Exon {b.exon}{b.isoformCoverageLabel ? ` · ${b.isoformCoverageLabel}` : ""}, RS2 {b.ruleSet2}):{" "}
+                        {b.lindelRank ? (
+                          <span>
+                            ASSURED Rank <strong>#{b.lindelRank}</strong> · Tier <code>{b.panelTier}</code> · LoF <strong>{b.predictedLofPct}%</strong>
+                            {b.selectedInAssuredPair ? " ✅ Selected in ASSURED Pair" : !b.isCommonExon ? " ⚠ Non-common exon" : ""}
+                          </span>
+                        ) : (
+                          <span><code>{b.panelTier}</code> (excluded by terminal exon NMD rule)</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </details>
           )}
 

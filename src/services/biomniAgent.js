@@ -29,6 +29,43 @@ const BUNDLED_REFERENCE_MAP = Object.freeze({
 });
 
 /**
+ * Broad Institute GPP Brunello Human Genome-Wide CRISPRko Library (Doench et al., Nature Biotechnology 2016, Addgene #73178)
+ * reference guides for benchmark loci (ordered by Rule Set 2 on-target score).
+ */
+export const CURATED_BRUNELLO_LIBRARY = Object.freeze({
+  DIPK2A: [
+    { spacer: "TTTCCATTAATTGCCAAGCG", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6416, libraryGene: "C3orf58" },
+    { spacer: "AGTACACGTTCTTCACGTTG", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.6410, libraryGene: "C3orf58" },
+    { spacer: "GCAGACGCACGTCGCCGTTG", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.5818, libraryGene: "C3orf58" },
+    { spacer: "CAGTTCGTTGCGCTGCCAAG", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.5549, libraryGene: "C3orf58" },
+  ],
+  TP53: [
+    { spacer: "CCATTGTTCAATATCGTCCG", pam: "GGG", strand: "-", exon: 4, ruleSet2: 0.6899, libraryGene: "TP53" },
+    { spacer: "GAGCGCTGCTCAGATAGCGA", pam: "TGG", strand: "+", exon: 5, ruleSet2: 0.6542, libraryGene: "TP53" },
+    { spacer: "GGTGCCCTATGAGCCGCCTG", pam: "AGG", strand: "+", exon: 6, ruleSet2: 0.6259, libraryGene: "TP53" },
+    { spacer: "GATCCACTCACAGTTTCCAT", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6108, libraryGene: "TP53" },
+  ],
+  APOE: [
+    { spacer: "CATGCTCGGCCAGAGCACCG", pam: "AGG", strand: "+", exon: 4, ruleSet2: 0.6902, libraryGene: "APOE" },
+    { spacer: "AGCTGCGCCAGCAGACCGAG", pam: "TGG", strand: "+", exon: 3, ruleSet2: 0.6512, libraryGene: "APOE" },
+    { spacer: "GGCCTACAAATCGGAACTGG", pam: "AGG", strand: "+", exon: 4, ruleSet2: 0.6174, libraryGene: "APOE" },
+    { spacer: "GCGGACATGGAGGACGTGTG", pam: "CGG", strand: "+", exon: 4, ruleSet2: 0.6093, libraryGene: "APOE" },
+  ],
+  NR2F2: [
+    { spacer: "ACATTTGCGAACTGGCCGCG", pam: "AGG", strand: "+", exon: 2, ruleSet2: 0.7097, libraryGene: "NR2F2" },
+    { spacer: "TATATCCGGACAGGTACGAG", pam: "TGG", strand: "-", exon: 2, ruleSet2: 0.6898, libraryGene: "NR2F2" },
+    { spacer: "GTGTGCGGAGACAAGTCGAG", pam: "CGG", strand: "+", exon: 1, ruleSet2: 0.6876, libraryGene: "NR2F2" },
+    { spacer: "TGGGACAGTTCCGGTTGGCG", pam: "CGG", strand: "-", exon: 1, ruleSet2: 0.6113, libraryGene: "NR2F2" },
+  ],
+  INS: [
+    { spacer: "GCACAGGTGTTGGTTCACAA", pam: "AGG", strand: "-", exon: 1, ruleSet2: 0.6620, libraryGene: "INS" },
+    { spacer: "CGGGAGGCAGAGGACCTGCA", pam: "GGG", strand: "+", exon: 1, ruleSet2: 0.6522, libraryGene: "INS" },
+    { spacer: "GAAGCTCTCTACCTAGTGTG", pam: "CGG", strand: "+", exon: 1, ruleSet2: 0.5982, libraryGene: "INS" },
+    { spacer: "CTACACACCCAAGACCCGCC", pam: "GGG", strand: "+", exon: 1, ruleSet2: 0.5923, libraryGene: "INS" },
+  ],
+});
+
+/**
  * Multi-provider gene reference resolver for the Biomni Co-Scientist:
  * 1. Bundled verified GenBank references (instantaneous, offline-ready)
  * 2. NCBI Datasets + E-utilities (`fetchGeneReference` with `source: "ncbi"`, immune to Ensembl outages)
@@ -731,6 +768,10 @@ export async function runBiomniCoScientist(
         const selectedSpacers = new Set(
           (designResult?.gs || []).map(g => String(g.sp || g.spacer || "").toUpperCase())
         );
+        const brunelloList = CURATED_BRUNELLO_LIBRARY[String(intent.gene || "").toUpperCase()] || [];
+        const brunelloBySpacer = new Map(
+          brunelloList.map((b, idx) => [b.spacer.toUpperCase(), { ...b, brunelloRank: idx + 1 }])
+        );
         const KO_TIER_ORDER = { robust: 0, marginal: 1, truncation: 2, escape: 3 };
         const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
         const rows = rawRows.map(r => {
@@ -738,12 +779,14 @@ export async function runBiomniCoScientist(
           const inRecordDisruptedPct = Math.max(0, 100 - (r.other_isoform_not_disrupted_pct || 0));
           const coveragePct = ex ? ex.coveragePct : inRecordDisruptedPct;
           const isCommon = Boolean(ex ? ex.recommendedForKo : (r.other_isoform_not_disrupted_pct || 0) === 0);
+          const brunelloMatch = brunelloBySpacer.get(String(r.spacer || "").toUpperCase()) || null;
           return {
             ...r,
             isoform_coverage_pct: coveragePct,
             shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : `${coveragePct}%`,
             is_common_exon: isCommon,
             selected_in_pair: selectedSpacers.has(String(r.spacer || "").toUpperCase()),
+            brunello_match: brunelloMatch,
           };
         });
         // Prioritize Common Non-Terminal Exon (e.g. 3/3 isoforms) + NMD-Safe ('robust') tier + highest Lindel LoF %
@@ -765,12 +808,27 @@ export async function runBiomniCoScientist(
             topDisplay.push(r);
           }
         }
+        const brunelloEvaluated = brunelloList.map((b, idx) => {
+          const matchedRow = rows.find(r => String(r.spacer || "").toUpperCase() === b.spacer.toUpperCase());
+          const ex = exonLookup.get(b.exon);
+          return {
+            ...b,
+            brunelloRank: idx + 1,
+            lindelRank: matchedRow?.lindel_rank ?? null,
+            panelTier: matchedRow?.panel_tier ?? (ex?.isTerminalExon ? "terminal_exon_escape" : "unranked"),
+            predictedLofPct: matchedRow?.predicted_LoF_allele_pct ?? null,
+            isoformCoverageLabel: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : null,
+            isCommonExon: Boolean(ex?.recommendedForKo),
+            selectedInAssuredPair: selectedSpacers.has(b.spacer.toUpperCase()),
+          };
+        });
         lindelRanking = {
           ok: true,
           totalCandidates: rows.length,
           commonExonCandidates: rows.filter(r => r.is_common_exon).length,
           topGuides: rows.slice(0, 10),
           displayGuides: topDisplay,
+          brunelloComparison: brunelloEvaluated,
         };
         output = {
           ok: true,
