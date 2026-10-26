@@ -103,11 +103,11 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
             <strong style={{ color: qcCalibration.goalMet ? "#166534" : "#92400e" }}>
-              🎯 Closed-Loop Design Prediction vs. Observed Sanger QC Calibration
+              Model estimate vs. observed Sanger QC acceptance (this design)
             </strong>
             <span style={{ fontWeight: 600 }}>
-              Accepted Clones: <strong>{qcCalibration.acceptedCount}/{qcCalibration.totalAnalyzed}</strong> ({qcCalibration.observedAcceptedPct}%)
-              {qcCalibration.predictedBiallelicPct != null ? ` · Predicted: ~${qcCalibration.predictedBiallelicPct}%` : ""}
+              Accepted Clones: <strong>{qcCalibration.acceptedCount}/{qcCalibration.totalAnalyzed}</strong> ({qcCalibration.observedAcceptedPct}%, 95% CI {qcCalibration.observedInterval95Pct[0]}–{qcCalibration.observedInterval95Pct[1]}%)
+              {qcCalibration.modelEstimateBiallelicPct != null ? ` · Model estimate: ~${qcCalibration.modelEstimateBiallelicPct}%` : ""}
             </span>
           </div>
           <div style={{ marginTop: "0.25rem", color: "#334155" }}>{qcCalibration.summary}</div>

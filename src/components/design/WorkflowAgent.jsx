@@ -615,7 +615,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                 <div style={{ marginTop: "0.15rem" }}>
                   WT Amplicon: <strong>{biomniResult.genotypingAssay.wtAmpliconBp} bp</strong> → Dual-Cut KO Amplicon:{" "}
                   <strong>{biomniResult.genotypingAssay.editedAmpliconBp} bp</strong> (<strong>Δ{biomniResult.genotypingAssay.deletionBp} bp</strong>) ·{" "}
-                  <span style={{ color: "#0369a1", fontWeight: 600 }}>{biomniResult.genotypingAssay.agaroseRecommendation}</span>
+                  <span style={{ color: "#0369a1" }}>{biomniResult.genotypingAssay.sizeNote}</span>
                 </div>
               ) : (
                 <div style={{ marginTop: "0.15rem" }}>
@@ -634,13 +634,28 @@ export function WorkflowAgent({ project, onUpdateProject }) {
             </div>
           )}
 
-          {biomniResult.screeningPower && (
-            <p style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.88rem" }}>
-              <strong>Clonal Screening Power ({biomniResult.screeningPower.mode}):</strong>{" "}
-              Predicted biallelic clone rate ~<code>{biomniResult.screeningPower.predictedBiallelicClonePct}%</code> → Screen{" "}
-              <strong>{biomniResult.screeningPower.recommendedClonesToScreen} clones</strong> ({biomniResult.screeningPower.plates96Well} × 96-well plate) for ≥95% probability of recovering ≥2 verified clones.
-            </p>
+          {biomniResult.genotypingAssay && biomniResult.genotypingAssay.ok === false && (
+            <p className="muted" style={{ marginTop: "0.45rem", marginBottom: 0, fontSize: "0.82rem" }}>Genotyping assay: {biomniResult.genotypingAssay.reason}</p>
           )}
+
+          {biomniResult.screeningPower && (biomniResult.screeningPower.ok ? (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.88rem" }}>
+              <strong>Clonal screening estimate ({biomniResult.screeningPower.mode}):</strong>{" "}
+              ~<code>{biomniResult.screeningPower.predictedBiallelicClonePct}%</code> of clones biallelic LoF →{" "}
+              {biomniResult.screeningPower.recommendedClonesToScreen != null
+                ? <><strong>{biomniResult.screeningPower.recommendedClonesToScreen} clones</strong> ({biomniResult.screeningPower.plates96Well} × 96-well plate) for ≥95% probability of ≥2 such clones.</>
+                : biomniResult.screeningPower.note}
+              <details style={{ marginTop: "0.2rem" }}>
+                <summary className="muted">Model and assumptions</summary>
+                <div className="muted" style={{ fontSize: "0.82rem" }}>{biomniResult.screeningPower.model}</div>
+                <ul className="muted" style={{ margin: "0.2rem 0", paddingLeft: "1.1rem", fontSize: "0.82rem" }}>
+                  {biomniResult.screeningPower.assumptions.map((a, i) => <li key={i}>{a}</li>)}
+                </ul>
+              </details>
+            </div>
+          ) : (
+            <p className="muted" style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.85rem" }}>Clonal screening estimate: {biomniResult.screeningPower.reason}</p>
+          ))}
         </div>
       )}
     </details>

@@ -51,7 +51,7 @@ test("buildBiomniPlan builds ordered multi-step ASSURED-E1 plan", () => {
 test("computeClonalScreeningPower computes 96-well clonal screening power", () => {
   const power = computeClonalScreeningPower({
     editType: "ko",
-    lindelTopGuide: { predicted_LoF_allele_pct: 85 },
+    weakerGuideLofPct: 85,
     deliveryEfficiency: 0.8,
   });
   assert.equal(power.ok, true);

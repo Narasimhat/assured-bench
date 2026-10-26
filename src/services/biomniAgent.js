@@ -87,11 +87,17 @@ const COMMERCIAL_RESTRICTION_ENZYMES = Object.freeze([
  * - For PM/KI: Commercial restriction enzyme sites (RFLP) gained or lost in the donor vs. WT sequence.
  */
 export function computeWetLabGenotypingAssay({ editType, designResult, genbankRaw }) {
-  if (!designResult || designResult.err) return { ok: false };
+  if (!designResult || designResult.err) return { ok: false, reason: "No design result." };
   const p0 = designResult.ps?.[0] || {};
   const p1 = designResult.ps?.[1] || {};
+  const forwardPrimer = p0.s || "";
+  const reversePrimer = p1.s || "";
+  // The wild-type amplicon size is what the primer design reported; it is never filled in with a typical value.
   const ampMatch = String(designResult.amp || "").match(/(\d+)\s*bp/i);
-  const wtAmpliconBp = ampMatch ? Number(ampMatch[1]) : Number(p0.productSize || 480);
+  const wtAmpliconBp = ampMatch ? Number(ampMatch[1]) : Number.isFinite(Number(p0.productSize)) && Number(p0.productSize) > 0 ? Number(p0.productSize) : null;
+  if (!forwardPrimer || !reversePrimer || wtAmpliconBp == null) {
+    return { ok: false, reason: "Not computed: the design has no screening primer pair with an expected amplicon size, so band sizes and primers cannot be listed.", forwardPrimer, reversePrimer, wtAmpliconBp };
+  }
 
   if (editType === "ko") {
     const bwSize =
@@ -100,24 +106,21 @@ export function computeWetLabGenotypingAssay({ editType, designResult, genbankRa
         ? Math.abs(designResult.gs[0].cut - designResult.gs[1].cut)
         : 0);
     const deletionBp = Math.max(0, Number(bwSize || 0));
-    const editedAmpliconBp = Math.max(80, wtAmpliconBp - deletionBp);
-    const gelShiftResolvable = deletionBp >= 25;
-    const agaroseRecommendation =
-      deletionBp >= 60
-        ? "2.0% standard TAE/TBE agarose gel (45 min at 100V)"
-        : deletionBp >= 25
-          ? "2.5% high-resolution / MetaPhor agarose gel (60 min at 90V)"
-          : "Deletion < 25 bp — screen directly by Sanger trace deconvolution (ASSURED QC)";
+    if (deletionBp >= wtAmpliconBp) return { ok: false, reason: `Not computed: the deletion between the cuts (${deletionBp} bp) is not smaller than the amplicon (${wtAmpliconBp} bp); the primers must flank both cuts.`, forwardPrimer, reversePrimer, wtAmpliconBp };
+    const editedAmpliconBp = wtAmpliconBp - deletionBp;
+    const relativeChangePct = Math.round((deletionBp / wtAmpliconBp) * 1000) / 10;
     return {
       ok: true,
-      assayType: gelShiftResolvable ? "PCR Amplicon Gel-Shift + Sanger Confirmation" : "Direct Sanger Amplicon Deconvolution",
+      assayType: deletionBp > 0 ? "PCR amplicon size comparison (wild type vs deletion) + Sanger confirmation" : "Sanger amplicon deconvolution",
       wtAmpliconBp,
       editedAmpliconBp,
       deletionBp,
-      gelShiftResolvable,
-      agaroseRecommendation,
-      forwardPrimer: p0.s || p0.f || p0.fwd || "",
-      reversePrimer: p1.s || p0.r || p0.rev || "",
+      relativeChangePct,
+      sizeNote: deletionBp > 0
+        ? `The deletion product is ${deletionBp} bp (${relativeChangePct}%) shorter than the wild-type amplicon (${wtAmpliconBp} bp). Whether the two bands separate depends on your gel and ladder; if they do not, read the amplicon by Sanger deconvolution (ASSURED QC).`
+        : "The cuts do not remove a fragment; screen by Sanger amplicon deconvolution (ASSURED QC).",
+      forwardPrimer,
+      reversePrimer,
     };
   }
 
@@ -170,13 +173,13 @@ export function computeWetLabGenotypingAssay({ editType, designResult, genbankRa
       rflpGained.length || rflpLost.length
         ? "Diagnostic RFLP Restriction Digest + Sanger Confirmation"
         : editType === "ct" || editType === "nt"
-          ? "Insert-Junctional PCR Shift + Sanger Confirmation"
+          ? "Insert-junction PCR (insert length is not computed here) + Sanger Confirmation"
           : "Direct Sanger Trace Deconvolution (ASSURED QC)",
     wtAmpliconBp,
     rflpGained,
     rflpLost,
-    forwardPrimer: p0.f || p0.fwd || "",
-    reversePrimer: p0.r || p0.rev || "",
+    forwardPrimer,
+    reversePrimer,
   };
 }
 
@@ -691,72 +694,99 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
 }
 
 /**
- * Compute binomial clonal screening power (minimum 96-well clones to screen for >=95% probability of >=2 target clones).
+ * Clonal screening power for a knockout: how many clones to pick so that at least two are biallelic loss-of-function with 95% probability.
+ *
+ * Model (all assumptions are returned in `assumptions` and shown with the number):
+ *   P(clone is biallelic LoF) = d * L^2, with d the fraction of cells that received the editor and L the probability that one allele
+ *   carries a loss-of-function outcome. d is a cell-level event, L an allele-level event, so L is squared and d is not.
+ *   L is the predicted LoF fraction of the WEAKER guide of the selected pair: a floor, because the second guide and the excision
+ *   between the cuts add outcomes that this model does not count.
+ * Nothing is substituted when an input is missing: without a predicted LoF fraction the function returns ok:false, and
+ * knock-ins are not modelled (no HDR efficiency is available that is not a guess).
  */
-export function computeClonalScreeningPower({ editType, lindelTopGuide, deliveryEfficiency = 0.8, uniprot = null }) {
-  const isKo = editType === "ko";
-  const singleAlleleSuccess = isKo
-    ? ((lindelTopGuide?.predicted_LoF_allele_pct || 80) / 100) * deliveryEfficiency
-    : 0.32 * deliveryEfficiency; // Conservative HDR allele rate
-  const pBiallelic = Math.max(0.01, Math.min(0.95, singleAlleleSuccess ** 2));
-
-  let clonesFor95Pct = 192;
-  for (let n = 4; n <= 384; n += 1) {
-    const p0 = (1 - pBiallelic) ** n;
-    const p1 = n * pBiallelic * ((1 - pBiallelic) ** (n - 1));
-    if (1 - (p0 + p1) >= 0.95) {
-      clonesFor95Pct = n;
-      break;
-    }
+export function computeClonalScreeningPower({ editType, weakerGuideLofPct = null, deliveryEfficiency = 0.8, uniprot = null }) {
+  const constraint = { pLI: uniprot?.pLI ?? null, loeuf: uniprot?.loeuf ?? null, essentialityTier: uniprot?.essentialityTier ?? "unknown", constraintSummary: uniprot?.constraintSummary ?? null };
+  if (editType !== "ko") {
+    return { ok: false, mode: "Knock-in", reason: "Not modelled: a knock-in's yield depends on HDR efficiency in the line, delivery and locus, and no measured value is available here. Estimate it from a pilot plate or from earlier projects in the same line.", ...constraint };
+  }
+  const lof = Number(weakerGuideLofPct);
+  if (!Number.isFinite(lof) || lof <= 0 || lof > 100) {
+    return { ok: false, mode: "Biallelic LoF knockout", reason: "Not computed: no predicted loss-of-function fraction is available for the selected guides (the Lindel outcome model was not run for this enzyme or design). A day-3 pool ICE for each guide gives the number to use.", ...constraint };
+  }
+  const d = Number(deliveryEfficiency);
+  if (!(d > 0 && d <= 1)) return { ok: false, mode: "Biallelic LoF knockout", reason: "Not computed: delivery efficiency must be between 0 and 1.", ...constraint };
+  const p = d * (lof / 100) ** 2;
+  const MAX_CLONES = 1536;
+  let clonesFor95Pct = null;
+  for (let n = 2; n <= MAX_CLONES; n += 1) {
+    const atMostOne = (1 - p) ** n + n * p * (1 - p) ** (n - 1);
+    if (1 - atMostOne >= 0.95) { clonesFor95Pct = n; break; }
   }
   return {
     ok: true,
-    mode: isKo ? "Homozygous/Biallelic LoF Knockout" : "Homozygous HDR Knock-In",
-    assumedDeliveryEfficiencyPct: Math.round(deliveryEfficiency * 100),
-    predictedBiallelicClonePct: Math.round(pBiallelic * 1000) / 10,
+    mode: "Biallelic LoF knockout",
+    model: "P(biallelic LoF clone) = delivery x L^2; L = predicted LoF fraction of the weaker guide of the pair",
+    weakerGuideLofPct: lof,
+    assumedDeliveryEfficiencyPct: Math.round(d * 100),
+    predictedBiallelicClonePct: Math.round(p * 1000) / 10,
     recommendedClonesToScreen: clonesFor95Pct,
-    plates96Well: Math.ceil(clonesFor95Pct / 96),
-    pLI: uniprot?.pLI ?? null,
-    loeuf: uniprot?.loeuf ?? null,
-    essentialityTier: uniprot?.essentialityTier ?? "unknown",
-    constraintSummary: uniprot?.constraintSummary ?? null,
+    plates96Well: clonesFor95Pct == null ? null : Math.ceil(clonesFor95Pct / 96),
+    assumptions: [
+      `${Math.round(d * 100)}% of cells receive the editor (an assumption, not a measurement; change it to the efficiency you measure by day-3 pool ICE or by reporter).`,
+      "The two alleles are edited independently, each with the weaker guide's predicted LoF fraction (Lindel, 5-point resolution at best: Lindel's own test-set correlation is 0.71).",
+      "Clones are picked at random; growth differences between edited and unedited cells, mosaic clones and clone-level QC losses are not modelled.",
+      "The second guide and the excision between the cuts are not counted, so the estimate is a floor for a pair.",
+    ],
+    ...(clonesFor95Pct == null ? { note: `More than ${MAX_CLONES} clones would be needed under these assumptions.` } : {}),
+    ...constraint,
   };
 }
 
+/** Wilson score interval for a proportion, in percent. */
+export function wilsonInterval(successes, total, z = 1.96) {
+  if (!total) return null;
+  const p = successes / total, z2 = z * z;
+  const centre = (p + z2 / (2 * total)) / (1 + z2 / total);
+  const half = (z * Math.sqrt((p * (1 - p)) / total + z2 / (4 * total * total))) / (1 + z2 / total);
+  return [Math.round(Math.max(0, centre - half) * 1000) / 10, Math.round(Math.min(1, centre + half) * 1000) / 10];
+}
+
 /**
- * Compare Step 1 Biomni / Lindel in-silico predictions against Step 3 observed Sanger .ab1 trace QC outcomes.
+ * Put the screening-power estimate next to what the Sanger QC accepted. This is a comparison for one design, not a calibration: the
+ * estimate is the model's (see computeClonalScreeningPower), the observation is the share of analysed clones that QC accepted at
+ * sequence level (not protein loss), and the interval shows how little a handful of clones can say.
  */
 export function computeQcPredictionCalibration(project = {}, qcResults = []) {
   const valid = (qcResults || []).filter(r => r && r.ok !== false);
   if (!valid.length) return null;
-  const accepted = valid.filter(r => (r.decision?.decision || r.decision?.verdict) === "accept");
-  const held = valid.filter(r => (r.decision?.decision || r.decision?.verdict) === "hold");
+  const verdict = (r) => r.decision?.decision || r.decision?.verdict;
+  const accepted = valid.filter(r => verdict(r) === "accept");
+  const held = valid.filter(r => verdict(r) === "hold");
   const observedPct = Math.round((accepted.length / valid.length) * 1000) / 10;
-  const sp = project?.biomniReport?.screeningPower || null;
-  const predictedPct =
-    sp?.predictedBiallelicClonePct ??
-    project?.designResult?.koOutcomes?.minLofPct ??
-    project?.designResult?.koAssessment?.outcomes?.minLofPct ??
-    null;
-  const recommendedClones = sp?.recommendedClonesToScreen ?? null;
+  const interval = wilsonInterval(accepted.length, valid.length);
+  const sp = project?.biomniReport?.screeningPower;
+  // Only the screening-power model's number is compared. A per-allele LoF fraction is a different quantity and is never substituted.
+  const predictedPct = sp?.ok ? sp.predictedBiallelicClonePct : null;
+  const recommendedClones = sp?.ok ? sp.recommendedClonesToScreen : null;
   const goalMet = accepted.length >= 2;
-  const deltaPct = predictedPct != null ? Math.round((observedPct - predictedPct) * 10) / 10 : null;
-
+  const withinInterval = predictedPct != null && interval ? predictedPct >= interval[0] && predictedPct <= interval[1] : null;
+  const caution = `n = ${valid.length} clone${valid.length === 1 ? "" : "s"}: a comparison for this design, not a calibration of the model (that needs outcomes from many designs, failures included).`;
+  const observed = `${accepted.length}/${valid.length} (${observedPct}%, 95% CI ${interval[0]}-${interval[1]}%) analysed clones accepted by Sanger QC (sequence level; protein loss is not tested)`;
   return {
     ok: true,
     totalAnalyzed: valid.length,
     acceptedCount: accepted.length,
     heldCount: held.length,
     observedAcceptedPct: observedPct,
+    observedInterval95Pct: interval,
+    modelEstimateBiallelicPct: predictedPct,
     predictedBiallelicPct: predictedPct,
-    deltaPct,
+    withinInterval,
     recommendedClones,
     goalMet,
+    caution,
     topAcceptedClones: accepted.slice(0, 3).map(r => r.name || r.sample || "Clone"),
-    summary:
-      predictedPct != null
-        ? `Biomni predicted ~${predictedPct}% verified biallelic clones (target sample size: ${recommendedClones || "—"} clones); observed ${accepted.length}/${valid.length} (${observedPct}%) accepted clones${goalMet ? " — ≥2 verified clone banking target met." : " — screen additional clones to bank ≥2 independent lines."}`
-        : `Observed ${accepted.length}/${valid.length} (${observedPct}%) accepted clones (${held.length} held for review)${goalMet ? " — ≥2 verified clone banking target met." : "."}`,
+    summary: `${predictedPct != null ? `Model estimate for a biallelic LoF clone: ${predictedPct}% (assumptions in the design report; ${withinInterval ? "inside" : "outside"} the observed interval). ` : "No model estimate is available for this design. "}Observed: ${observed}${goalMet ? "; at least two accepted clones are available to bank" : "; fewer than two accepted clones so far"}. ${caution}`,
   };
 }
 
@@ -1197,7 +1227,8 @@ export async function runBiomniCoScientist(
       } else if (item.tool === "compute_screening_power") {
         screeningPower = computeClonalScreeningPower({
           editType: intent.editType,
-          lindelTopGuide: lindelRanking?.topGuides?.[0],
+          // the weaker guide of the selected pair (not the top-ranked candidate, which need not be in the pair)
+          weakerGuideLofPct: designResult?.koAssessment?.outcomes?.minLofPct ?? null,
           uniprot,
         });
         output = screeningPower;

@@ -1073,7 +1073,7 @@ export function DesignView({
                 )}
                 {currentProject?.biomniReport?.screeningPower?.ok && (
                   <span style={{ color: "#334155" }}>
-                    <strong>Screening Power:</strong> ~{currentProject.biomniReport.screeningPower.predictedBiallelicClonePct}% biallelic → screen <strong>{currentProject.biomniReport.screeningPower.recommendedClonesToScreen} clones</strong> ({currentProject.biomniReport.screeningPower.plates96Well} × 96-well plate)
+                    <strong>Screening estimate:</strong> ~{currentProject.biomniReport.screeningPower.predictedBiallelicClonePct}% biallelic LoF clones{currentProject.biomniReport.screeningPower.recommendedClonesToScreen != null ? <> → screen <strong>{currentProject.biomniReport.screeningPower.recommendedClonesToScreen} clones</strong> ({currentProject.biomniReport.screeningPower.plates96Well} × 96-well plate)</> : null} (model; assumptions in the Co-Scientist report)
                   </span>
                 )}
               </div>

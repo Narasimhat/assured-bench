@@ -99,15 +99,17 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
     lines.push(
       `<p style="margin:4px 0"><strong>Wet-Lab Pre-Sequencing Genotyping Assay (${escapeHtml(ga.assayType)}):</strong> ${
         ga.deletionBp != null
-          ? `WT amplicon ${escapeHtml(ga.wtAmpliconBp)} bp → Excised KO amplicon ${escapeHtml(ga.editedAmpliconBp)} bp (Δ${escapeHtml(ga.deletionBp)} bp; ${escapeHtml(ga.agaroseRecommendation)}).`
+          ? `WT amplicon ${escapeHtml(ga.wtAmpliconBp)} bp → Excised KO amplicon ${escapeHtml(ga.editedAmpliconBp)} bp (Δ${escapeHtml(ga.deletionBp)} bp, ${escapeHtml(ga.relativeChangePct)}% of the amplicon). ${escapeHtml(ga.sizeNote)}`
           : `WT amplicon ${escapeHtml(ga.wtAmpliconBp)} bp${ga.rflpGained?.length ? ` · RFLP gained: ${escapeHtml(ga.rflpGained.join(", "))}` : ""}${ga.rflpLost?.length ? ` · RFLP ablated: ${escapeHtml(ga.rflpLost.join(", "))}` : ""}.`
       }</p>`
     );
   }
   if (sp?.ok) {
     lines.push(
-      `<p style="margin:4px 0"><strong>Clonal Screening Power (${escapeHtml(sp.mode)}):</strong> Predicted biallelic clone yield ~<strong>${escapeHtml(sp.predictedBiallelicClonePct)}%</strong> → Screen <strong>${escapeHtml(sp.recommendedClonesToScreen)} clones</strong> (${escapeHtml(sp.plates96Well)} × 96-well plate) for ≥95% probability of recovering ≥2 verified clones.</p>`
+      `<p style="margin:4px 0"><strong>Clonal screening estimate (${escapeHtml(sp.mode)}):</strong> ~<strong>${escapeHtml(sp.predictedBiallelicClonePct)}%</strong> of clones biallelic LoF (${escapeHtml(sp.model)}) → ${sp.recommendedClonesToScreen != null ? `screen <strong>${escapeHtml(sp.recommendedClonesToScreen)} clones</strong> (${escapeHtml(sp.plates96Well)} × 96-well plate) for ≥95% probability of ≥2 such clones` : escapeHtml(sp.note)}. Assumptions: ${sp.assumptions.map(escapeHtml).join(" ")}</p>`
     );
+  } else if (sp && sp.ok === false) {
+    lines.push(`<p style="margin:4px 0"><strong>Clonal screening estimate:</strong> ${escapeHtml(sp.reason)}</p>`);
   }
   if (!lines.length) return html;
   const section = `<section style="margin:16px 20px;padding:12px 16px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;font-family:system-ui,sans-serif;font-size:13px;color:#0f172a"><div style="font-weight:700;color:#0369a1;margin-bottom:4px">🧬 ASSURED-Biomni Co-Scientist Integrated Verification</div>${lines.join("")}</section>`;
