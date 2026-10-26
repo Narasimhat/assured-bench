@@ -32,6 +32,7 @@ import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/bi
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
+import { KoGuidePicker } from "./KoGuidePicker.jsx";
 import {
   Search,
   Play,
@@ -485,7 +486,11 @@ export function DesignView({
             },
             initialDesignResult: result,
             preloadedLindel: koLindel || null,
-            preserveCustomGuides: Boolean(customGuidesOverride?.length)
+            preserveCustomGuides: Boolean(customGuidesOverride?.length),
+            // choosing another pair for the same gene and reference does not change the isoform, protein and ClinVar lookups, so they are not repeated
+            reuse: currentProject.biomniReport && currentProject.genbankRaw === genbankRaw && currentProject.biomniReport.intent?.gene === resolvedGene
+              ? { gene: resolvedGene, mutation, isoformAnalysis: currentProject.biomniReport.isoformAnalysis, uniprot: currentProject.biomniReport.uniprot, clinvar: currentProject.biomniReport.clinvar }
+              : null
           }
         );
         if (biomniReport?.designResult && !biomniReport.designResult.err) {
@@ -524,6 +529,10 @@ export function DesignView({
   };
 
   const handleRunDesign = () => executeDesign(null);
+
+  const handleUsePair = (spacers) => {
+    if (Array.isArray(spacers) && spacers.length === 2) executeDesign(spacers);
+  };
 
   const handleSelectAlternativeGuide = (spacer) => {
     if (!spacer) return;
@@ -1097,6 +1106,24 @@ export function DesignView({
               />
             </div>
           </div>
+
+          {designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 && (
+            <details className="card" style={{ marginTop: "1rem" }} open={designResult.koPairChoice?.source === "user"}>
+              <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
+                Choose the guide pair ({designResult.koPicker.listed} guides ranked by predicted loss of function)
+              </summary>
+              <div style={{ marginTop: "1rem" }}>
+                <KoGuidePicker
+                  result={designResult}
+                  genbankRaw={currentProject.genbankRaw || genbankRaw}
+                  geneSymbol={geneMeta?.geneSymbol || geneInput.trim()}
+                  busy={isDesigning}
+                  onUsePair={handleUsePair}
+                  onUseRecommended={handleRunDesign}
+                />
+              </div>
+            </details>
+          )}
 
           {designResult.guideAlternatives?.candidates?.length > 0 && (
             <details className="card" style={{ marginTop: "1rem" }}>

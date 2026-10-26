@@ -152,6 +152,41 @@ export function selectFunctionalKoGuides(model, candidates, { enzyme = "spcas9",
   return { pair: { guides, spacing: best.spacing }, selection };
 }
 
+const KO_PICKER_ROWS = 60;
+
+/**
+ * The ranked single guides as the Design screen lists them for choosing a pair: the selector's own order (rankKoSingles), the predicted repair
+ * outcome of each guide, and where it cuts. At most KO_PICKER_ROWS rows, plus any guide named in `include` (the chosen pair).
+ */
+export function buildKoPicker(model, candidates, { enzyme = "spcas9", delivery = "rnp", koScorer = null, commonKoExons = null, gcPenaltyScale = 1, include = [] } = {}) {
+  const ranked = rankKoSingles(model, candidates, { enzyme, delivery, koScorer, commonKoExons, gcPenaltyScale });
+  const keep = new Set(include.map(spacer => String(spacer).toUpperCase()));
+  const chosen = ranked.rows.filter((row, index) => index < KO_PICKER_ROWS || keep.has(sequenceOf(row.guide)));
+  const rows = chosen.map(row => {
+    const o = row.outcomes;
+    return { rank: row.rank, spacer: sequenceOf(row.guide), strand: row.guide.str || row.guide.strand, pam: row.guide.pam, cut: row.guide.cut,
+      exon: row.exonIndex, offsetInExon: row.guide.cut - model.cdsSegments[row.exonIndex - 1][0],
+      gc: row.gc, gcPenaltyPts: row.gcPenaltyPts, tier: row.assessment.tier,
+      lofPct: o?.lofPct ?? null, effectiveLofPct: o ? Math.round((o.lofPct - row.gcPenaltyPts) * 10) / 10 : null, frameshiftPct: o?.frameshiftPct ?? null,
+      plus1Pct: o?.plus1Pct ?? null, inframePct: o?.inframePct ?? null, biallelicPct: o?.biallelicPct ?? null, otherIsoformNotDisruptedPct: o?.gapPct ?? null,
+      spliceMargin: row.spliceMargin, exonSkippingInFrame: row.exonSkippingInFrame, selfComplementarityFlag: row.selfComplementarityFlag,
+      ...(row.inCommonExon === undefined ? {} : { inCommonExon: row.inCommonExon }) };
+  });
+  return { version: KO_SELECTION_VERSION, outcomeModel: koScorer ? "Lindel (Chen et al. 2019) with the Assured QC NMD and truncation rules" : null,
+    eligible: ranked.rows.length, listed: rows.length, scanned: ranked.candidatesScanned,
+    rejected: { quality: ranked.qualityRejected, coverage: ranked.coverageRejected, spliceBoundary: ranked.spliceBoundaryRejected }, rows };
+}
+
+/** One or two sentences for the report when the pair was chosen by hand, naming what the selector recommended for comparison. Empty when the selector's pair was used. */
+export function describeKoPairChoice(choice) {
+  if (!choice || choice.source !== "user") return [];
+  const pct = value => (Number.isFinite(value) ? `${value}%` : "not predicted");
+  const lines = ["Guide pair chosen by the user from the ranked list. It is assessed like any pair below but is not labelled as the selector's optimum."];
+  if (choice.recommended) lines.push(`Selector's recommendation: ${choice.recommended.pair.join(" + ")} (weaker guide predicted LoF ${pct(choice.recommended.minLofPct)}). This pair: ${choice.pair.join(" + ")} (${pct(choice.minLofPct)}).`);
+  else lines.push("The selector found no pair to compare this one with.");
+  return lines;
+}
+
 export function describeKoSelection(selection) {
   if (!selection) return [];
   const list = rows => rows.map(g => `#${g.rank} ${g.spacer} (${g.strand}, GC ${g.gc.toFixed(1)}%${g.gcPenaltyPts ? ` (penalty ${g.gcPenaltyPts} points)` : ""}, ${g.tier}, coding coverage ${g.coveredIsoforms}/${g.isoformsEvaluated}, boundary margin ${g.spliceMargin} bp${g.exonSkippingInFrame ? ", in-frame exon-skipping flag" : ""}${g.selfComplementarityFlag ? ", self-complementarity flag" : ""}${g.isoformGaps.length ? `, escape flags in ${g.isoformGaps.map(gap => gap.id).join("/")}` : ""})`).join("; ");

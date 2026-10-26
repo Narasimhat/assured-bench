@@ -1,4 +1,4 @@
-import { selectFunctionalKoGuides, assessKoEligibility } from "./koSelection.js";
+import { selectFunctionalKoGuides, assessKoEligibility, buildKoPicker } from "./koSelection.js";
 import { calculateCfd } from "./cfd.js";
 import { assessKoPair, describeKoTier, codingModels } from "./koOutcomes.js";
 import { createKoOutcomeScorer } from "./koRank.js";
@@ -3629,12 +3629,17 @@ export function designKO(gb, options = {}) {
   if (!gb.cdsSegments.length) return { err: "No coding exons available for KO design." };
   let selectedPair;
   let koSelection = null;
+  let recommendedKoPair = null;
+  const koDelivery = options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp");
+  // every candidate the selector ranks: it chooses the pair from them, and the Design screen lists them for choosing a pair by hand
+  const koCandidates = findConfiguredModelGuides(gb, Math.floor(gb.genomicSequence.length / 2), gb.genomicSequence.length, { enzyme: enzyme.id, spacerLength: options.spacerLength });
   let exonStart;
   let exonEnd;
   let bestLength;
   let exonNumber;
   // Repair-outcome scoring (Lindel, SpCas9 only): the caller loads the weights (lindel/loadLindel.js) and passes the parsed model as `koLindel`.
   const koScorer = options.koLindel && !configured && gb.cdsSequence ? createKoOutcomeScorer(gb, options.koLindel) : null;
+  const koCommon = options.commonKoExons || null;
   if (options.customGuides?.length) {
     const customGuideSelection = configured ? (() => {
       const available = findConfiguredModelGuides(gb, Math.floor(gb.genomicSequence.length / 2), gb.genomicSequence.length, { enzyme: enzyme.id, spacerLength: options.spacerLength });
@@ -3666,12 +3671,11 @@ export function designKO(gb, options = {}) {
     exonEnd = exon?.end ?? 0;
     bestLength = exon ? (exon.end - exon.start) : 0;
   } else {
-    const available = findConfiguredModelGuides(gb, Math.floor(gb.genomicSequence.length / 2), gb.genomicSequence.length,
-      { enzyme: enzyme.id, spacerLength: options.spacerLength });
-    const choice = selectFunctionalKoGuides(gb, available, { enzyme: enzyme.id, delivery: options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp"), koScorer, commonKoExons: options.commonKoExons || null, gcPenaltyScale: options.gcPenaltyScale ?? 1 });
+    const choice = selectFunctionalKoGuides(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1 });
     if (choice.err) return { err: choice.err, koSelection: choice.selection };
     selectedPair = choice.pair;
     koSelection = choice.selection;
+    recommendedKoPair = choice.pair.guides.map(guide => guide.sp);
     const segmentIndex = gb.cdsSegments.findIndex(([a, b]) => a < selectedPair.guides[0].cut && selectedPair.guides[0].cut < b);
     [exonStart, exonEnd] = gb.cdsSegments[segmentIndex];
     bestLength = exonEnd - exonStart;
@@ -3703,6 +3707,21 @@ export function designKO(gb, options = {}) {
   // how often each repair outcome is predicted, weighted into the share of alleles that lose the protein (koRank.js); null when not requested or not computable
   const guideOutcomes = koScorer && koAssessment ? selectedPair.guides.map((guide) => koScorer(guide)) : null;
   const koOutcomes = guideOutcomes && guideOutcomes.every(Boolean) ? { model: "Lindel (Chen et al. 2019) with the Assured QC NMD and truncation rules", guides: guideOutcomes, minLofPct: Math.min(...guideOutcomes.map((o) => o.lofPct)) } : null;
+  // the ranked guides for choosing a pair by hand, and how the pair used here relates to the selector's recommendation
+  let koPicker = null; let koPairChoice = null;
+  try {
+    koPicker = buildKoPicker(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, include: selectedPair.guides.map(guide => guide.sp) });
+    const userPair = Boolean(options.customGuides?.length);
+    if (userPair && !recommendedKoPair) {
+      const rec = selectFunctionalKoGuides(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, sensitivity: false });
+      recommendedKoPair = rec.err ? null : rec.pair.guides.map(guide => guide.sp);
+    }
+    const minLof = spacers => { const found = spacers.map(sp => koPicker.rows.find(row => row.spacer === sp)?.lofPct); return found.every(Number.isFinite) ? Math.min(...found) : null; };
+    const chosenSpacers = selectedPair.guides.map(guide => guide.sp);
+    const same = recommendedKoPair && [...recommendedKoPair].sort().join("|") === [...chosenSpacers].sort().join("|");
+    koPairChoice = { source: userPair && !same ? "user" : "selector", pair: chosenSpacers, minLofPct: minLof(chosenSpacers),
+      recommended: recommendedKoPair ? { pair: recommendedKoPair, minLofPct: minLof(recommendedKoPair) } : null };
+  } catch { koPicker = null; koPairChoice = null; }
   const deletionOutcome = {
     deletionSize: selectedPair.spacing,
     deletionMod3: ((selectedPair.spacing % 3) + 3) % 3,
@@ -3742,6 +3761,8 @@ export function designKO(gb, options = {}) {
     amp: `WT ~${primerPair.wtAmpliconLength} bp | deletion ~${primerPair.deletionAmpliconLength} bp`,
     deletionOutcome,
     koSelection,
+    koPicker,
+    koPairChoice,
     koAssessment: koAssessment ? { ...koAssessment, summary: describeKoTier(koAssessment.tier), outcomes: koOutcomes, outcomesUnavailable: !koOutcomes && !configured && options.koOutcomesUnavailable ? String(options.koOutcomesUnavailable) : undefined } : null,
     strat: configured ? `NHEJ-mediated disruption using two ${enzyme.name} guides. Nominal deletion ${selectedPair.spacing} bp uses target-strand cut boundaries; staggered ends and end processing can change the repaired junction. Screen WT/deletion PCR products, sequence the junction, and confirm protein loss.` : longDeletion
       ? "NHEJ-mediated deletion using dual Cas9 guides. Screen with flanking junction PCR, then confirm the deletion by sequencing."
@@ -3941,6 +3962,44 @@ export function runDesignFromTranscriptModel(projectType, model, mutation, tag, 
     dbg: `Parsed ${model.genomicSequence.length} bp with ${getFeatureCount(model)} features. CDS: ${model.gene}, ${model.cdsSegments.length} segments, ${model.proteinLength} aa.`,
     ...designResult,
   };
+}
+
+// ---- choosing a pair by hand (Design screen) ----
+let previewModelCache = { raw: null, gene: null, model: null };
+function modelForPreview(genbankRaw, expectedGene) {
+  if (previewModelCache.raw === genbankRaw && previewModelCache.gene === (expectedGene || null)) return previewModelCache.model;
+  const parsed = parseGB(genbankRaw);
+  const model = parsed.seq ? normalizeGenBankToTranscriptModel(parsed, { expectedGene }) : null;
+  previewModelCache = { raw: genbankRaw, gene: expectedGene || null, model };
+  return model;
+}
+
+/**
+ * What a pair chosen from the ranked list would be, before the design is regenerated: nominal deletion between the cuts, whether it shifts the frame,
+ * the pair's functional tier across the annotated coding sequences, and the review flags. `picks` are two rows of `result.koPicker.rows`.
+ * Errors are conditions the design would refuse; warnings are things the report will state.
+ */
+export function previewKoPair(genbankRaw, picks, { expectedGene } = {}) {
+  const errors = []; const warnings = [];
+  if (!Array.isArray(picks) || picks.length !== 2) return { ok: false, errors: ["Choose exactly two guides."], warnings };
+  const [a, b] = picks;
+  if (a.spacer === b.spacer) errors.push("The two guides are the same.");
+  if (a.cut === b.cut) errors.push("The two guides cut at the same position; a pair needs two distinct cuts.");
+  const model = genbankRaw ? modelForPreview(genbankRaw, expectedGene) : null;
+  if (!model?.cdsSegments?.length) errors.push("The reference has no coding sequence to assess the pair on.");
+  if (errors.length) return { ok: false, errors, warnings };
+  const left = a.cut <= b.cut ? a : b; const right = left === a ? b : a;
+  const assessment = assessKoPair(model, { sp: left.spacer, cut: left.cut, str: left.strand }, { sp: right.spacer, cut: right.cut, str: right.strand });
+  const spacing = right.cut - left.cut;
+  if (spacing < 10 || spacing > 140) warnings.push(`The cuts are ${spacing} bp apart; the selector searches 10-140 bp. The report describes this deletion as chosen.`);
+  if (left.exon !== right.exon) warnings.push("The guides cut in different exons, so the deletion removes at least one intron boundary and may skip exons.");
+  if (spacing > KO_LONG_DELETION_THRESHOLD) warnings.push("The deletion is over 1 kb; screening primers will be placed across it.");
+  for (const g of [a, b]) if (g.gcPenaltyPts > 0) warnings.push(`${g.spacer} has ${g.gc}% GC (${g.gcPenaltyPts}-point penalty in the ranking).`);
+  const lof = [a.lofPct, b.lofPct];
+  const minLofPct = lof.every(Number.isFinite) ? Math.min(...lof) : null;
+  if (minLofPct != null && minLofPct < KO_LOF_WARN_PCT) warnings.push(`The weaker guide is predicted to give ${minLofPct}% loss-of-function alleles, below ${KO_LOF_WARN_PCT}%.`);
+  return { ok: true, errors, warnings, spacing, deletionMod3: spacing % 3, frameshiftPredicted: spacing % 3 !== 0, tier: assessment.tier, betweenTier: assessment.between.tier,
+    betweenClass: assessment.between.class, isoformGapScore: assessment.isoformGapScore, minLofPct, expectedBiallelicPct: minLofPct == null ? null : Math.round((minLofPct / 100) ** 2 * 1000) / 10 };
 }
 
 export function runDesign(projectType, gbRaw, mutation, tag, homologyArmLength, options = {}) {

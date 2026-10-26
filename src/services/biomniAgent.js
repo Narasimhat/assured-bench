@@ -830,6 +830,7 @@ export async function runBiomniCoScientist(
     initialDesignResult = null,
     preloadedLindel = null,
     preserveCustomGuides = false,
+    reuse = null,
   } = {}
 ) {
   const parsedIntent = parseBiomniPrompt(prompt, currentProject);
@@ -889,14 +890,18 @@ export async function runBiomniCoScientist(
           };
         }
       } else if (item.tool === "analyze_common_isoform_exons") {
-        isoformAnalysis = await analyzeCommonIsoformExons(intent.gene, genbankRaw, fetchFn);
-        output = isoformAnalysis;
+        // `reuse` carries the gene-level lookups of an earlier run on the same gene (choosing another guide pair does not change them)
+        const again = reuse && reuse.gene === intent.gene ? reuse : null;
+        isoformAnalysis = again?.isoformAnalysis?.ok ? again.isoformAnalysis : await analyzeCommonIsoformExons(intent.gene, genbankRaw, fetchFn);
+        output = again?.isoformAnalysis?.ok ? { ...isoformAnalysis, reusedFromEarlierRun: true } : isoformAnalysis;
       } else if (item.tool === "query_uniprot_protein") {
-        uniprot = await queryUniprotProtein(intent.gene, fetchFn);
-        output = uniprot;
+        const again = reuse && reuse.gene === intent.gene ? reuse : null;
+        uniprot = again?.uniprot?.ok ? again.uniprot : await queryUniprotProtein(intent.gene, fetchFn);
+        output = again?.uniprot?.ok ? { ...uniprot, reusedFromEarlierRun: true } : uniprot;
       } else if (item.tool === "search_clinvar_variants") {
-        clinvar = await searchClinvarVariants(intent.gene, intent.mutation, fetchFn);
-        output = clinvar;
+        const again = reuse && reuse.gene === intent.gene && reuse.mutation === intent.mutation ? reuse : null;
+        clinvar = again?.clinvar?.ok ? again.clinvar : await searchClinvarVariants(intent.gene, intent.mutation, fetchFn);
+        output = again?.clinvar?.ok ? { ...clinvar, reusedFromEarlierRun: true } : clinvar;
       } else if (item.tool === "design_crispr_edit") {
         if (!loadedLindel && intent.editType === "ko" && intent.enzyme === "spcas9") {
           try {

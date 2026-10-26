@@ -1,4 +1,4 @@
-import { describeKoSelection } from "./koSelection.js";
+import { describeKoSelection, describeKoPairChoice } from "./koSelection.js";
 // Report and export rendering, extracted from App.jsx.
 //
 // Everything here is a pure function of a design result: no React, no hooks, no DOM. That
@@ -99,6 +99,7 @@ export function buildDesignSummary(result) {
       if (outcomes) outcomes.guides.forEach((g, index) => lines.push(`  Guide ${index + 1} predicted repair outcomes: ${g.lofPct}% loss-of-function alleles (${g.plus1Pct}% +1 insertions, ${g.frameshiftPct}% frameshifts, ${g.inframePct}% in-frame).`));
       else if (result.koAssessment.outcomesUnavailable) lines.push(`  Repair-outcome ranking not applied: ${result.koAssessment.outcomesUnavailable}`);
     }
+    describeKoPairChoice(result.koPairChoice).forEach(line => lines.push(line));
     describeKoSelection(result.koSelection).forEach(line => lines.push(line));
     if (result.strat) lines.push(`Strategy: ${result.strat}`);
     return lines.join("\n");
@@ -1075,6 +1076,7 @@ function buildKnockoutFactsHtml(result) {
     summaryRows.push({ label: "Pair spacing", value: spacingBp });
   }
 
+  describeKoPairChoice(result.koPairChoice).forEach((line, index) => summaryRows.push({ label: index === 0 ? "Guide pair" : "Compared with the selector", value: line }));
   const ko = result.koAssessment;
   if (ko) {
     summaryRows.push({ label: "KO confidence tier", value: `${ko.tier.toUpperCase()} — ${ko.summary}` });
