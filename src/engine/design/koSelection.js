@@ -5,7 +5,7 @@ import { assessEnzymeGuide } from "./enzymeGuides.js";
 import { getEnzyme } from "./enzymeConfig.js";
 
 export const KO_SELECTION_VERSION = "2.0.0";
-const PAIR_SHORTLIST = 24;
+const PAIR_SHORTLIST = 32;
 const sequenceOf = guide => String(guide.sp || guide.spacer || "").toUpperCase();
 const keyOf = guide => `${guide.str || guide.strand}:${guide.cut}:${sequenceOf(guide)}`;
 export function assessKoEligibility(guide, { enzyme = "spcas9", delivery = "rnp" } = {}) {
@@ -90,6 +90,8 @@ export function selectFunctionalKoGuides(model, candidates, { enzyme = "spcas9",
     pairs.push({ a, b, spacing, assessment });
   }
   pairs.sort((a, b) => KO_TIER_RANK[a.assessment.tier] - KO_TIER_RANK[b.assessment.tier]
+    || KO_TIER_RANK[a.assessment.between.tier] - KO_TIER_RANK[b.assessment.between.tier]
+    || Number(a.assessment.between.class === "inframe") - Number(b.assessment.between.class === "inframe")
     || a.assessment.isoformGapScore - b.assessment.isoformGapScore
     || Number(b.spacing >= 40) - Number(a.spacing >= 40)
     || Math.max(a.a.rank, a.b.rank) - Math.max(b.a.rank, b.b.rank)

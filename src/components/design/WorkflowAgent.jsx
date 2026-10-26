@@ -355,10 +355,13 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                             </span>
                           ) : null}
                         </td>
-                        <td style={{ padding: "0.25rem" }}>Exon {g.coding_exon}</td>
+                        <td style={{ padding: "0.25rem" }}>
+                          Exon {g.coding_exon}
+                          {g.is_terminal_exon ? " (5' Last Exon)" : ""}
+                        </td>
                         <td style={{ padding: "0.25rem" }}>
                           {g.shared_isoforms_label || `${g.isoform_coverage_pct ?? 100}%`}
-                          {g.is_common_exon ? " ✅ Common" : ""}
+                          {g.is_common_exon ? " ✅ Common" : g.is_terminal_exon ? " ⚠ Terminal" : ""}
                         </td>
                         <td style={{ padding: "0.25rem" }}>{g.gc_percent}%</td>
                         <td style={{ padding: "0.25rem" }}>{g.panel_tier}</td>
@@ -384,11 +387,11 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                           border: b.selectedInAssuredPair ? "1px solid #16a34a" : "1px solid #fcd34d",
                         }}
                       >
-                        <strong>Brunello #{b.brunelloRank}</strong> <code>{b.spacer}</code> (Exon {b.exon}{b.isoformCoverageLabel ? ` · ${b.isoformCoverageLabel}` : ""}, RS2 {b.ruleSet2}):{" "}
+                        <strong>Brunello #{b.brunelloRank}</strong> <code>{b.spacer}</code> (Exon {b.exon}{b.isTerminalExon ? " · Terminal" : ""}{b.isoformCoverageLabel ? ` · ${b.isoformCoverageLabel}` : ""}, RS2 {b.ruleSet2}):{" "}
                         {b.lindelRank ? (
                           <span>
                             ASSURED Rank <strong>#{b.lindelRank}</strong> · Tier <code>{b.panelTier}</code> · LoF <strong>{b.predictedLofPct}%</strong>
-                            {b.selectedInAssuredPair ? " ✅ Selected in ASSURED Pair" : !b.isCommonExon ? " ⚠ Non-common exon" : ""}
+                            {b.selectedInAssuredPair ? " ✅ Selected in ASSURED Pair" : b.isTerminalExon ? " ⚠ Terminal exon" : !b.isCommonExon ? " ⚠ Non-common exon" : ""}
                           </span>
                         ) : (
                           <span><code>{b.panelTier}</code> (excluded by terminal exon NMD rule)</span>
@@ -396,6 +399,51 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                       </span>
                     ))}
                   </div>
+                </div>
+              )}
+              {biomniResult.lindelRanking.nmdEscapeRescue && (
+                <div style={{ marginTop: "0.45rem", fontSize: "0.81rem", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "6px", padding: "0.5rem 0.7rem" }}>
+                  <strong>🧬 NMD-Escape Rescue: Dual-Guide Early-Truncation (&lt;50% Protein), 5' Last-Exon &amp; Alternative Nuclease Strategies</strong>
+                  <div className="muted" style={{ marginTop: "0.2rem" }}>
+                    {biomniResult.lindelRanking.nmdEscapeRescue.reason}
+                  </div>
+                  {biomniResult.lindelRanking.nmdEscapeRescue.alternativeEnzymePairs?.length > 0 && (
+                    <div style={{ marginTop: "0.35rem" }}>
+                      <strong>1. Coordinated Dual-Cut Early-Truncation Pairs Across Nucleases:</strong>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
+                        {biomniResult.lindelRanking.nmdEscapeRescue.alternativeEnzymePairs.map(opt => (
+                          <span
+                            key={opt.enzymeId}
+                            style={{
+                              padding: "0.2rem 0.5rem",
+                              borderRadius: "4px",
+                              background: opt.deletionClass === "lof_truncation" ? "#dcfce7" : "#ffffff",
+                              border: opt.deletionClass === "lof_truncation" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                            }}
+                          >
+                            <strong>{opt.enzymeName} ({opt.pam})</strong> · {opt.exon}:{" "}
+                            {opt.guides.map(g => `${g.spacer} (${g.pam}, ${g.gc}% GC)`).join(" + ")}{" "}
+                            {opt.deletionBp != null && (
+                              <span>
+                                → <strong>{opt.deletionBp} bp deletion</strong> (<code>{opt.deletionClass}</code>
+                                {opt.retainedProteinPct != null ? `, retains ${opt.retainedProteinPct}% protein` : ""})
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {biomniResult.lindelRanking.nmdEscapeRescue.lastExonTruncationGuides?.length > 0 && (
+                    <div style={{ marginTop: "0.35rem" }}>
+                      <strong>2. Top 5' Last-Exon Early-Truncation Guides (Upstream of C-Terminal Functional Domains):</strong>{" "}
+                      {biomniResult.lindelRanking.nmdEscapeRescue.lastExonTruncationGuides.map((tg, i) => (
+                        <span key={tg.spacer} style={{ marginRight: "0.5rem" }}>
+                          #{i + 1} <code>{tg.spacer}</code> ({tg.pam}, {tg.strand}, Exon {tg.coding_exon} +{tg.cut_after_exon_nt} nt, {tg.gc_percent}% GC, Truncation LoF <strong>{tg.predicted_LoF_allele_pct}%</strong>)
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </details>

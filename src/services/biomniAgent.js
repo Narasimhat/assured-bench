@@ -9,8 +9,9 @@
 import { ENZYMES } from "../engine/design/enzymeConfig.js";
 import { parseGB, runDesign, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
-import { codingModels } from "../engine/design/koOutcomes.js";
-import { rankKoGuides } from "../engine/design/koRank.js";
+import { assessKoGuide, codingModels } from "../engine/design/koOutcomes.js";
+import { koGuideWindow, rankKoGuides, summariseGuideOutcomes } from "../engine/design/koRank.js";
+import { lindelEdits, predictLindel } from "../engine/design/lindel/lindel.js";
 import { cdsToGenomic, fetchGeneReference } from "../engine/design/geneFetch.js";
 import { fetchGeneGenbank } from "./ensembl.js";
 import { agentRequest, runWorkflowAgent } from "./workflowAgent.js";
@@ -46,10 +47,10 @@ export const CURATED_BRUNELLO_LIBRARY = Object.freeze({
     { spacer: "GATCCACTCACAGTTTCCAT", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6108, libraryGene: "TP53" },
   ],
   APOE: [
-    { spacer: "CATGCTCGGCCAGAGCACCG", pam: "AGG", strand: "+", exon: 4, ruleSet2: 0.6902, libraryGene: "APOE" },
-    { spacer: "AGCTGCGCCAGCAGACCGAG", pam: "TGG", strand: "+", exon: 3, ruleSet2: 0.6512, libraryGene: "APOE" },
-    { spacer: "GGCCTACAAATCGGAACTGG", pam: "AGG", strand: "+", exon: 4, ruleSet2: 0.6174, libraryGene: "APOE" },
-    { spacer: "GCGGACATGGAGGACGTGTG", pam: "CGG", strand: "+", exon: 4, ruleSet2: 0.6093, libraryGene: "APOE" },
+    { spacer: "CATGCTCGGCCAGAGCACCG", pam: "AGG", strand: "+", exon: 3, ruleSet2: 0.6902, libraryGene: "APOE" },
+    { spacer: "AGCTGCGCCAGCAGACCGAG", pam: "TGG", strand: "+", exon: 2, ruleSet2: 0.6512, libraryGene: "APOE" },
+    { spacer: "GGCCTACAAATCGGAACTGG", pam: "AGG", strand: "+", exon: 3, ruleSet2: 0.6174, libraryGene: "APOE" },
+    { spacer: "GCGGACATGGAGGACGTGTG", pam: "CGG", strand: "+", exon: 3, ruleSet2: 0.6093, libraryGene: "APOE" },
   ],
   NR2F2: [
     { spacer: "ACATTTGCGAACTGGCCGCG", pam: "AGG", strand: "+", exon: 2, ruleSet2: 0.7097, libraryGene: "NR2F2" },
@@ -765,6 +766,58 @@ export async function runBiomniCoScientist(
         }
         const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
         const rawRows = rankKoGuides(model, loadedLindel);
+        const isNmdBlindLocus = !rawRows.some(r => r.panel_tier === "robust" || r.panel_tier === "marginal");
+
+        // When non-terminal exons have no NMD-triggering ('robust'/'marginal') guides (e.g. APOE where 75.3% of CDS is in the last exon),
+        // also evaluate 5'-half last-exon guides so early-truncation (<50% retained protein) and Brunello terminal-exon guides are ranked.
+        const terminalRows = [];
+        if (isNmdBlindLocus && model.cdsSegments.length > 1) {
+          const lastIdx = model.cdsSegments.length - 1;
+          const [lastStart, lastEnd] = model.cdsSegments[lastIdx];
+          const G = model.genomicSequence.toUpperCase();
+          const rc = (s) => [...s].reverse().map(c => ({ A: "T", C: "G", G: "C", T: "A" }[c] || "N")).join("");
+          const pct1 = (x) => Math.round(1000 * x) / 10;
+          for (let pos = lastStart; pos + 23 <= lastEnd; pos += 1) {
+            const tryGuide = (spacer, strand, pam, cut) => {
+              if (cut <= lastStart + 2 || cut >= lastEnd - 2) return;
+              const w65 = koGuideWindow(model, { sp: spacer, str: strand, cut });
+              if (!w65) return;
+              const pred = predictLindel(loadedLindel, w65);
+              if (pred.error) return;
+              const edits = lindelEdits(pred);
+              if (!edits.length) return;
+              const s = summariseGuideOutcomes(model, { cut, strand, edits });
+              const tier = assessKoGuide(model, { sp: spacer, str: strand, cut }).tier;
+              const gc = Math.round([...spacer].filter(c => c === "G" || c === "C").length * 5);
+              terminalRows.push({
+                spacer,
+                strand,
+                pam,
+                coding_exon: lastIdx + 1,
+                cut_after_exon_nt: cut - lastStart,
+                gc_percent: gc,
+                base_pos17: spacer[16],
+                panel_tier: tier,
+                lindel_frameshift_pct: Math.round(1000 * pred.frameshift) / 10,
+                lindel_plus1_ins_pct: pct1(s.plus1),
+                predicted_LoF_allele_pct: pct1(s.lof),
+                predicted_clear_NMD_allele_pct: pct1(s.clean),
+                predicted_in_frame_pct: pct1(s.inframe),
+                ge3bp_insertion_group_pct: pct1(s.group),
+                other_isoform_not_disrupted_pct: pct1(s.gap),
+                predicted_biallelic_LoF_clone_pct: Math.round(s.lof ** 2 * 1000) / 10,
+                is_terminal_exon: true,
+              });
+            };
+            if (/^[ACGT]GG$/.test(G.slice(pos + 20, pos + 23))) {
+              tryGuide(G.slice(pos, pos + 20), "+", G.slice(pos + 20, pos + 23), pos + 17);
+            }
+            if (/^[ACGT]GG$/.test(rc(G.slice(pos, pos + 3)))) {
+              tryGuide(rc(G.slice(pos + 3, pos + 23)), "-", rc(G.slice(pos, pos + 3)), pos + 6);
+            }
+          }
+        }
+
         const selectedSpacers = new Set(
           (designResult?.gs || []).map(g => String(g.sp || g.spacer || "").toUpperCase())
         );
@@ -774,7 +827,8 @@ export async function runBiomniCoScientist(
         );
         const KO_TIER_ORDER = { robust: 0, marginal: 1, truncation: 2, escape: 3 };
         const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
-        const rows = rawRows.map(r => {
+        const combinedRows = [...rawRows, ...terminalRows];
+        const rows = combinedRows.map(r => {
           const ex = exonLookup.get(r.coding_exon);
           const inRecordDisruptedPct = Math.max(0, 100 - (r.other_isoform_not_disrupted_pct || 0));
           const coveragePct = ex ? ex.coveragePct : inRecordDisruptedPct;
@@ -785,6 +839,7 @@ export async function runBiomniCoScientist(
             isoform_coverage_pct: coveragePct,
             shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : `${coveragePct}%`,
             is_common_exon: isCommon,
+            is_terminal_exon: Boolean(r.is_terminal_exon || ex?.isTerminalExon),
             selected_in_pair: selectedSpacers.has(String(r.spacer || "").toUpperCase()),
             brunello_match: brunelloMatch,
           };
@@ -808,6 +863,18 @@ export async function runBiomniCoScientist(
             topDisplay.push(r);
           }
         }
+        // For NMD-blind loci (like APOE), also include the top 2 5'-last-exon truncation guides in displayGuides
+        if (isNmdBlindLocus) {
+          const bestTerminal = rows
+            .filter(r => r.is_terminal_exon && r.predicted_LoF_allele_pct > 0)
+            .sort((a, b) => b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct)
+            .slice(0, 2);
+          for (const tr of bestTerminal) {
+            if (!topDisplay.some(t => t.spacer === tr.spacer)) {
+              topDisplay.push(tr);
+            }
+          }
+        }
         const brunelloEvaluated = brunelloList.map((b, idx) => {
           const matchedRow = rows.find(r => String(r.spacer || "").toUpperCase() === b.spacer.toUpperCase());
           const ex = exonLookup.get(b.exon);
@@ -819,9 +886,55 @@ export async function runBiomniCoScientist(
             predictedLofPct: matchedRow?.predicted_LoF_allele_pct ?? null,
             isoformCoverageLabel: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : null,
             isCommonExon: Boolean(ex?.recommendedForKo),
+            isTerminalExon: Boolean(matchedRow?.is_terminal_exon || ex?.isTerminalExon),
             selectedInAssuredPair: selectedSpacers.has(b.spacer.toUpperCase()),
           };
         });
+
+        // Build NMD-Escape Rescue & Alternative Nuclease options when all single-cut guides are 'escape'
+        let nmdEscapeRescue = null;
+        if (isNmdBlindLocus) {
+          const altEnzymeOptions = [];
+          for (const enzId of ["spcas9", "spcas9ng", "spry", "sacas9"]) {
+            try {
+              const enzCfg = ENZYMES[enzId];
+              const altRes = designRunner("ko", genbankRaw, "", "", "", {
+                enzyme: enzId,
+                spacerLength: enzCfg.spacer_len.default,
+                expectedGene: intent.gene,
+                ...(enzId === "spcas9" && loadedLindel ? { koLindel: loadedLindel } : {}),
+              });
+              if (altRes && !altRes.err && altRes.gs?.length >= 2) {
+                const bw = altRes.koAssessment?.between;
+                altEnzymeOptions.push({
+                  enzymeId: enzId,
+                  enzymeName: enzCfg.name,
+                  pam: enzCfg.pam_pattern,
+                  exon: altRes.exon,
+                  deletionBp: bw?.sizeBp ?? null,
+                  deletionClass: bw?.class ?? null,
+                  deletionTier: bw?.tier ?? altRes.koAssessment?.tier ?? "escape",
+                  retainedProteinPct: bw?.retainedPct ?? null,
+                  guides: altRes.gs.slice(0, 2).map(g => ({ spacer: g.sp, pam: g.pm || g.pam, strand: g.str, gc: g.gc })),
+                });
+              }
+            } catch {
+              // Skip failed enzyme
+            }
+          }
+          const bestLastExonGuides = rows
+            .filter(r => r.is_terminal_exon)
+            .sort((a, b) => b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct)
+            .slice(0, 3);
+          nmdEscapeRescue = {
+            isNmdBlindLocus: true,
+            reason:
+              "All single-cut frameshifts in non-terminal exons reach their premature stop codon within ≤55 nt of the last exon-exon junction or inside the terminal coding exon (escaping NMD).",
+            alternativeEnzymePairs: altEnzymeOptions,
+            lastExonTruncationGuides: bestLastExonGuides,
+          };
+        }
+
         lindelRanking = {
           ok: true,
           totalCandidates: rows.length,
@@ -829,6 +942,7 @@ export async function runBiomniCoScientist(
           topGuides: rows.slice(0, 10),
           displayGuides: topDisplay,
           brunelloComparison: brunelloEvaluated,
+          nmdEscapeRescue,
         };
         output = {
           ok: true,
