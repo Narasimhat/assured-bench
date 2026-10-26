@@ -92,7 +92,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
           {Object.entries(AGENT_PRIORITIES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>
       </label>
-      {project.editType === "ko" && <p>Knockout comparison uses nominal frameshift and exon-skipping evidence, then primer checks. Repair outcomes can differ.</p>}
+      {project.editType === "ko" && <p>SpCas9 guide pairs use Lindel repair outcomes when available. Cross-enzyme ordering uses nominal frameshift and exon-skipping evidence, then primer checks; it does not compare Lindel percentages. Repair outcomes can differ.</p>}
       <p className="muted">Blocked or incomplete designs are excluded first. Activity scores are not compared across enzymes. Custom guides and previous risk acceptance are not reused.</p>
     </details>
     {inputError && <p className="muted">{inputError}</p>}
@@ -100,7 +100,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
       <button type="button" className="btn btn-primary" disabled={Boolean(inputError || progress)} onClick={compare}>Compare enzymes and recommend</button>
       {progress && <button type="button" className="btn btn-secondary" onClick={cancel}>Cancel comparison</button>}
     </div>
-    {progress && <p role="status" aria-live="polite">Comparing {progress.enzyme} · {progress.completed}/{progress.total} completed</p>}
+    {progress && <p role="status" aria-live="polite">{progress.phase === "loading_model" ? "Loading Lindel for " : "Comparing "}{progress.enzyme} · {progress.completed}/{progress.total} completed</p>}
     {error && <p role="alert" className="error">{error}</p>}
     {visible && <>
       <div className="agent-summary" aria-live="polite">
