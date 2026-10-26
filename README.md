@@ -41,6 +41,27 @@ Project Setup (Header) ──► 1. Design ──► 2. Order ──► 3. Trace
 
 ---
 
+## What the checks do, and what they do not
+
+The Co-Scientist panel in Step 1 is a rule-based workflow: fixed rules read the request and run a fixed sequence of tools. It does not use a language model, and it states what it could not read (no gene, no edit type, no residue) instead of choosing a default.
+
+| Output | Source | Limits |
+| --- | --- | --- |
+| Known variants at guide, PAM and primer sites | Live NCBI dbSNP query (`src/services/variantScreen.js`) | Needs GRCh38 coordinates in the reference record and checks them against dbSNP's reference bases. Records without coordinates (RefSeqGene `NG_` records, for example TP53, NR2F2) are reported as "not assessed", never "clean". Frequencies are ALFA/gnomAD as reported by dbSNP. |
+| Protein domains | Live UniProt query | No annotated domain means none is shown. Gene constraint (pLI, LOEUF) and essentiality (DepMap) are not retrieved. |
+| Brunello library guides | Subset generated from the Broad library file (`scripts/build_brunello_subset.mjs`; source SHA-256 recorded in `src/services/data/brunelloSubset.js`) | Six genes only (DIPK2A, TP53, APOE, NR2F2, INS, SCN5A); exon numbers and Rule Set 2 scores are the library's own. |
+| Guide ranking by predicted loss of function | Lindel (Chen et al. 2019), JavaScript port | Lindel's own test-set correlation is 0.71; the order is a prediction, not a measurement. |
+| Clonal screening estimate | `computeClonalScreeningPower` | P(biallelic LoF clone) = delivery x L^2 with L from the pair's weaker guide; delivery (80%) is an assumption. Knock-ins are not modelled. |
+| Observed vs estimated | `computeQcPredictionCalibration` | A comparison for one design with a Wilson interval, not a calibration. Sanger acceptance is sequence-level, not protein loss. |
+
+Known open items are listed in `docs/AUDIT_2026-10.md`.
+
+## Quality gates
+
+`npm test` runs the test suite; `npm run build` builds; CI (`.github/workflows/ci.yml`) runs both and an audit gate on every push. `vercel.json` sets a content security policy (scripts only from the app's own files).
+
+---
+
 ## Getting Started
 
 ### Prerequisites

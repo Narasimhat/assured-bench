@@ -210,12 +210,12 @@ export function WorkflowAgent({ project, onUpdateProject }) {
   const recommended = visible?.candidates.filter(c => c.recommended) || [];
   return <section ref={panel} className="card workflow-agent" aria-labelledby="workflow-agent-title">
     <h2 id="workflow-agent-title">Workflow agent &amp; Biomni Co-Scientist <span className="agent-optional">Optional</span></h2>
-    <p className="muted">Run an autonomous Stanford Biomni-style biomedical workflow or compare nuclease options for your modification.</p>
+    <p className="muted">Run a multi-step, Biomni-style workflow (fixed rules, no language model) or compare nuclease options for your modification.</p>
 
     <details className="agent-details" open>
-      <summary><strong>🧬 Biomni Co-Scientist (Autonomous Multi-Step Agent · ASSURED-E1)</strong></summary>
+      <summary><strong>🧬 Co-Scientist (rule-based multi-step workflow · ASSURED-E1)</strong></summary>
       <p className="muted" style={{ marginTop: "0.4rem" }}>
-        Describe your genome editing goal in plain English. The agent decomposes your prompt into a multi-step plan across Ensembl, UniProtKB, NCBI ClinVar, 7-enzyme ASSURED CRISPR Design, JavaScript Lindel KO repair modeling, and clonal screening power analysis.
+        Describe your genome editing goal in plain English. Fixed rules read the gene, the edit, the residue and the enzyme from your text (what they cannot read is reported, not guessed), then run these tools in order: Ensembl/NCBI reference, UniProtKB, NCBI ClinVar, ASSURED CRISPR Design, JavaScript Lindel knockout-repair model, a live dbSNP check of the guide and primer sites, and a clonal screening estimate. No language model is involved.
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", margin: "0.5rem 0" }}>
         {BIOMNI_PRESET_MISSIONS.map(m => (
