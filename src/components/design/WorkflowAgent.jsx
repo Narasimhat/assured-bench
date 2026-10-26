@@ -249,10 +249,18 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                     }}
                   >
                     <strong>Exon {ex.codingExon}</strong> ({ex.lengthBp} bp): {ex.sharedIsoforms}/{ex.totalIsoforms} ({ex.coveragePct}%)
-                    {ex.recommendedForKo ? " ✅ Common" : ex.isTerminalExon ? " ⚠ Terminal" : ""}
+                    {ex.recommendedForKo ? " ✅ Common" : ex.isTerminalExon ? " ⚠ Terminal" : ex.nmdViable === false ? " ⚠ 5' Re-init / NMD Escape" : ""}
                   </span>
                 ))}
               </div>
+              {biomniResult.designResult?.singleCdsDefault && (
+                <div className="muted" style={{ marginTop: "0.3rem", fontSize: "0.78rem" }}>
+                  <strong>Why Biomni differs from Single-Transcript Manual Selection:</strong> Manual design evaluates only the single canonical CDS in the GenBank file and selects{" "}
+                  <code>{biomniResult.designResult.singleCdsDefault.exon}</code> ({biomniResult.designResult.singleCdsDefault.guides.join(" + ")}), whereas Biomni queries all{" "}
+                  {biomniResult.isoformAnalysis.totalIsoforms} RefSeq isoforms and upgrades to{" "}
+                  <code>{biomniResult.designResult.exon}</code> for higher pan-isoform NMD coverage.
+                </div>
+              )}
             </div>
           )}
 

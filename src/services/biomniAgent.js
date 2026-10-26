@@ -531,15 +531,38 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
     }
   }
 
-  const nonTerminalCounts = mainSegs.length > 1 ? sharingCounts.slice(0, -1) : sharingCounts;
-  const maxNonTerminalSharing = Math.max(...nonTerminalCounts, 1);
+  // Check which non-terminal exons can produce NMD-triggering ('robust'/'marginal') cuts vs 5' re-initiation / 3' last-junction 'escape'
+  const exonNmdViable = mainSegs.map(([s, e], idx) => {
+    const isTerm = mainSegs.length > 1 && idx === mainSegs.length - 1;
+    if (isTerm || e - s < 25) return false;
+    const sampleCuts = [
+      Math.round(s + (e - s) * 0.25),
+      Math.round(s + (e - s) * 0.5),
+      Math.round(s + (e - s) * 0.75),
+    ].filter(c => c > s + 10 && c < e - 10);
+    return sampleCuts.some(cut => {
+      try {
+        const t = assessKoGuide(model, { cut }).tier;
+        return t === "robust" || t === "marginal";
+      } catch {
+        return false;
+      }
+    });
+  });
+
+  const anyNmdViable = exonNmdViable.some(Boolean);
+  const candidateSharing = mainSegs
+    .map((_, idx) => ({ idx, shared: sharingCounts[idx], isTerm: mainSegs.length > 1 && idx === mainSegs.length - 1, viable: exonNmdViable[idx] }))
+    .filter(x => !x.isTerm && (anyNmdViable ? x.viable : true));
+  const maxNonTerminalSharing = Math.max(...candidateSharing.map(x => x.shared), 1);
 
   const exons = mainSegs.map(([s, e], idx) => {
     const shared = sharingCounts[idx];
     const coveragePct = Math.round((shared / totalIsoforms) * 100);
     const isTerminalExon = mainSegs.length > 1 && idx === mainSegs.length - 1;
     const isCommonAll = shared === totalIsoforms;
-    const recommendedForKo = !isTerminalExon && shared === maxNonTerminalSharing;
+    const nmdViable = exonNmdViable[idx];
+    const recommendedForKo = !isTerminalExon && (anyNmdViable ? nmdViable : true) && shared === maxNonTerminalSharing;
     return {
       codingExon: idx + 1,
       start: s + 1,
@@ -550,6 +573,7 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
       coveragePct,
       isCommonExon: isCommonAll,
       isTerminalExon,
+      nmdViable,
       recommendedForKo,
     };
   });
@@ -726,6 +750,11 @@ export async function runBiomniCoScientist(
                   }
                 }
                 if (foundCommonPair) {
+                  foundCommonPair.singleCdsDefault = {
+                    exon: res.exon,
+                    codingExon: chosenExon,
+                    guides: (res.gs || []).slice(0, 2).map(g => g.sp),
+                  };
                   res = foundCommonPair;
                   break;
                 }
@@ -844,12 +873,12 @@ export async function runBiomniCoScientist(
             brunello_match: brunelloMatch,
           };
         });
-        // Prioritize Common Non-Terminal Exon (e.g. 3/3 isoforms) + NMD-Safe ('robust') tier + highest Lindel LoF %
+        // Prioritize NMD-Safe ('robust') tier FIRST, then Common Non-Terminal Exon + highest isoform coverage % + highest Lindel LoF %
         rows.sort(
           (a, b) =>
+            (KO_TIER_ORDER[a.panel_tier] ?? 9) - (KO_TIER_ORDER[b.panel_tier] ?? 9) ||
             Number(b.is_common_exon) - Number(a.is_common_exon) ||
             b.isoform_coverage_pct - a.isoform_coverage_pct ||
-            (KO_TIER_ORDER[a.panel_tier] ?? 9) - (KO_TIER_ORDER[b.panel_tier] ?? 9) ||
             b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct ||
             (a.other_isoform_not_disrupted_pct || 0) - (b.other_isoform_not_disrupted_pct || 0) ||
             b.gc_percent - a.gc_percent
