@@ -712,7 +712,7 @@ export async function runBiomniCoScientist(
             donorCount: (res.os || []).length,
             primerCount: (res.ps || []).length,
             releaseStatus: res.procurement?.status || "review",
-            topGuides: (res.gs || []).slice(0, 2).map(g => ({ spacer: g.sp, pam: g.pam, strand: g.str, score: g.sc })),
+            topGuides: (res.gs || []).slice(0, 2).map(g => ({ spacer: g.sp, pam: g.pm || g.pam, strand: g.str, score: g.sc })),
             koTier: res.koAssessment?.tier || null,
             minLofPct: res.koOutcomes?.minLofPct ?? res.koAssessment?.outcomes?.minLofPct ?? null,
             targetCodingExon,
@@ -728,6 +728,9 @@ export async function runBiomniCoScientist(
         }
         const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
         const rawRows = rankKoGuides(model, loadedLindel);
+        const selectedSpacers = new Set(
+          (designResult?.gs || []).map(g => String(g.sp || g.spacer || "").toUpperCase())
+        );
         const KO_TIER_ORDER = { robust: 0, marginal: 1, truncation: 2, escape: 3 };
         const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
         const rows = rawRows.map(r => {
@@ -740,6 +743,7 @@ export async function runBiomniCoScientist(
             isoform_coverage_pct: coveragePct,
             shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : `${coveragePct}%`,
             is_common_exon: isCommon,
+            selected_in_pair: selectedSpacers.has(String(r.spacer || "").toUpperCase()),
           };
         });
         // Prioritize Common Non-Terminal Exon (e.g. 3/3 isoforms) + NMD-Safe ('robust') tier + highest Lindel LoF %
@@ -752,11 +756,21 @@ export async function runBiomniCoScientist(
             (a.other_isoform_not_disrupted_pct || 0) - (b.other_isoform_not_disrupted_pct || 0) ||
             b.gc_percent - a.gc_percent
         );
+        rows.forEach((r, idx) => {
+          r.lindel_rank = idx + 1;
+        });
+        const topDisplay = rows.slice(0, 5);
+        for (const r of rows) {
+          if (r.selected_in_pair && !topDisplay.some(t => t.spacer === r.spacer)) {
+            topDisplay.push(r);
+          }
+        }
         lindelRanking = {
           ok: true,
           totalCandidates: rows.length,
           commonExonCandidates: rows.filter(r => r.is_common_exon).length,
-          topGuides: rows.slice(0, 8),
+          topGuides: rows.slice(0, 10),
+          displayGuides: topDisplay,
         };
         output = {
           ok: true,

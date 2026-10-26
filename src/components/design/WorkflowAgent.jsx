@@ -261,7 +261,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
               <strong>Selected ASSURED Guides ({biomniResult.designResult.gs.length}):</strong>{" "}
               {biomniResult.designResult.gs.slice(0, 2).map((g, i) => (
                 <span key={i} style={{ marginRight: "0.6rem" }}>
-                  <code>{g.sp}</code> ({g.pam}, {g.str})
+                  <code>{g.sp}</code> ({g.pm || g.pam}, {g.str})
                 </span>
               ))}
               {biomniResult.designResult.koAssessment && (
@@ -295,7 +295,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
 
           {biomniResult.lindelRanking?.topGuides?.length > 0 && (
             <details style={{ marginTop: "0.5rem" }} open>
-              <summary><strong>Lindel KO Repair Outcome Ranking (Common-Exon Prioritized · Top {Math.min(5, biomniResult.lindelRanking.topGuides.length)} of {biomniResult.lindelRanking.totalCandidates} Guides)</strong></summary>
+              <summary><strong>Lindel KO Repair Outcome Ranking (Common-Exon Prioritized · Top {(biomniResult.lindelRanking.displayGuides || biomniResult.lindelRanking.topGuides.slice(0, 5)).length} of {biomniResult.lindelRanking.totalCandidates} Guides)</strong></summary>
               <div style={{ overflowX: "auto", marginTop: "0.4rem" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>
@@ -304,6 +304,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                       <th style={{ padding: "0.25rem" }}>Spacer</th>
                       <th style={{ padding: "0.25rem" }}>Exon</th>
                       <th style={{ padding: "0.25rem" }}>Isoform Coverage</th>
+                      <th style={{ padding: "0.25rem" }}>GC %</th>
                       <th style={{ padding: "0.25rem" }}>Tier</th>
                       <th style={{ padding: "0.25rem" }}>Lindel FS %</th>
                       <th style={{ padding: "0.25rem" }}>Predicted LoF Allele %</th>
@@ -311,15 +312,39 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {biomniResult.lindelRanking.topGuides.slice(0, 5).map((g, idx) => (
-                      <tr key={`${g.spacer}-${idx}`} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                        <td style={{ padding: "0.25rem" }}>#{idx + 1}</td>
-                        <td style={{ padding: "0.25rem" }}><code>{g.spacer}</code></td>
+                    {(biomniResult.lindelRanking.displayGuides || biomniResult.lindelRanking.topGuides.slice(0, 5)).map((g, idx) => (
+                      <tr
+                        key={`${g.spacer}-${idx}`}
+                        style={{
+                          borderBottom: "1px solid #e2e8f0",
+                          background: g.selected_in_pair ? "#eff6ff" : "transparent",
+                        }}
+                      >
+                        <td style={{ padding: "0.25rem" }}>#{g.lindel_rank || idx + 1}</td>
+                        <td style={{ padding: "0.25rem" }}>
+                          <code>{g.spacer}</code> ({g.pam}, {g.strand})
+                          {g.selected_in_pair ? (
+                            <span
+                              style={{
+                                marginLeft: "0.35rem",
+                                padding: "0.08rem 0.35rem",
+                                borderRadius: "4px",
+                                background: "#dbeafe",
+                                color: "#1d4ed8",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              ★ Selected Pair
+                            </span>
+                          ) : null}
+                        </td>
                         <td style={{ padding: "0.25rem" }}>Exon {g.coding_exon}</td>
                         <td style={{ padding: "0.25rem" }}>
                           {g.shared_isoforms_label || `${g.isoform_coverage_pct ?? 100}%`}
                           {g.is_common_exon ? " ✅ Common" : ""}
                         </td>
+                        <td style={{ padding: "0.25rem" }}>{g.gc_percent}%</td>
                         <td style={{ padding: "0.25rem" }}>{g.panel_tier}</td>
                         <td style={{ padding: "0.25rem" }}>{g.lindel_frameshift_pct}%</td>
                         <td style={{ padding: "0.25rem" }}><strong>{g.predicted_LoF_allele_pct}%</strong></td>
