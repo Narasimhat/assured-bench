@@ -10,6 +10,7 @@ import {
 
 const tp53Raw = readFileSync(new URL("../public/references/tp53-NG_017013.2.gb", import.meta.url), "utf8");
 const apoeRaw = readFileSync(new URL("./fixtures/reference_demo.gb", import.meta.url), "utf8");
+const dipk2aRaw = readFileSync(new URL("../public/references/dipk2a-region.gb", import.meta.url), "utf8");
 
 test("parseBiomniPrompt extracts gene, editType, mutation, tag, enzyme, and tool flags", () => {
   const snp = parseBiomniPrompt("Design R175H point mutation knock-in for TP53, check ClinVar, and compare all enzymes");
@@ -55,20 +56,36 @@ test("computeClonalScreeningPower computes 96-well clonal screening power", () =
 });
 
 test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzyme comparison", async () => {
-  const mockFetch = async () => ({
-    ok: true,
-    json: async () => ({
-      results: [
-        {
-          primaryAccession: "P02649",
-          proteinDescription: { recommendedName: { fullName: { value: "Apolipoprotein E" } } },
-          sequence: { length: 317 },
-          comments: [{ commentType: "FUNCTION", texts: [{ value: "Mediates lipid transport." }] }],
-          features: [{ type: "Domain", description: "LDL-receptor binding", location: { start: { value: 140 }, end: { value: 160 } } }],
-        },
-      ],
-    }),
-  });
+  const mockFetch = async (url) => {
+    if (String(url).includes("dipk2a-region.gb")) {
+      return { ok: true, text: async () => dipk2aRaw };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            primaryAccession: "P02649",
+            proteinDescription: { recommendedName: { fullName: { value: "Apolipoprotein E" } } },
+            sequence: { length: 317 },
+            comments: [{ commentType: "FUNCTION", texts: [{ value: "Mediates lipid transport." }] }],
+            features: [{ type: "Domain", description: "LDL-receptor binding", location: { start: { value: 140 }, end: { value: 160 } } }],
+          },
+        ],
+      }),
+    };
+  };
+
+  // Test DIPK2A KO with empty project genbankRaw (auto-resolves dipk2a-region.gb)
+  const dipkRes = await runBiomniCoScientist(
+    "Design a biallelic knockout for DIPK2A and rank exon guides with Lindel",
+    { id: "p0", gene: "TP53", genbankRaw: "", options: { enzyme: "spcas9" } },
+    { fetchFn: mockFetch }
+  );
+  assert.equal(dipkRes.intent.gene, "DIPK2A");
+  assert.equal(dipkRes.steps.every(s => s.status === "completed"), true);
+  assert.ok(dipkRes.designResult && dipkRes.designResult.gs.length === 2);
+  assert.ok(dipkRes.lindelRanking && dipkRes.lindelRanking.totalCandidates > 0);
 
   const koRes = await runBiomniCoScientist(
     "Design a biallelic knockout for APOE and rank exon guides with Lindel",

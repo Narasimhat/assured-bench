@@ -215,10 +215,31 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                   <strong>{s.title}</strong> <code>[{s.tool}]</code> ({s.durationMs} ms) —{" "}
                   <span style={{ color: s.status === "completed" ? "#15803d" : "#b45309" }}>{s.status.toUpperCase()}</span>
                   <div className="muted" style={{ fontSize: "0.82rem" }}>{s.rationale}</div>
+                  {s.output?.source && <div style={{ fontSize: "0.8rem", color: "#0f766e" }}>✓ Source: {s.output.source} ({s.output.sequenceLength} bp)</div>}
+                  {s.output?.error && <div style={{ fontSize: "0.8rem", color: "#b91c1c" }}>⚠ {s.output.error}</div>}
                 </li>
               ))}
             </ol>
           </details>
+
+          {biomniResult.designResult?.gs?.length > 0 && (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
+              <strong>Selected ASSURED Guides ({biomniResult.designResult.gs.length}):</strong>{" "}
+              {biomniResult.designResult.gs.slice(0, 2).map((g, i) => (
+                <span key={i} style={{ marginRight: "0.6rem" }}>
+                  <code>{g.sp}</code> ({g.pam}, {g.str})
+                </span>
+              ))}
+              {biomniResult.designResult.koAssessment && (
+                <span>
+                  {" "}· <strong>KO Protein-Loss Tier:</strong> <code>{biomniResult.designResult.koAssessment.tier.toUpperCase()}</code>
+                  {biomniResult.designResult.koAssessment.outcomes?.minLofPct != null && (
+                    <span> (Min Lindel LoF: <strong>{biomniResult.designResult.koAssessment.outcomes.minLofPct}%</strong>)</span>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
 
           {biomniResult.uniprot?.found && (
             <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>

@@ -11,9 +11,8 @@ async function fetchJson(url, description) {
     response = await fetch(url, {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ASSURED/1.0",
       },
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(6000)
     });
   } catch (err) {
     throw new Error(`Could not reach Ensembl while ${description}. Check your connection or upload a GenBank reference.`, { cause: err });
@@ -69,6 +68,60 @@ export async function fetchGeneGenbank(geneSymbol, species = "homo_sapiens") {
               source: "Bundled Reference", sourceUrl: "https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=ENSG00000130203",
               warning: "Ensembl lookup failed. Using bundled APOE reference (ENSG00000130203 / ENST00000252486).",
               genbankText, sequenceLength: 3640
+            };
+          }
+        }
+      } catch {}
+    }
+
+    if (species === "homo_sapiens" && ["DIPK2A", "C3ORF58", "ENSG00000181744"].includes(sym)) {
+      try {
+        const response = await fetch(`${base}references/dipk2a-region.gb`);
+        if (response.ok) {
+          const genbankText = await response.text();
+          if (genbankText.includes("ORIGIN")) {
+            return {
+              geneSymbol: "DIPK2A", ensemblId: "ENSG00000181744", transcriptId: "NM_173552.5",
+              referenceAccession: "NM_173552.5", proteinId: "NP_775823.2", chr: "3",
+              source: "Bundled Reference", sourceUrl: "https://www.ncbi.nlm.nih.gov/nuccore/NM_173552.5",
+              warning: "Ensembl lookup failed. Using bundled DIPK2A reference (NM_173552.5).",
+              genbankText, sequenceLength: genbankText.length
+            };
+          }
+        }
+      } catch {}
+    }
+
+    if (species === "homo_sapiens" && ["NR2F2", "ENSG00000185551"].includes(sym)) {
+      try {
+        const response = await fetch(`${base}references/nr2f2-ng016753.gb`);
+        if (response.ok) {
+          const genbankText = await response.text();
+          if (genbankText.includes("ORIGIN")) {
+            return {
+              geneSymbol: "NR2F2", ensemblId: "ENSG00000185551", transcriptId: "NM_021005.4",
+              referenceAccession: "NG_016753.1", proteinId: "NP_066285.1", chr: "15",
+              source: "Bundled NCBI RefSeqGene", sourceUrl: "https://www.ncbi.nlm.nih.gov/nuccore/NG_016753.1",
+              warning: "Ensembl lookup failed. Using bundled NR2F2 reference (NG_016753.1).",
+              genbankText, sequenceLength: genbankText.length
+            };
+          }
+        }
+      } catch {}
+    }
+
+    if (species === "homo_sapiens" && ["INS", "ENSG00000254647"].includes(sym)) {
+      try {
+        const response = await fetch(`${base}references/ins-ensg00000254647.gb`);
+        if (response.ok) {
+          const genbankText = await response.text();
+          if (genbankText.includes("ORIGIN")) {
+            return {
+              geneSymbol: "INS", ensemblId: "ENSG00000254647", transcriptId: "ENST00000381330",
+              referenceAccession: "INS_(ENSG00000254647)", proteinId: "NP_000198.1", chr: "11",
+              source: "Bundled Reference", sourceUrl: "https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=ENSG00000254647",
+              warning: "Ensembl lookup failed. Using bundled INS reference (ENSG00000254647).",
+              genbankText, sequenceLength: genbankText.length
             };
           }
         }

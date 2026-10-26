@@ -10,6 +10,7 @@ import { ENZYMES } from "../engine/design/enzymeConfig.js";
 import { parseGB, runDesign, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
 import { rankKoGuides } from "../engine/design/koRank.js";
+import { fetchGeneReference } from "../engine/design/geneFetch.js";
 import { fetchGeneGenbank } from "./ensembl.js";
 import { agentRequest, runWorkflowAgent } from "./workflowAgent.js";
 
@@ -18,9 +19,81 @@ async function defaultLindelLoader() {
   return loadLindel();
 }
 
-export const BIOMNI_AGENT_VERSION = "1.0.0";
+const BUNDLED_REFERENCE_MAP = Object.freeze({
+  TP53: { file: "tp53-NG_017013.2.gb", ensemblId: "ENSG00000141510", transcriptId: "NM_000546.5", chr: "17", source: "Bundled NCBI RefSeqGene (NG_017013.2)" },
+  APOE: { file: "apoe-ensg00000130203.gb", ensemblId: "ENSG00000130203", transcriptId: "ENST00000252486", chr: "19", source: "Bundled Reference (ENSG00000130203)" },
+  DIPK2A: { file: "dipk2a-region.gb", ensemblId: "ENSG00000181744", transcriptId: "NM_173552.5", chr: "3", source: "Bundled NCBI RefSeq (NM_173552.5)" },
+  NR2F2: { file: "nr2f2-ng016753.gb", ensemblId: "ENSG00000185551", transcriptId: "NM_021005.4", chr: "15", source: "Bundled NCBI RefSeqGene (NG_016753.1)" },
+  INS: { file: "ins-ensg00000254647.gb", ensemblId: "ENSG00000254647", transcriptId: "ENST00000381330", chr: "11", source: "Bundled Reference (ENSG00000254647)" },
+});
+
+/**
+ * Multi-provider gene reference resolver for the Biomni Co-Scientist:
+ * 1. Bundled verified GenBank references (instantaneous, offline-ready)
+ * 2. NCBI Datasets + E-utilities (`fetchGeneReference` with `source: "ncbi"`, immune to Ensembl outages)
+ * 3. Ensembl REST fallback (`fetchGeneGenbank`)
+ */
+export async function resolveBiomniGeneReference(geneSymbol, fetchFn = globalThis.fetch) {
+  const sym = String(geneSymbol || "").trim().toUpperCase();
+  const base = import.meta.env?.BASE_URL || "/";
+  const bundled = BUNDLED_REFERENCE_MAP[sym];
+
+  if (bundled && typeof fetchFn === "function") {
+    try {
+      const res = await fetchFn(`${base}references/${bundled.file}`);
+      if (res?.ok) {
+        const text = await res.text();
+        if (text && text.includes("ORIGIN")) {
+          return {
+            geneSymbol: sym,
+            ensemblId: bundled.ensemblId,
+            transcriptId: bundled.transcriptId,
+            chr: bundled.chr,
+            source: bundled.source,
+            genbankText: text,
+            sequenceLength: text.length,
+          };
+        }
+      }
+    } catch {
+      // Fall through to NCBI / Ensembl
+    }
+  }
+
+  // Try NCBI Datasets + E-utilities first (fast, CORS-enabled, with automatic Ensembl fallback)
+  try {
+    const ncbiRes = await fetchGeneReference({
+      query: sym,
+      source: "ncbi",
+      species: "human",
+      fetchImpl: fetchFn,
+    });
+    if (ncbiRes?.genbank) {
+      return {
+        geneSymbol: ncbiRes.summary?.gene || sym,
+        ensemblId: ncbiRes.summary?.geneId || "",
+        transcriptId: ncbiRes.summary?.transcriptId || "",
+        chr: ncbiRes.summary?.chromosome || "",
+        source: `NCBI Datasets & E-utilities (${ncbiRes.summary?.transcriptId || sym})`,
+        genbankText: ncbiRes.genbank,
+        sequenceLength: ncbiRes.genbank.length,
+      };
+    }
+  } catch {
+    // Fall through to fetchGeneGenbank
+  }
+
+  return fetchGeneGenbank(sym);
+}
+
+export const BIOMNI_AGENT_VERSION = "1.1.0";
 
 export const BIOMNI_PRESET_MISSIONS = Object.freeze([
+  {
+    id: "dipk2a_ko",
+    label: "DIPK2A Knockout + Lindel & NMD Escape Check",
+    prompt: "Design a biallelic knockout for DIPK2A, rank exon guides with Lindel DNA repair model, and check UniProt domains",
+  },
   {
     id: "tp53_pm",
     label: "TP53 R175H SNP + ClinVar & Multi-Enzyme",
@@ -35,11 +108,6 @@ export const BIOMNI_PRESET_MISSIONS = Object.freeze([
     id: "apoe_ct",
     label: "APOE C-Terminal FLAG Tag Knock-In",
     prompt: "Design a C-terminal FLAG tag knock-in for APOE and compare SpCas9 vs SpCas9-NG vs Mad7",
-  },
-  {
-    id: "tp53_ko",
-    label: "TP53 Knockout + Lindel & Nuclease Comparison",
-    prompt: "Design a knockout for TP53, rank guides with Lindel, and compare all enzymes",
   },
 ]);
 
@@ -371,7 +439,7 @@ export async function runBiomniCoScientist(
   {
     onStep = () => {},
     fetchFn = globalThis.fetch,
-    geneFetcher = fetchGeneGenbank,
+    geneFetcher = resolveBiomniGeneReference,
     designRunner = runDesign,
     lindelLoader = defaultLindelLoader,
   } = {}
@@ -410,7 +478,7 @@ export async function runBiomniCoScientist(
             sequenceLength: genbankRaw.length,
           };
         } else {
-          const fetched = await geneFetcher(intent.gene);
+          const fetched = await geneFetcher(intent.gene, fetchFn);
           genbankRaw = fetched.genbankText;
           geneMeta = fetched;
           output = {
