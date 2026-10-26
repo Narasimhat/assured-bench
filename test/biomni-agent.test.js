@@ -6,6 +6,7 @@ import {
   buildBiomniPlan,
   buildManualBiomniPrompt,
   computeClonalScreeningPower,
+  computeQcPredictionCalibration,
   runBiomniCoScientist,
 } from "../src/services/biomniAgent.js";
 import { runDesign } from "../src/engine/design/designEngine.js";
@@ -134,6 +135,33 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.ok(manualBiomni.designResult?.panIsoformMeta);
   assert.equal(manualBiomni.designResult.panIsoformMeta.targetCodingExon, 2);
   assert.equal(manualBiomni.designResult.panIsoformMeta.isCommonExon, true);
+  // 1. Functional domain mapping + gnomAD constraint
+  assert.ok(manualBiomni.uniprot.pLI != null);
+  assert.ok(manualBiomni.uniprot.constraintSummary);
+  assert.ok(manualBiomni.lindelRanking.topGuides[0].cut_aa > 0);
+  // 2. Common human SNP & allelic-dropout shielding
+  assert.equal(manualBiomni.variantShielding?.ok, true);
+  assert.equal(manualBiomni.variantShielding.guideChecks.length, 2);
+  // 3. Wet-lab genotyping assay (PCR gel-shift band sizes)
+  assert.equal(manualBiomni.genotypingAssay?.ok, true);
+  assert.ok(manualBiomni.genotypingAssay.wtAmpliconBp > manualBiomni.genotypingAssay.editedAmpliconBp);
+  assert.ok(manualBiomni.genotypingAssay.deletionBp >= 20);
+  // 4. Closed-loop Design Prediction vs Observed Sanger QC Calibration
+  const qcCal = computeQcPredictionCalibration(
+    { gene: "DIPK2A", editType: "ko", biomniReport: manualBiomni, designResult: manualBiomni.designResult },
+    [
+      { name: "Clone_A01", ok: true, decision: { decision: "accept" } },
+      { name: "Clone_A02", ok: true, decision: { decision: "accept" } },
+      { name: "Clone_A03", ok: true, decision: { decision: "hold" } },
+      { name: "Clone_A04", ok: true, decision: { decision: "reject" } },
+    ]
+  );
+  assert.equal(qcCal.ok, true);
+  assert.equal(qcCal.acceptedCount, 2);
+  assert.equal(qcCal.totalAnalyzed, 4);
+  assert.equal(qcCal.observedAcceptedPct, 50);
+  assert.equal(qcCal.goalMet, true);
+
   const reportHtml = generateReportHtml(
     { gene: "DIPK2A", editType: "ko", biomniReport: manualBiomni },
     manualBiomni.designResult
@@ -141,4 +169,5 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.match(reportHtml, /ASSURED-Biomni Co-Scientist Integrated Verification/);
   assert.match(reportHtml, /Coding Exon 2/);
   assert.match(reportHtml, /Broad GPP Brunello Library/);
+  assert.match(reportHtml, /Wet-Lab Pre-Sequencing Genotyping Assay/);
 });

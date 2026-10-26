@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { CheckCircle, AlertCircle, ArrowRight, Award } from "lucide-react";
 import { buildQcDesignSpec } from "../../engine/design/qcExport.js";
 import { downloadDesignJson, downloadReportHtml } from "../../services/designExport.js";
+import { computeQcPredictionCalibration } from "../../services/biomniAgent.js";
 
 // Use Assured QC itself: its upload, pairing, HTML import and worker analysis stay identical.
 export function QcView({ currentProject, onUpdateProject, onProceedToDecision }) {
@@ -40,6 +41,7 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
 
   const qcResults = currentProject?.qcResults || [];
   const acceptedCount = qcResults.filter(r => (r.decision?.decision || r.decision?.verdict) === "accept").length;
+  const qcCalibration = computeQcPredictionCalibration(currentProject, qcResults);
 
   return <div>
     <div className="card">
@@ -84,6 +86,31 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
               Provide your <strong>gRNA sequences and donor sequence</strong> directly in the workspace below, click a <strong>1-click benchmark trace set</strong>, or design an edit in <strong>Step 1</strong>.
             </div>
           </div>
+        </div>
+      )}
+
+      {qcCalibration && (
+        <div
+          style={{
+            marginTop: "0.75rem",
+            padding: "0.75rem 1.15rem",
+            borderRadius: "8px",
+            background: qcCalibration.goalMet ? "#f0fdf4" : "#fffbeb",
+            border: qcCalibration.goalMet ? "1px solid #86efac" : "1px solid #fde68a",
+            fontSize: "0.86rem",
+            color: "#0f172a",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+            <strong style={{ color: qcCalibration.goalMet ? "#166534" : "#92400e" }}>
+              🎯 Closed-Loop Design Prediction vs. Observed Sanger QC Calibration
+            </strong>
+            <span style={{ fontWeight: 600 }}>
+              Accepted Clones: <strong>{qcCalibration.acceptedCount}/{qcCalibration.totalAnalyzed}</strong> ({qcCalibration.observedAcceptedPct}%)
+              {qcCalibration.predictedBiallelicPct != null ? ` · Predicted: ~${qcCalibration.predictedBiallelicPct}%` : ""}
+            </span>
+          </div>
+          <div style={{ marginTop: "0.25rem", color: "#334155" }}>{qcCalibration.summary}</div>
         </div>
       )}
     </div>

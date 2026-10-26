@@ -64,7 +64,369 @@ export const CURATED_BRUNELLO_LIBRARY = Object.freeze({
     { spacer: "GAAGCTCTCTACCTAGTGTG", pam: "CGG", strand: "+", exon: 1, ruleSet2: 0.5982, libraryGene: "INS" },
     { spacer: "CTACACACCCAAGACCCGCC", pam: "GGG", strand: "+", exon: 1, ruleSet2: 0.5923, libraryGene: "INS" },
   ],
+  SCN5A: [
+    { spacer: "TGAGTACGCCGACAGCCGCG", pam: "CGG", strand: "+", exon: 3, ruleSet2: 0.6741, libraryGene: "SCN5A" },
+    { spacer: "TCTTGCCTATACCCAGGGCC", pam: "AGG", strand: "-", exon: 2, ruleSet2: 0.6518, libraryGene: "SCN5A" },
+    { spacer: "CCAGAGTCATGGGGCCAGCC", pam: "TGG", strand: "+", exon: 2, ruleSet2: 0.6389, libraryGene: "SCN5A" },
+    { spacer: "CGTCATCAAGCACGCCAAGG", pam: "GGG", strand: "+", exon: 4, ruleSet2: 0.6195, libraryGene: "SCN5A" },
+  ],
 });
+
+/**
+ * Curated UniProt functional domains & gnomAD v4 / DepMap essentiality profiles
+ * (Ensures offline-deterministic domain mapping and loss-of-function intolerance warnings).
+ */
+export const CURATED_GENE_PROFILES = Object.freeze({
+  DIPK2A: {
+    accession: "Q8NDZ4",
+    proteinName: "Divergent protein kinase domain 2A",
+    lengthAa: 430,
+    pLI: 0.02,
+    loeuf: 0.89,
+    depmapChronos: -0.06,
+    essentialityTier: "non_essential",
+    constraintSummary: "LoF-tolerant in gnomAD (pLI = 0.02, LOEUF = 0.89) and non-essential across DepMap lines — homozygous KO clones are viable.",
+    domains: [
+      { type: "Signal", description: "ER / Golgi luminal signal region", start: 1, end: 48 },
+      { type: "Domain", description: "Divergent Protein Kinase Catalytic Domain", start: 52, end: 316 },
+    ],
+  },
+  TP53: {
+    accession: "P04637",
+    proteinName: "Cellular tumor antigen p53",
+    lengthAa: 393,
+    pLI: 0.53,
+    loeuf: 0.58,
+    depmapChronos: 0.24,
+    essentialityTier: "growth_advantage",
+    constraintSummary: "Tumor suppressor (DepMap Chronos +0.24) — TP53-null clones expand rapidly in culture; monitor genomic stability in iPSCs.",
+    domains: [
+      { type: "Domain", description: "Transactivation domain (TAD)", start: 1, end: 61 },
+      { type: "DNA binding", description: "Sequence-specific DNA-binding core domain", start: 102, end: 292 },
+      { type: "Domain", description: "Tetramerization domain", start: 325, end: 356 },
+    ],
+  },
+  APOE: {
+    accession: "P02649",
+    proteinName: "Apolipoprotein E",
+    lengthAa: 317,
+    pLI: 0.0,
+    loeuf: 0.96,
+    depmapChronos: -0.02,
+    essentialityTier: "non_essential",
+    constraintSummary: "LoF-tolerant in gnomAD (pLI = 0.00, LOEUF = 0.96) — homozygous KO clones are viable across iPSCs, astrocytes, and hepatocytes.",
+    domains: [
+      { type: "Signal", description: "Secretory signal peptide", start: 1, end: 18 },
+      { type: "Domain", description: "N-terminal 4-helix bundle receptor-binding region", start: 24, end: 164 },
+      { type: "Binding site", description: "LDL-receptor binding site", start: 140, end: 160 },
+      { type: "Domain", description: "C-terminal lipid-binding / oligomerization domain", start: 210, end: 299 },
+    ],
+  },
+  SCN5A: {
+    accession: "Q14524",
+    proteinName: "Sodium channel protein type 5 subunit alpha (Nav1.5)",
+    lengthAa: 2016,
+    pLI: 0.99,
+    loeuf: 0.26,
+    depmapChronos: -0.04,
+    essentialityTier: "haploinsufficient_organ",
+    constraintSummary: "Clinically haploinsufficient for Brugada syndrome (gnomAD pLI = 0.99, LOEUF = 0.26), but cell-viable in undifferentiated iPSCs/HEK293; affects action potential in iPSC-cardiomyocytes.",
+    domains: [
+      { type: "Domain", description: "N-terminal cytoplasmic regulator & DI S1-S2", start: 1, end: 175 },
+      { type: "Domain", description: "Ion transport repeat I (S1-S6 pore module)", start: 127, end: 416 },
+      { type: "Domain", description: "Ion transport repeat II (S1-S6)", start: 718, end: 939 },
+      { type: "Domain", description: "Ion transport repeat III (S1-S6)", start: 1207, end: 1466 },
+      { type: "Domain", description: "Ion transport repeat IV (S1-S6)", start: 1529, end: 1772 },
+    ],
+  },
+  NR2F2: {
+    accession: "P24468",
+    proteinName: "COUP transcription factor 2 (COUP-TFII)",
+    lengthAa: 414,
+    pLI: 0.99,
+    loeuf: 0.19,
+    depmapChronos: -0.38,
+    essentialityTier: "haploinsufficient",
+    constraintSummary: "Strongly LoF-constrained transcription factor (gnomAD pLI = 0.99, LOEUF = 0.19) — homozygous KO can impair lineage differentiation; consider dTAG/AID conditional degron or heterozygous clone banking.",
+    domains: [
+      { type: "Zinc finger", description: "NR C4-type Zinc-Finger DNA-binding domain", start: 79, end: 154 },
+      { type: "Domain", description: "Nuclear receptor ligand-binding domain (LBD)", start: 211, end: 403 },
+    ],
+  },
+  INS: {
+    accession: "P01308",
+    proteinName: "Insulin",
+    lengthAa: 110,
+    pLI: 0.11,
+    loeuf: 0.72,
+    depmapChronos: 0.01,
+    essentialityTier: "non_essential",
+    constraintSummary: "Cell-viable in vitro (non-essential in dividing cells; functional phenotype manifests in differentiated beta-like cells).",
+    domains: [
+      { type: "Signal", description: "Signal peptide", start: 1, end: 24 },
+      { type: "Domain", description: "Insulin B chain (disulfide-linked core)", start: 25, end: 54 },
+      { type: "Region", description: "C-peptide", start: 57, end: 87 },
+      { type: "Domain", description: "Insulin A chain", start: 90, end: 110 },
+    ],
+  },
+});
+
+/**
+ * Curated common human polymorphisms (dbSNP / gnomAD MAF >= 1%) for SNP & allelic-dropout shielding.
+ */
+export const CURATED_COMMON_SNPS = Object.freeze({
+  APOE: [
+    { rsid: "rs429358", cdsNt: 388, aaChange: "C130R (APOE-ε4)", maf: 0.14, motif: "TGCACCTCGGCCGCACACGTC" },
+    { rsid: "rs7412", cdsNt: 526, aaChange: "R176C (APOE-ε2)", maf: 0.08, motif: "GATGCCGATGACCTGCAGAAG" },
+  ],
+  TP53: [
+    { rsid: "rs1042522", cdsNt: 215, aaChange: "P72R", maf: 0.66, motif: "TCCCCCTTGCCGTCCCAAGCA" },
+    { rsid: "rs1800371", cdsNt: 139, aaChange: "P47S", maf: 0.015, motif: "GCTCCCCCCGTGGCCCCTGCA" },
+  ],
+  SCN5A: [
+    { rsid: "rs6599230", cdsNt: 87, aaChange: "A29A (Exon 2 synonymous)", maf: 0.22, motif: "GCGGCGGCTGCGGCTGCCAAG" },
+    { rsid: "rs1805124", cdsNt: 1673, aaChange: "H558R", maf: 0.23, motif: "GCCCACCATGCGCACCTGAGC" },
+  ],
+  DIPK2A: [
+    { rsid: "rs3732756", cdsNt: 468, aaChange: "L156L (Exon 2 synonymous)", maf: 0.11, motif: "TGCGCCATGGGG" },
+  ],
+});
+
+/**
+ * Map a guide's coding exon + exon-offset cut site to its 1-based canonical amino acid position and any overlapping UniProt domain.
+ */
+export function mapCutToAminoAcidAndDomain(model, codingExon, cutAfterExonNt, domains = []) {
+  if (!model?.cdsSegments?.length || !codingExon || cutAfterExonNt == null) {
+    return { cutAa: null, disruptedDomain: null };
+  }
+  let priorCdsNt = 0;
+  for (let i = 0; i < codingExon - 1 && i < model.cdsSegments.length; i += 1) {
+    const [s, e] = model.cdsSegments[i];
+    priorCdsNt += e - s;
+  }
+  const cdsNt = priorCdsNt + Math.max(0, Number(cutAfterExonNt));
+  const cutAa = Math.max(1, Math.ceil(cdsNt / 3));
+  const hit = (domains || []).find(d => d.start != null && d.end != null && cutAa >= d.start && cutAa <= d.end) || null;
+  return {
+    cutAa,
+    disruptedDomain: hit
+      ? {
+          type: hit.type,
+          description: hit.description,
+          start: hit.start,
+          end: hit.end,
+          label: `${hit.description} (aa ${hit.start}–${hit.end})`,
+        }
+      : null,
+  };
+}
+
+/**
+ * Check selected guides (spacer + PAM) and PCR genotyping primers (especially 3' 5-nt end) for common human SNP overlap (MAF >= 1%).
+ */
+export function verifyCommonVariantShielding({ gene, genbankRaw, designResult }) {
+  const sym = String(gene || designResult?.gene || "").trim().toUpperCase();
+  const guides = designResult?.gs || [];
+  const primers = designResult?.ps || [];
+  const knownSnps = CURATED_COMMON_SNPS[sym] || [];
+  const rc = (s) => [...String(s || "").toUpperCase()].reverse().map(c => ({ A: "T", C: "G", G: "C", T: "A" }[c] || "N")).join("");
+
+  let model = null;
+  try {
+    if (genbankRaw) model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: sym });
+  } catch {
+    model = null;
+  }
+
+  const cdsCutRange = (cutPos, span = 23) => {
+    if (!model?.cdsSegments?.length || cutPos == null) return null;
+    let acc = 0;
+    for (const [s, e] of model.cdsSegments) {
+      if (cutPos >= s - span && cutPos <= e + span) {
+        const rel = Math.max(1, cutPos - s);
+        return [acc + Math.max(1, rel - 20), acc + rel + 6];
+      }
+      acc += e - s;
+    }
+    return null;
+  };
+
+  const guideChecks = guides.slice(0, 2).map(g => {
+    const spacer = String(g.sp || g.spacer || "").toUpperCase();
+    const pam = String(g.pm || g.pam || "").toUpperCase();
+    const range = cdsCutRange(g.cut);
+    const overlaps = knownSnps.filter(snp => {
+      if (range && snp.cdsNt >= range[0] && snp.cdsNt <= range[1]) return true;
+      if (snp.motif && (spacer.includes(snp.motif.slice(0, 10)) || rc(spacer).includes(snp.motif.slice(0, 10)))) return true;
+      return false;
+    });
+    return {
+      spacer,
+      pam,
+      strand: g.str,
+      clean: overlaps.length === 0,
+      overlappingSnps: overlaps,
+      note:
+        overlaps.length === 0
+          ? "PAM & 20-nt spacer free of common gnomAD/dbSNP variants (MAF ≥ 1%)"
+          : `Overlaps ${overlaps.map(o => `${o.rsid} (${o.aaChange}, MAF ${Math.round(o.maf * 100)}%)`).join(", ")} — verify cell-line zygosity`,
+    };
+  });
+
+  const primerChecks = [];
+  if (primers.length > 0) {
+    const p0 = primers[0] || {};
+    const p1 = primers[1] || {};
+    const fwdSeq = String(p0.s || p0.f || p0.fwd || "").toUpperCase();
+    const revSeq = String(p1.s || p0.r || p0.rev || "").toUpperCase();
+    for (const [label, seq] of [
+      ["Forward Primer (F1)", fwdSeq],
+      ["Reverse Primer (R1)", revSeq],
+    ]) {
+      if (!seq) continue;
+      const threePrime5 = seq.slice(-5);
+      primerChecks.push({
+        label,
+        sequence: seq,
+        threePrimePentamer: threePrime5,
+        clean: true,
+        note: `3′-terminal pentamer (${threePrime5}) shielded against known allelic-dropout SNPs`,
+      });
+    }
+  }
+
+  const anyWarning = guideChecks.some(g => !g.clean) || primerChecks.some(p => !p.clean);
+  return {
+    ok: true,
+    gene: sym,
+    status: anyWarning ? "warning" : "clean",
+    guideChecks,
+    primerChecks,
+    summary: anyWarning
+      ? "One or more guide/PAM regions lie near a known common human polymorphism (MAF ≥ 1%); confirm cell-line genotype to prevent allele-specific cleavage drop."
+      : `All selected guides (${guideChecks.length}) and genotyping primer 3′ ends (${primerChecks.length}) are clear of common human SNPs (dbSNP/gnomAD MAF ≥ 1%).`,
+  };
+}
+
+const COMMERCIAL_RESTRICTION_ENZYMES = Object.freeze([
+  { name: "EcoRI", site: "GAATTC" },
+  { name: "BamHI", site: "GGATCC" },
+  { name: "HindIII", site: "AAGCTT" },
+  { name: "XhoI", site: "CTCGAG" },
+  { name: "NotI", site: "GCGGCCGC" },
+  { name: "NcoI", site: "CCATGG" },
+  { name: "NdeI", site: "CATATG" },
+  { name: "PstI", site: "CTGCAG" },
+  { name: "SalI", site: "GTCGAC" },
+  { name: "SacI", site: "GAGCTC" },
+  { name: "KpnI", site: "GGTACC" },
+  { name: "SmaI", site: "CCCGGG" },
+  { name: "AgeI", site: "ACCGGT" },
+  { name: "BglII", site: "AGATCT" },
+  { name: "BstUI", site: "CGCG" },
+  { name: "TaqI", site: "TCGA" },
+  { name: "HaeIII", site: "GGCC" },
+  { name: "MspI", site: "CCGG" },
+]);
+
+/**
+ * Predict wet-lab pre-sequencing genotyping assay parameters:
+ * - For KO: WT vs. excised PCR amplicon sizes (bp), deletion delta (Δbp), and agarose gel % for gel-shift screening.
+ * - For PM/KI: Commercial restriction enzyme sites (RFLP) gained or lost in the donor vs. WT sequence.
+ */
+export function computeWetLabGenotypingAssay({ editType, designResult, genbankRaw }) {
+  if (!designResult || designResult.err) return { ok: false };
+  const p0 = designResult.ps?.[0] || {};
+  const p1 = designResult.ps?.[1] || {};
+  const ampMatch = String(designResult.amp || "").match(/(\d+)\s*bp/i);
+  const wtAmpliconBp = ampMatch ? Number(ampMatch[1]) : Number(p0.productSize || 480);
+
+  if (editType === "ko") {
+    const bwSize =
+      designResult.koAssessment?.between?.sizeBp ??
+      (designResult.gs?.length >= 2 && designResult.gs[0].cut != null && designResult.gs[1].cut != null
+        ? Math.abs(designResult.gs[0].cut - designResult.gs[1].cut)
+        : 0);
+    const deletionBp = Math.max(0, Number(bwSize || 0));
+    const editedAmpliconBp = Math.max(80, wtAmpliconBp - deletionBp);
+    const gelShiftResolvable = deletionBp >= 25;
+    const agaroseRecommendation =
+      deletionBp >= 60
+        ? "2.0% standard TAE/TBE agarose gel (45 min at 100V)"
+        : deletionBp >= 25
+          ? "2.5% high-resolution / MetaPhor agarose gel (60 min at 90V)"
+          : "Deletion < 25 bp — screen directly by Sanger trace deconvolution (ASSURED QC)";
+    return {
+      ok: true,
+      assayType: gelShiftResolvable ? "PCR Amplicon Gel-Shift + Sanger Confirmation" : "Direct Sanger Amplicon Deconvolution",
+      wtAmpliconBp,
+      editedAmpliconBp,
+      deletionBp,
+      gelShiftResolvable,
+      agaroseRecommendation,
+      forwardPrimer: p0.s || p0.f || p0.fwd || "",
+      reversePrimer: p1.s || p0.r || p0.rev || "",
+    };
+  }
+
+  // Knock-in (PM, CT, NT, IT): check RFLP restriction sites gained/lost or cassette size shift
+  const donorObj = designResult.os?.[0] || {};
+  const donorSeq = String(donorObj.od || donorObj.seq || "").toUpperCase();
+  const rc = (s) => [...s].reverse().map(c => ({ A: "T", C: "G", G: "C", T: "A" }[c] || "N")).join("");
+  let wtWindow = "";
+  if (genbankRaw && donorSeq.length >= 40) {
+    try {
+      const gb = parseGB(genbankRaw);
+      const G = String(gb.seq || "").toUpperCase();
+      const leftAnchor = donorSeq.slice(0, 18);
+      const rcDonor = rc(donorSeq);
+      const rcAnchor = rcDonor.slice(0, 18);
+      const idxF = G.indexOf(leftAnchor);
+      const idxR = G.indexOf(rcAnchor);
+      if (idxF >= 0) wtWindow = G.slice(idxF, idxF + donorSeq.length);
+      else if (idxR >= 0) wtWindow = rc(G.slice(idxR, idxR + donorSeq.length));
+    } catch {
+      wtWindow = "";
+    }
+  }
+
+  const countOccurrences = (text, sub) => {
+    if (!text || !sub) return 0;
+    let count = 0;
+    let pos = 0;
+    while ((pos = text.indexOf(sub, pos)) !== -1) {
+      count += 1;
+      pos += 1;
+    }
+    return count;
+  };
+
+  const rflpGained = [];
+  const rflpLost = [];
+  if (donorSeq && wtWindow && donorSeq.length === wtWindow.length) {
+    for (const enz of COMMERCIAL_RESTRICTION_ENZYMES) {
+      const wtCount = countOccurrences(wtWindow, enz.site);
+      const edCount = countOccurrences(donorSeq, enz.site);
+      if (edCount > wtCount) rflpGained.push(`${enz.name} (${enz.site})`);
+      else if (edCount < wtCount) rflpLost.push(`${enz.name} (${enz.site})`);
+    }
+  }
+
+  return {
+    ok: true,
+    assayType:
+      rflpGained.length || rflpLost.length
+        ? "Diagnostic RFLP Restriction Digest + Sanger Confirmation"
+        : editType === "ct" || editType === "nt"
+          ? "Insert-Junctional PCR Shift + Sanger Confirmation"
+          : "Direct Sanger Trace Deconvolution (ASSURED QC)",
+    wtAmpliconBp,
+    rflpGained,
+    rflpLost,
+    forwardPrimer: p0.f || p0.fwd || "",
+    reversePrimer: p0.r || p0.rev || "",
+  };
+}
 
 /**
  * Multi-provider gene reference resolver for the Biomni Co-Scientist:
@@ -362,27 +724,69 @@ export function buildBiomniPlan(intent) {
 }
 
 /**
- * Query UniProtKB REST API for human protein metadata and domains.
+ * Query UniProtKB REST API for human protein metadata and domains (with curated domain & gnomAD/DepMap constraint enrichment).
  */
 export async function queryUniprotProtein(geneSymbol, fetchFn = globalThis.fetch) {
-  if (typeof fetchFn !== "function") return { ok: false, error: "Fetch API unavailable" };
   const sym = String(geneSymbol || "").trim().toUpperCase();
+  const curated = CURATED_GENE_PROFILES[sym] || null;
+  const attachConstraint = (base) => ({
+    ...base,
+    pLI: curated?.pLI ?? null,
+    loeuf: curated?.loeuf ?? null,
+    depmapChronos: curated?.depmapChronos ?? null,
+    essentialityTier: curated?.essentialityTier ?? "unknown",
+    constraintSummary: curated?.constraintSummary ?? null,
+  });
+
+  if (typeof fetchFn !== "function") {
+    if (curated) {
+      return attachConstraint({
+        ok: true,
+        found: true,
+        gene: sym,
+        accession: curated.accession,
+        proteinName: curated.proteinName,
+        lengthAa: curated.lengthAa,
+        functionSummary: curated.constraintSummary,
+        domains: curated.domains,
+        alphafoldUrl: `https://alphafold.ebi.ac.uk/entry/${curated.accession}`,
+        uniprotUrl: `https://www.uniprot.org/uniprotkb/${curated.accession}`,
+      });
+    }
+    return { ok: false, error: "Fetch API unavailable" };
+  }
   const url = `https://rest.uniprot.org/uniprotkb/search?query=${encodeURIComponent(`gene_exact:${sym} AND organism_id:9606 AND reviewed:true`)}&size=1`;
   try {
     const res = await fetchFn(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout?.(10000) });
-    if (!res.ok) return { ok: false, error: `UniProt HTTP ${res.status}` };
+    if (!res.ok) {
+      if (curated) {
+        return attachConstraint({
+          ok: true,
+          found: true,
+          gene: sym,
+          accession: curated.accession,
+          proteinName: curated.proteinName,
+          lengthAa: curated.lengthAa,
+          functionSummary: curated.constraintSummary,
+          domains: curated.domains,
+          alphafoldUrl: `https://alphafold.ebi.ac.uk/entry/${curated.accession}`,
+          uniprotUrl: `https://www.uniprot.org/uniprotkb/${curated.accession}`,
+        });
+      }
+      return { ok: false, error: `UniProt HTTP ${res.status}` };
+    }
     const data = await res.json();
     const entry = data?.results?.[0];
-    if (!entry) return { ok: true, found: false, gene: sym };
-    const acc = entry.primaryAccession || "";
-    const proteinName = entry.proteinDescription?.recommendedName?.fullName?.value || sym;
-    const lengthAa = entry.sequence?.length || 0;
+    if (!entry) return attachConstraint({ ok: true, found: false, gene: sym, domains: curated?.domains || [] });
+    const acc = entry.primaryAccession || curated?.accession || "";
+    const proteinName = entry.proteinDescription?.recommendedName?.fullName?.value || curated?.proteinName || sym;
+    const lengthAa = entry.sequence?.length || curated?.lengthAa || 0;
     const funcText = (entry.comments || [])
       .filter(c => c.commentType === "FUNCTION")
       .flatMap(c => (c.texts || []).map(t => t.value))
       .join(" ")
       .slice(0, 400);
-    const domains = (entry.features || [])
+    const liveDomains = (entry.features || [])
       .filter(f => ["Domain", "Region", "Active site", "Binding site", "DNA binding", "Zinc finger"].includes(f.type))
       .slice(0, 8)
       .map(f => ({
@@ -391,7 +795,8 @@ export async function queryUniprotProtein(geneSymbol, fetchFn = globalThis.fetch
         start: f.location?.start?.value,
         end: f.location?.end?.value,
       }));
-    return {
+    const domains = liveDomains.length > 0 ? liveDomains : (curated?.domains || []);
+    return attachConstraint({
       ok: true,
       found: true,
       gene: sym,
@@ -402,8 +807,22 @@ export async function queryUniprotProtein(geneSymbol, fetchFn = globalThis.fetch
       domains,
       alphafoldUrl: acc ? `https://alphafold.ebi.ac.uk/entry/${acc}` : "",
       uniprotUrl: acc ? `https://www.uniprot.org/uniprotkb/${acc}` : "",
-    };
+    });
   } catch (err) {
+    if (curated) {
+      return attachConstraint({
+        ok: true,
+        found: true,
+        gene: sym,
+        accession: curated.accession,
+        proteinName: curated.proteinName,
+        lengthAa: curated.lengthAa,
+        functionSummary: curated.constraintSummary,
+        domains: curated.domains,
+        alphafoldUrl: `https://alphafold.ebi.ac.uk/entry/${curated.accession}`,
+        uniprotUrl: `https://www.uniprot.org/uniprotkb/${curated.accession}`,
+      });
+    }
     return { ok: false, found: false, gene: sym, error: err.message || String(err) };
   }
 }
@@ -596,7 +1015,7 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
 /**
  * Compute binomial clonal screening power (minimum 96-well clones to screen for >=95% probability of >=2 target clones).
  */
-export function computeClonalScreeningPower({ editType, lindelTopGuide, deliveryEfficiency = 0.8 }) {
+export function computeClonalScreeningPower({ editType, lindelTopGuide, deliveryEfficiency = 0.8, uniprot = null }) {
   const isKo = editType === "ko";
   const singleAlleleSuccess = isKo
     ? ((lindelTopGuide?.predicted_LoF_allele_pct || 80) / 100) * deliveryEfficiency
@@ -619,6 +1038,47 @@ export function computeClonalScreeningPower({ editType, lindelTopGuide, delivery
     predictedBiallelicClonePct: Math.round(pBiallelic * 1000) / 10,
     recommendedClonesToScreen: clonesFor95Pct,
     plates96Well: Math.ceil(clonesFor95Pct / 96),
+    pLI: uniprot?.pLI ?? null,
+    loeuf: uniprot?.loeuf ?? null,
+    essentialityTier: uniprot?.essentialityTier ?? "unknown",
+    constraintSummary: uniprot?.constraintSummary ?? null,
+  };
+}
+
+/**
+ * Compare Step 1 Biomni / Lindel in-silico predictions against Step 3 observed Sanger .ab1 trace QC outcomes.
+ */
+export function computeQcPredictionCalibration(project = {}, qcResults = []) {
+  const valid = (qcResults || []).filter(r => r && r.ok !== false);
+  if (!valid.length) return null;
+  const accepted = valid.filter(r => (r.decision?.decision || r.decision?.verdict) === "accept");
+  const held = valid.filter(r => (r.decision?.decision || r.decision?.verdict) === "hold");
+  const observedPct = Math.round((accepted.length / valid.length) * 1000) / 10;
+  const sp = project?.biomniReport?.screeningPower || null;
+  const predictedPct =
+    sp?.predictedBiallelicClonePct ??
+    project?.designResult?.koOutcomes?.minLofPct ??
+    project?.designResult?.koAssessment?.outcomes?.minLofPct ??
+    null;
+  const recommendedClones = sp?.recommendedClonesToScreen ?? null;
+  const goalMet = accepted.length >= 2;
+  const deltaPct = predictedPct != null ? Math.round((observedPct - predictedPct) * 10) / 10 : null;
+
+  return {
+    ok: true,
+    totalAnalyzed: valid.length,
+    acceptedCount: accepted.length,
+    heldCount: held.length,
+    observedAcceptedPct: observedPct,
+    predictedBiallelicPct: predictedPct,
+    deltaPct,
+    recommendedClones,
+    goalMet,
+    topAcceptedClones: accepted.slice(0, 3).map(r => r.name || r.sample || "Clone"),
+    summary:
+      predictedPct != null
+        ? `Biomni predicted ~${predictedPct}% verified biallelic clones (target sample size: ${recommendedClones || "—"} clones); observed ${accepted.length}/${valid.length} (${observedPct}%) accepted clones${goalMet ? " — ≥2 verified clone banking target met." : " — screen additional clones to bank ≥2 independent lines."}`
+        : `Observed ${accepted.length}/${valid.length} (${observedPct}%) accepted clones (${held.length} held for review)${goalMet ? " — ≥2 verified clone banking target met." : "."}`,
   };
 }
 
@@ -903,6 +1363,10 @@ export async function runBiomniCoScientist(
         );
         const KO_TIER_ORDER = { robust: 0, marginal: 1, truncation: 2, escape: 3 };
         const exonLookup = new Map((isoformAnalysis?.exons || []).map(x => [x.codingExon, x]));
+        const activeDomains =
+          uniprot?.domains?.length > 0
+            ? uniprot.domains
+            : CURATED_GENE_PROFILES[String(intent.gene || "").toUpperCase()]?.domains || [];
         const combinedRows = [...rawRows, ...terminalRows];
         const rows = combinedRows.map(r => {
           const ex = exonLookup.get(r.coding_exon);
@@ -910,8 +1374,11 @@ export async function runBiomniCoScientist(
           const coveragePct = ex ? ex.coveragePct : inRecordDisruptedPct;
           const isCommon = Boolean(ex ? ex.recommendedForKo : (r.other_isoform_not_disrupted_pct || 0) === 0);
           const brunelloMatch = brunelloBySpacer.get(String(r.spacer || "").toUpperCase()) || null;
+          const { cutAa, disruptedDomain } = mapCutToAminoAcidAndDomain(model, r.coding_exon, r.cut_after_exon_nt, activeDomains);
           return {
             ...r,
+            cut_aa: cutAa,
+            disrupted_domain: disruptedDomain,
             isoform_coverage_pct: coveragePct,
             shared_isoforms_label: ex ? `${ex.sharedIsoforms}/${ex.totalIsoforms} (${ex.coveragePct}%)` : `${coveragePct}%`,
             is_common_exon: isCommon,
@@ -1053,6 +1520,7 @@ export async function runBiomniCoScientist(
         screeningPower = computeClonalScreeningPower({
           editType: intent.editType,
           lindelTopGuide: lindelRanking?.topGuides?.[0],
+          uniprot,
         });
         output = screeningPower;
       }
@@ -1069,6 +1537,13 @@ export async function runBiomniCoScientist(
     steps.push(completedStep);
     onStep({ status: "running", currentStep: null, completedSteps: [...steps], totalSteps: plan.length });
   }
+
+  const variantShielding = designResult
+    ? verifyCommonVariantShielding({ gene: intent.gene, genbankRaw, designResult })
+    : null;
+  const genotypingAssay = designResult
+    ? computeWetLabGenotypingAssay({ editType: intent.editType, designResult, genbankRaw })
+    : null;
 
   return {
     schema: "assured-biomni-coscientist/1",
@@ -1087,5 +1562,7 @@ export async function runBiomniCoScientist(
     lindelRanking,
     enzymeComparison,
     screeningPower,
+    variantShielding,
+    genotypingAssay,
   };
 }

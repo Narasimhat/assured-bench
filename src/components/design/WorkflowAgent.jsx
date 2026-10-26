@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ENZYMES } from "../../engine/design/enzymeConfig.js";
+import { runDesign, summarizeProcurementReadiness } from "../../engine/design/designEngine.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/design/designScheme.js";
 import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
-import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist } from "../../services/biomniAgent.js";
+import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, verifyCommonVariantShielding, computeWetLabGenotypingAssay } from "../../services/biomniAgent.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
   const [enzymes, setEnzymes] = useState(() => Object.keys(ENZYMES));
@@ -101,6 +102,49 @@ export function WorkflowAgent({ project, onUpdateProject }) {
 
   const applyBiomniToWorkbench = () => {
     syncBiomniResultToProject(biomniResult, true);
+  };
+
+  const applyRescueOption = (enzymeId, customSpacers) => {
+    const rawGb = biomniResult?.genbankRaw || project?.genbankRaw;
+    if (!rawGb || !customSpacers?.length) return;
+    const config = ENZYMES[enzymeId] || ENZYMES.spcas9;
+    const targetGene = biomniResult?.intent?.gene || project?.gene || "TP53";
+    const opts = {
+      ...(project?.options || {}),
+      enzyme: enzymeId,
+      spacerLength: config.spacer_len.default,
+      expectedGene: targetGene,
+      ensureGuidePair: customSpacers.length >= 2,
+      allowNonCodingBlockers: true,
+      customGuides: customSpacers,
+    };
+    const res = runDesign("ko", rawGb, "", "", "", opts);
+    if (!res || res.err) {
+      setBiomniError(res?.err || "Could not apply rescue guide option.");
+      return;
+    }
+    res.procurement = summarizeProcurementReadiness(res);
+    const updatedBiomni = biomniResult
+      ? {
+          ...biomniResult,
+          intent: { ...biomniResult.intent, enzyme: enzymeId },
+          designResult: res,
+          variantShielding: verifyCommonVariantShielding({ gene: targetGene, genbankRaw: rawGb, designResult: res }),
+          genotypingAssay: computeWetLabGenotypingAssay({ editType: "ko", designResult: res, genbankRaw: rawGb }),
+        }
+      : null;
+    if (updatedBiomni) setBiomniResult(updatedBiomni);
+    onUpdateProject({
+      gene: targetGene,
+      editType: "ko",
+      options: opts,
+      genbankRaw: rawGb,
+      designResult: res,
+      svgScheme: buildDesignSchemeSvg(res),
+      caption: buildDesignSchemeCaption(res),
+      status: res.procurement?.status || "review",
+      ...(updatedBiomni ? { biomniReport: updatedBiomni } : {}),
+    });
   };
 
   const compare = () => {
@@ -302,9 +346,20 @@ export function WorkflowAgent({ project, onUpdateProject }) {
           {biomniResult.uniprot?.found && (
             <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
               <strong>UniProtKB ({biomniResult.uniprot.accession}):</strong> {biomniResult.uniprot.proteinName} ({biomniResult.uniprot.lengthAa} aa)
+              {biomniResult.uniprot.pLI != null && (
+                <span style={{ marginLeft: "0.45rem", padding: "0.1rem 0.45rem", borderRadius: "4px", fontSize: "0.78rem", background: biomniResult.uniprot.pLI >= 0.9 ? "#fef3c7" : "#dcfce7", color: biomniResult.uniprot.pLI >= 0.9 ? "#92400e" : "#166534", fontWeight: 600 }}>
+                  gnomAD pLI = {biomniResult.uniprot.pLI} · LOEUF = {biomniResult.uniprot.loeuf}
+                  {biomniResult.uniprot.depmapChronos != null ? ` · DepMap Chronos = ${biomniResult.uniprot.depmapChronos}` : ""}
+                </span>
+              )}
               {biomniResult.uniprot.domains?.length > 0 && (
                 <div className="muted">
                   Domains/Sites: {biomniResult.uniprot.domains.map(d => `${d.description} (${d.start}–${d.end} aa)`).join(", ")}
+                </div>
+              )}
+              {biomniResult.uniprot.constraintSummary && (
+                <div style={{ fontSize: "0.8rem", color: "#334155", marginTop: "0.15rem" }}>
+                  🧬 <strong>Cell Fitness &amp; LoF Constraint:</strong> {biomniResult.uniprot.constraintSummary}
                 </div>
               )}
             </div>
@@ -346,7 +401,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                       >
                         <td style={{ padding: "0.25rem" }}>#{g.lindel_rank || idx + 1}</td>
                         <td style={{ padding: "0.25rem" }}>
-                          <code>{g.spacer}</code> ({g.pam}, {g.strand})
+                          <code>{g.spacer}</code> ({g.pam}, {g.strand}{g.cut_aa ? `, aa ${g.cut_aa}` : ""})
                           {g.selected_in_pair ? (
                             <span
                               style={{
@@ -376,6 +431,22 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                               title={`Broad GPP Brunello Library (${g.brunello_match.libraryGene}) · Rule Set 2 = ${g.brunello_match.ruleSet2}`}
                             >
                               📚 Brunello #{g.brunello_match.brunelloRank} (RS2 {g.brunello_match.ruleSet2})
+                            </span>
+                          ) : null}
+                          {g.disrupted_domain ? (
+                            <span
+                              style={{
+                                marginLeft: "0.35rem",
+                                padding: "0.08rem 0.35rem",
+                                borderRadius: "4px",
+                                background: "#f3e8ff",
+                                color: "#6b21a8",
+                                fontSize: "0.71rem",
+                                fontWeight: 600,
+                              }}
+                              title={`Cleaves inside UniProt ${g.disrupted_domain.label}`}
+                            >
+                              🎯 {g.disrupted_domain.description}
                             </span>
                           ) : null}
                         </td>
@@ -439,20 +510,34 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                           <span
                             key={opt.enzymeId}
                             style={{
-                              padding: "0.2rem 0.5rem",
+                              padding: "0.25rem 0.55rem",
                               borderRadius: "4px",
                               background: opt.deletionClass === "lof_truncation" ? "#dcfce7" : "#ffffff",
                               border: opt.deletionClass === "lof_truncation" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.4rem",
+                              flexWrap: "wrap",
                             }}
                           >
-                            <strong>{opt.enzymeName} ({opt.pam})</strong> · {opt.exon}:{" "}
-                            {opt.guides.map(g => `${g.spacer} (${g.pam}, ${g.gc}% GC)`).join(" + ")}{" "}
-                            {opt.deletionBp != null && (
-                              <span>
-                                → <strong>{opt.deletionBp} bp deletion</strong> (<code>{opt.deletionClass}</code>
-                                {opt.retainedProteinPct != null ? `, retains ${opt.retainedProteinPct}% protein` : ""})
-                              </span>
-                            )}
+                            <span>
+                              <strong>{opt.enzymeName} ({opt.pam})</strong> · {opt.exon}:{" "}
+                              {opt.guides.map(g => `${g.spacer} (${g.pam}, ${g.gc}% GC)`).join(" + ")}{" "}
+                              {opt.deletionBp != null && (
+                                <span>
+                                  → <strong>{opt.deletionBp} bp deletion</strong> (<code>{opt.deletionClass}</code>
+                                  {opt.retainedProteinPct != null ? `, retains ${opt.retainedProteinPct}% protein` : ""})
+                                </span>
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: "0.1rem 0.45rem", fontSize: "0.73rem" }}
+                              onClick={() => applyRescueOption(opt.enzymeId, opt.guides.map(g => g.spacer))}
+                            >
+                              ⚡ Apply Pair
+                            </button>
                           </span>
                         ))}
                       </div>
@@ -461,16 +546,79 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                   {biomniResult.lindelRanking.nmdEscapeRescue.lastExonTruncationGuides?.length > 0 && (
                     <div style={{ marginTop: "0.35rem" }}>
                       <strong>2. Top 5' Last-Exon Early-Truncation Guides (Upstream of C-Terminal Functional Domains):</strong>{" "}
-                      {biomniResult.lindelRanking.nmdEscapeRescue.lastExonTruncationGuides.map((tg, i) => (
-                        <span key={tg.spacer} style={{ marginRight: "0.5rem" }}>
-                          #{i + 1} <code>{tg.spacer}</code> ({tg.pam}, {tg.strand}, Exon {tg.coding_exon} +{tg.cut_after_exon_nt} nt, {tg.gc_percent}% GC, Truncation LoF <strong>{tg.predicted_LoF_allele_pct}%</strong>)
-                        </span>
-                      ))}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.25rem" }}>
+                        {biomniResult.lindelRanking.nmdEscapeRescue.lastExonTruncationGuides.map((tg, i, arr) => {
+                          const partner = arr.find(other => other.spacer !== tg.spacer && Math.abs(other.cut_after_exon_nt - tg.cut_after_exon_nt) >= 20) || arr[1];
+                          const customPair = partner && partner.spacer !== tg.spacer ? [tg.spacer, partner.spacer] : [tg.spacer];
+                          return (
+                            <span
+                              key={tg.spacer}
+                              style={{
+                                padding: "0.2rem 0.5rem",
+                                borderRadius: "4px",
+                                background: "#ffffff",
+                                border: "1px solid #cbd5e1",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                              }}
+                            >
+                              <span>
+                                #{i + 1} <code>{tg.spacer}</code> ({tg.pam}, {tg.strand}, Exon {tg.coding_exon} +{tg.cut_after_exon_nt} nt{tg.cut_aa ? `, aa ${tg.cut_aa}` : ""}, {tg.gc_percent}% GC, Truncation LoF <strong>{tg.predicted_LoF_allele_pct}%</strong>)
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: "0.08rem 0.4rem", fontSize: "0.72rem" }}
+                                onClick={() => applyRescueOption("spcas9", customPair)}
+                              >
+                                ⚡ Apply 5' Last-Exon
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
             </details>
+          )}
+
+          {biomniResult.variantShielding?.ok && (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.82rem", padding: "0.45rem 0.65rem", borderRadius: "6px", background: biomniResult.variantShielding.status === "clean" ? "#f8fafc" : "#fffbeb", border: biomniResult.variantShielding.status === "clean" ? "1px solid #cbd5e1" : "1px solid #fcd34d" }}>
+              <strong>🛡 Common Human SNP &amp; Allelic-Dropout Shielding (dbSNP / gnomAD MAF ≥ 1%):</strong>{" "}
+              <span style={{ color: biomniResult.variantShielding.status === "clean" ? "#15803d" : "#b45309", fontWeight: 600 }}>
+                {biomniResult.variantShielding.status === "clean" ? "✓ SNP-Clean PAM, Seed & Primer 3′ Ends" : "⚠ Common Polymorphism Near Target"}
+              </span>
+              <div className="muted" style={{ marginTop: "0.15rem" }}>{biomniResult.variantShielding.summary}</div>
+            </div>
+          )}
+
+          {biomniResult.genotypingAssay?.ok && (
+            <div style={{ marginTop: "0.45rem", fontSize: "0.82rem", padding: "0.45rem 0.65rem", borderRadius: "6px", background: "#f0f9ff", border: "1px solid #bae6fd" }}>
+              <strong>🧪 Wet-Lab Pre-Sequencing Genotyping Assay ({biomniResult.genotypingAssay.assayType}):</strong>
+              {biomniResult.genotypingAssay.deletionBp != null ? (
+                <div style={{ marginTop: "0.15rem" }}>
+                  WT Amplicon: <strong>{biomniResult.genotypingAssay.wtAmpliconBp} bp</strong> → Dual-Cut KO Amplicon:{" "}
+                  <strong>{biomniResult.genotypingAssay.editedAmpliconBp} bp</strong> (<strong>Δ{biomniResult.genotypingAssay.deletionBp} bp</strong>) ·{" "}
+                  <span style={{ color: "#0369a1", fontWeight: 600 }}>{biomniResult.genotypingAssay.agaroseRecommendation}</span>
+                </div>
+              ) : (
+                <div style={{ marginTop: "0.15rem" }}>
+                  WT Amplicon: <strong>{biomniResult.genotypingAssay.wtAmpliconBp} bp</strong>
+                  {biomniResult.genotypingAssay.rflpGained?.length > 0 && (
+                    <span> · <strong>RFLP Gained in Donor:</strong> <code>{biomniResult.genotypingAssay.rflpGained.join(", ")}</code></span>
+                  )}
+                  {biomniResult.genotypingAssay.rflpLost?.length > 0 && (
+                    <span> · <strong>RFLP Ablated in Donor:</strong> <code>{biomniResult.genotypingAssay.rflpLost.join(", ")}</code></span>
+                  )}
+                  {!biomniResult.genotypingAssay.rflpGained?.length && !biomniResult.genotypingAssay.rflpLost?.length && (
+                    <span> · Screen clones directly via Sanger `.ab1` trace deconvolution in Step 3 (QC).</span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {biomniResult.screeningPower && (

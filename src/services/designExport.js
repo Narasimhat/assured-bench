@@ -89,6 +89,26 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
       `<p style="margin:4px 0;color:#92400e"><strong>NMD-Escape Locus Rescue:</strong> ${escapeHtml(rescue.reason)} Use dual-guide excision or 5′ terminal-exon early truncation (&lt;50% retained CDS).</p>`
     );
   }
+  if (biomniReport?.uniprot?.constraintSummary) {
+    lines.push(
+      `<p style="margin:4px 0"><strong>Cell Fitness &amp; gnomAD Constraint:</strong> ${escapeHtml(biomniReport.uniprot.constraintSummary)}</p>`
+    );
+  }
+  if (biomniReport?.variantShielding?.ok) {
+    lines.push(
+      `<p style="margin:4px 0"><strong>Common Human SNP &amp; Allelic-Dropout Shielding:</strong> ${escapeHtml(biomniReport.variantShielding.summary)}</p>`
+    );
+  }
+  if (biomniReport?.genotypingAssay?.ok) {
+    const ga = biomniReport.genotypingAssay;
+    lines.push(
+      `<p style="margin:4px 0"><strong>Wet-Lab Pre-Sequencing Genotyping Assay (${escapeHtml(ga.assayType)}):</strong> ${
+        ga.deletionBp != null
+          ? `WT amplicon ${escapeHtml(ga.wtAmpliconBp)} bp → Excised KO amplicon ${escapeHtml(ga.editedAmpliconBp)} bp (Δ${escapeHtml(ga.deletionBp)} bp; ${escapeHtml(ga.agaroseRecommendation)}).`
+          : `WT amplicon ${escapeHtml(ga.wtAmpliconBp)} bp${ga.rflpGained?.length ? ` · RFLP gained: ${escapeHtml(ga.rflpGained.join(", "))}` : ""}${ga.rflpLost?.length ? ` · RFLP ablated: ${escapeHtml(ga.rflpLost.join(", "))}` : ""}.`
+      }</p>`
+    );
+  }
   if (sp?.ok) {
     lines.push(
       `<p style="margin:4px 0"><strong>Clonal Screening Power (${escapeHtml(sp.mode)}):</strong> Predicted biallelic clone yield ~<strong>${escapeHtml(sp.predictedBiallelicClonePct)}%</strong> → Screen <strong>${escapeHtml(sp.recommendedClonesToScreen)} clones</strong> (${escapeHtml(sp.plates96Well)} × 96-well plate) for ≥95% probability of recovering ≥2 verified clones.</p>`
