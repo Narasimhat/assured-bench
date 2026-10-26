@@ -1,0 +1,62 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { runDesign, summarizeProcurementReadiness, selectKoGuidePair } from "../src/engine/design/designEngine.js";
+import { loadLindel } from "../src/engine/design/lindel/loadLindel.js";
+import { buildDesignSummary } from "../src/engine/design/reportHtml.js";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const DIPK2A = fs.readFileSync(path.join(HERE, "fixtures", "dipk2a-region.gb"), "utf8");
+const lindel = await loadLindel();
+const G1 = "TGTCAAAGCTGACGTCCAGG"; const G2 = "AGTTGGTCCTAGAGATGGGA";
+const design = (options) => runDesign("ko", DIPK2A, "", "", 400, options);
+
+test("without the outcome model nothing changes: same pair as before, no outcome fields", () => {
+  const r = design({});
+  assert.deepEqual(r.gs.map((g) => g.sp), ["AATGGCCAACCTTCATCAGA", "TGGAGCTTGTGGAAGAATGG"]);
+  assert.equal(r.koAssessment.outcomes, null); assert.equal(r.gs[0].ko.outcomes, undefined);
+  assert.ok(!summarizeProcurementReadiness(r).warnings.some((w) => /loss-of-function alleles are|Repair-outcome/.test(w)));
+});
+
+test("with the outcome model the pair is chosen by the share of alleles predicted to lose the protein: both guides above 85% on DIPK2A, up from 36% for the old pair's weaker guide", () => {
+  const r = design({ koLindel: lindel });
+  const lof = r.gs.map((g) => g.ko.outcomes.lofPct);
+  assert.ok(lof.every((v) => v > 85), String(lof));
+  assert.equal(r.koAssessment.tier, "robust");
+  assert.equal(r.koAssessment.outcomes.minLofPct, Math.min(...lof));
+  assert.deepEqual(r.gs.map((g) => g.sp).sort(), ["ATTATGTTGGAGAAGAACTG", "TTTCCATTAATTGCCAAGCG"]);
+  assert.ok(!summarizeProcurementReadiness(r).warnings.some((w) => /loss-of-function alleles are/.test(w)), "no warning when both guides are strong");
+  const cuts = r.gs.map((g) => g.cut); assert.ok(Math.abs(cuts[1] - cuts[0]) >= 40 && Math.abs(cuts[1] - cuts[0]) <= 140, "pair spacing rule still holds");
+});
+
+test("pasting the guides of the clones that kept protein shows why: 73% and 36% predicted loss-of-function alleles, with a warning that gives the clone-level consequence", () => {
+  const r = design({ koLindel: lindel, customGuides: [G1, G2] });
+  const by = Object.fromEntries(r.gs.map((g) => [g.sp, g.ko.outcomes]));
+  assert.equal(by[G1].lofPct, 72.7); assert.equal(by[G2].lofPct, 36.3); assert.equal(by[G2].frameshiftPct, 84.4);
+  const warning = summarizeProcurementReadiness(r).warnings.find((w) => /loss-of-function alleles are/.test(w));
+  assert.match(warning, /72\.7% for guide 1 and 36\.3% for guide 2/); assert.match(warning, /about 13% of clones/); assert.match(warning, /cutting efficiency is not part/);
+});
+
+test("the report names the predicted outcomes, and says so when the outcome model could not be applied", () => {
+  const withModel = buildDesignSummary(design({ koLindel: lindel }));
+  assert.match(withModel, /Guide 1 predicted repair outcomes: [\d.]+% loss-of-function alleles/);
+  const failed = design({ koOutcomesUnavailable: "the Lindel weights could not be loaded (HTTP 404)." });
+  assert.match(buildDesignSummary(failed), /Repair-outcome ranking not applied: the Lindel weights could not be loaded/);
+  assert.ok(summarizeProcurementReadiness(failed).warnings.some((w) => /Guides were chosen by the frameshift-panel tier alone/.test(w)));
+  assert.equal(failed.gs[0].sp, "AATGGCCAACCTTCATCAGA", "the fallback is the tier-only choice");
+});
+
+test("the outcome model is SpCas9-only: other enzymes are designed as before", () => {
+  const plain = design({ enzyme: "spcas9ng" }); const withModel = design({ enzyme: "spcas9ng", koLindel: lindel });
+  assert.equal(plain.err, undefined);
+  assert.deepEqual(withModel.gs.map((g) => g.sp), plain.gs.map((g) => g.sp)); assert.equal(withModel.koAssessment && withModel.koAssessment.outcomes, null);
+});
+
+test("selectKoGuidePair ranks 25 acceptable pairs by default and as many as rankLimit when asked", () => {
+  const guides = Array.from({ length: 60 }, (_, i) => ({ cut: 1000 + i * 3, str: i % 2 ? "+" : "-", gc: 50 }));
+  const seen = new Set(); const rank = (candidate) => { seen.add(candidate); return 0; };
+  selectKoGuidePair(guides, 140, { accept: () => true, rank }); assert.equal(seen.size, 25);
+  seen.clear(); selectKoGuidePair(guides, 140, { accept: () => true, rank, rankLimit: 400 }); assert.equal(seen.size, 400);
+});

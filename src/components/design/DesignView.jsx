@@ -414,6 +414,16 @@ export function DesignView({
           ? (CASSETTES[tag] ? tag : resolveConstructSelection(tag, editType).cassette)
           : tag;
 
+      let koLindel;
+      let koOutcomesUnavailable;
+      if (editType === "ko" && (!enzyme || enzyme === "spcas9")) {
+        try {
+          koLindel = await (await import("../../engine/design/lindel/loadLindel.js")).loadLindel();
+        } catch (err) {
+          koOutcomesUnavailable = `the Lindel weights could not be loaded (${err?.message || err}).`;
+        }
+      }
+
       const options = {
         ...currentProject.options,
         enzyme,
@@ -424,6 +434,7 @@ export function DesignView({
         expectedGene: geneMeta?.geneSymbol || geneInput.trim(),
         ensureGuidePair: true,
         allowNonCodingBlockers: true,
+        ...(editType === "ko" ? { koLindel, ...(koOutcomesUnavailable ? { koOutcomesUnavailable } : {}) } : {}),
         ...(customGuidesOverride?.length ? { customGuides: customGuidesOverride } : {})
       };
 

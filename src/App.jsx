@@ -99,13 +99,23 @@ export function App() {
       };
 
       const cfg = presetConfigs[presetKey] || presetConfigs.tp53_flag;
+      let koLindel;
+      let koOutcomesUnavailable;
+      if (cfg.editType === "ko") {
+        try {
+          koLindel = await (await import("./engine/design/lindel/loadLindel.js")).loadLindel();
+        } catch (err) {
+          koOutcomesUnavailable = `the Lindel weights could not be loaded (${err?.message || err}).`;
+        }
+      }
       const options = {
         deliveryMethod: "rnp",
         maxBlockingChanges: 3,
         coDeliveryBlocking: false,
         expectedGene: "TP53",
         ensureGuidePair: true,
-        allowNonCodingBlockers: true
+        allowNonCodingBlockers: true,
+        ...(cfg.editType === "ko" ? { koLindel, ...(koOutcomesUnavailable ? { koOutcomesUnavailable } : {}) } : {})
       };
 
       const result = runDesign(cfg.editType, raw, cfg.mutation, cfg.tag, cfg.homologyArmLength, options);

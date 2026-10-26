@@ -1,4 +1,5 @@
 import { findEnzymeGuides } from "./enzymeGuides.js";
+import { assessKoGuide, assessKoPair, KO_TIER_RANK } from "./koOutcomes.js";
 
 function extractFeatureRanges(loc) {
   const nums = String(loc || "").match(/\d+/g);
@@ -585,7 +586,9 @@ export function extractCodingDonorWindowFromModel(model, donorStart, donorEnd, p
   };
 }
 
-export function findKoDesignTargetFromModel(model, reverseComplement, selectKoGuidePair, finder = findSpCas9Guides) {
+const KO_LOF_BIN = 5;
+
+export function findKoDesignTargetFromModel(model, reverseComplement, selectKoGuidePair, finder = findSpCas9Guides, options = {}) {
   const seq = getGenomicSequence(model);
   const segs = getCdsSegments(model);
   const exons = getExonsFromModel(model);
@@ -595,30 +598,56 @@ export function findKoDesignTargetFromModel(model, reverseComplement, selectKoGu
   const preferredSegments = nonTerminalSegments.filter((entry) => entry.index >= 1 && entry.index <= 3);
   const targetSegments = preferredSegments.length ? preferredSegments : nonTerminalSegments;
   const boundaryWindow = 25;
+  // Knockout-aware selection: a pair is ranked first by what its frameshifts do to the protein (see koOutcomes.js), then by the
+  // geometry the engine has always used. Without a coding sequence to simulate on, selection falls back to geometry alone.
+  const koAware = options.koAware !== false && Boolean(model?.cdsSequence) && segs.length >= 2;
+  // Optional repair-outcome scorer (koRank.createKoOutcomeScorer): among pairs of the same tier, prefer the pair whose weaker guide is predicted to give the
+  // larger share of loss-of-function alleles. Differences under KO_LOF_BIN percentage points are within the model's own error (Lindel r = 0.71 on its test set),
+  // so they do not decide; isoform coverage and then geometry do.
+  const koScorer = koAware && typeof options.koScorer === "function" ? options.koScorer : null;
+  const pairLof = (candidate) => { const a = koScorer(candidate.guides[0]); const b = koScorer(candidate.guides[1]); return a && b ? Math.min(a.lofPct, b.lofPct) : null; };
+  const lofBin = (value) => (value == null ? 0 : Math.floor(value / KO_LOF_BIN));
 
-  const candidates = targetSegments.map(({ start, end, index }) => {
+  const evaluate = (segments) => segments.map(({ start, end, index }) => {
     const exonLength = end - start;
     const exon = findExonForSegment(exons, start, end);
     const guides = finder(model, reverseComplement, Math.floor((start + end) / 2), Math.floor(exonLength / 2) + 10)
       .filter((guide) => guide.cut >= start - boundaryWindow && guide.cut <= end + boundaryWindow)
       .sort((left, right) => right.gc - left.gc);
-    const pair = selectKoGuidePair(guides);
-    return {
-      segmentIndex: index + 1,
-      exonNumber: exon?.exonNumber || index + 1,
-      start,
-      end,
-      exonLength,
-      pair,
-    };
+    let pair = null; let ko = null;
+    if (koAware) {
+      const guideTier = new Map();
+      const tierOf = (guide) => { if (!guideTier.has(guide.cut)) guideTier.set(guide.cut, assessKoGuide(model, guide).tier); return KO_TIER_RANK[guideTier.get(guide.cut)]; };
+      // the best tier a pair can reach: allow guides of one more tier at a time until a pair whose guides AND whose deletion between the cuts qualify exists
+      for (const maxRank of [0, 1, 2, 3]) {
+        const pool = guides.filter((guide) => tierOf(guide) <= maxRank);
+        if (pool.length < 2) continue;
+        pair = selectKoGuidePair(pool, undefined, { accept: (candidate) => KO_TIER_RANK[assessKoPair(model, candidate.guides[0], candidate.guides[1]).tier] <= maxRank, rank: (candidate) => (koScorer ? -lofBin(pairLof(candidate)) * 1000 : 0) + assessKoPair(model, candidate.guides[0], candidate.guides[1]).isoformGapScore, rankLimit: koScorer ? 2000 : undefined });
+        if (pair) break;
+      }
+      if (pair) ko = assessKoPair(model, pair.guides[0], pair.guides[1]);
+    }
+    const lof = koScorer && pair && pair.guides.length === 2 ? pairLof(pair) : null;
+    if (!pair) pair = selectKoGuidePair(guides);
+    return { segmentIndex: index + 1, exonNumber: exon?.exonNumber || index + 1, start, end, exonLength, pair, ko, lof };
   }).filter((entry) => entry.pair);
 
-  candidates.sort((left, right) => {
+  const gapCount = (entry) => (entry.ko ? entry.ko.isoformGapScore : 0);
+  const koRank = (entry) => (entry.ko ? KO_TIER_RANK[entry.ko.tier] : KO_TIER_RANK.unmodelled);
+  const order = (list) => list.sort((left, right) => {
+    if (koAware && koRank(left) !== koRank(right)) return koRank(left) - koRank(right);
+    if (koScorer && lofBin(left.lof) !== lofBin(right.lof)) return lofBin(right.lof) - lofBin(left.lof);
+    if (koAware && gapCount(left) !== gapCount(right)) return gapCount(left) - gapCount(right);
     if (left.pair.oppositeStrands !== right.pair.oppositeStrands) return left.pair.oppositeStrands ? -1 : 1;
     if (right.exonLength !== left.exonLength) return right.exonLength - left.exonLength;
     if (right.pair.score !== left.pair.score) return right.pair.score - left.pair.score;
     return left.pair.spacing - right.pair.spacing;
   });
-
+  let candidates = order(evaluate(targetSegments));
+  // exons 2-4 stay the first choice; only when none of them gives a robust pair are the other non-terminal exons considered
+  if (koAware && (!candidates.length || koRank(candidates[0]) > KO_TIER_RANK.robust) && targetSegments.length < nonTerminalSegments.length) {
+    const rest = nonTerminalSegments.filter((entry) => !targetSegments.includes(entry));
+    candidates = order([...candidates, ...evaluate(rest)]);
+  }
   return candidates[0] || null;
 }
