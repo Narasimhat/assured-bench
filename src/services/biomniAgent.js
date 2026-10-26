@@ -7,6 +7,7 @@
  */
 
 import { ENZYMES } from "../engine/design/enzymeConfig.js";
+import { withoutRunOverrides } from "./runOptions.js";
 import { parseGB, runDesign, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
 import { assessKoGuide, codingModels } from "../engine/design/koOutcomes.js";
@@ -905,7 +906,7 @@ export async function runBiomniCoScientist(
         }
         const config = ENZYMES[intent.enzyme] || ENZYMES.spcas9;
         const options = {
-          ...(currentProject?.options || {}),
+          ...withoutRunOverrides(currentProject?.options),
           enzyme: intent.enzyme,
           spacerLength: config.spacer_len.default,
           expectedGene: intent.gene,
@@ -1213,7 +1214,7 @@ export async function runBiomniCoScientist(
           mutation: intent.mutation,
           tag: intent.tag,
           homologyArmLength: currentProject?.homologyArmLength || 400,
-          options: { ...(currentProject?.options || {}), enzyme: intent.enzyme },
+          options: { ...withoutRunOverrides(currentProject?.options), enzyme: intent.enzyme },
         };
         const req = agentRequest(tempProject, Object.keys(ENZYMES), "balanced");
         enzymeComparison = await runWorkflowAgent(req, { runner: designRunner });

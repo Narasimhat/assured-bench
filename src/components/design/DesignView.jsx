@@ -29,6 +29,7 @@ import {
 } from "../../services/designExport.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
+import { withoutRunOverrides } from "../../services/runOptions.js";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
 import {
@@ -426,7 +427,7 @@ export function DesignView({
       }
 
       const options = {
-        ...currentProject.options,
+        ...withoutRunOverrides(currentProject.options),
         enzyme,
         deliveryMethod,
         maxBlockingChanges: Number(maxBlockingChanges),
@@ -505,7 +506,7 @@ export function DesignView({
         mutation,
         tag: resolvedTag,
         homologyArmLength,
-        options: { ...currentProject.options, ...options },
+        options: { ...withoutRunOverrides(currentProject.options), ...withoutRunOverrides(options) },
         genbankRaw,
         designResult: result,
         svgScheme,

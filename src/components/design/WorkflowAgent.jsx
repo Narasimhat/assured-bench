@@ -5,6 +5,7 @@ import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/des
 import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
 import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAssay, parseBiomniPrompt } from "../../services/biomniAgent.js";
 import { screenTargetVariants } from "../../services/variantScreen.js";
+import { withoutRunOverrides } from "../../services/runOptions.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
   const [enzymes, setEnzymes] = useState(() => Object.keys(ENZYMES));
@@ -55,7 +56,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
       mutation: intent.mutation || "",
       tag: intent.tag || project.tag || "FLAG",
       options: {
-        ...project.options,
+        ...withoutRunOverrides(project.options),
         enzyme: intent.enzyme,
         spacerLength: config.spacer_len.default,
         directRepeat: config.direct_repeat || "",
@@ -115,7 +116,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     const targetGene = biomniResult?.intent?.gene || project?.gene;
     if (!targetGene) { setBiomniError("The target gene is not known for this design, so the alternative guides were not applied."); return; }
     const opts = {
-      ...(project?.options || {}),
+      ...withoutRunOverrides(project?.options),
       enzyme: enzymeId,
       spacerLength: config.spacer_len.default,
       expectedGene: targetGene,
@@ -146,7 +147,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     onUpdateProject({
       gene: targetGene,
       editType: "ko",
-      options: opts,
+      options: withoutRunOverrides(opts),
       genbankRaw: rawGb,
       designResult: res,
       svgScheme: buildDesignSchemeSvg(res),
