@@ -5,7 +5,7 @@ import { designGenomicSnp } from "../engine/design/genomicSnp.js";
 import { normalizeGenomicDesign } from "./genomicDesignResult.js";
 import { getReleaseVerdict } from "../engine/design/releaseVerdict.js";
 
-export const WORKFLOW_AGENT_VERSION = "1.1.1";
+export const WORKFLOW_AGENT_VERSION = "1.2.0";
 export const AGENT_EVIDENCE_GAPS = Object.freeze([
   "Measured editing or HDR efficiency in your cell type and delivery conditions.",
   "Calibrated experimental activity comparisons between these enzymes.",
@@ -37,7 +37,7 @@ export function agentRequest(project, enzymes, priority = "balanced") {
   // previous risk acknowledgements from one enzyme to another.
   const options = genomic ? { deliveryMethod: genomic.input.deliveryMethod || "rnp",
     coDeliveryBlocking: genomic.input.blockingPolicy === "pair", maxBlockingChanges: genomic.input.maxBlockingChanges ?? (isTwoGuidePolicy(genomic.input.blockingPolicy) ? 3 : 2) } : { ...project.options };
-  for (const key of ["customGuides", "directRepeat", "repeatSource", "repeatVerified", "spacerLength", "enzyme", "weakProtectionAcceptance", "acceptWeakProtection", "weakProtectionReason", "acknowledgeWeakProtection", "weakProtectionAcceptedBy", "acceptedBy"]) delete options[key];
+  for (const key of ["customGuides", "directRepeat", "repeatSource", "repeatVerified", "spacerLength", "enzyme", "weakProtectionAcceptance", "acceptWeakProtection", "weakProtectionReason", "acknowledgeWeakProtection", "weakProtectionAcceptedBy", "acceptedBy", "koLindel", "koOutcomesUnavailable"]) delete options[key];
   return { projectId: project.id, gene: genomic?.input?.gene || project.geneMeta?.geneSymbol || project.gene?.trim() || "",
     editType: project.editType, mutation: genomic ? `chr${genomic.input.chromosome}:${genomic.input.position} ${genomic.input.ref}>${genomic.input.alt}` : project.mutation || "", tag: project.tag || "",
     homologyArmLength: project.homologyArmLength, genbankRaw: raw,
@@ -69,6 +69,13 @@ export function summarizeAgentCandidate(enzyme, result, type) {
       : result.deletionOutcome?.spliceDonorRemoved && result.deletionOutcome?.exonSkippingFrameshiftPredicted ? 1 : 2 : null,
     spacerLength: guides[0]?.sp?.length || config.spacer_len.default,
     extraChanges: changes, primersReady: summarizePrimerReadiness(result).ready };
+  const outcomes = type === "ko" && enzyme === "spcas9" ? result.koAssessment?.outcomes : null;
+  const repairOutcomeModel = type !== "ko" || enzyme !== "spcas9"
+    ? { status: "not_applicable", reason: "Lindel is used only for SpCas9 knockout repair outcomes." }
+    : outcomes ? { status: "applied", model: outcomes.model, weakerGuideLofPct: outcomes.minLofPct }
+    : { status: result.koAssessment?.outcomesUnavailable ? "unavailable" : "not_computable",
+        reason: result.koAssessment?.outcomesUnavailable || "Lindel could not score the selected guide contexts. The engine used its fallback knockout assessment." };
+  metrics.koMinLofPct = Number.isFinite(outcomes?.minLofPct) ? outcomes.minLofPct : null;
   const eligible = verdict.status !== "blocked" && guides.length > 0 && problems.length === 0;
   const reasons = [
     type === "ko" ? `Two-guide knockout; predicted deletion ${result.deletionOutcome?.deletionSize ?? "not recorded"} bp; nominal junction ${result.deletionOutcome?.frameshiftPredicted ? "shifts the reading frame" : "does not predict a frameshift"}. Staggered cuts and repair can change the junction.`
@@ -76,8 +83,13 @@ export function summarizeAgentCandidate(enzyme, result, type) {
     `${changes} ${type === "genomic-snv" ? "maximum additional base change(s) per donor" : "distinct documented blocking change(s)"}; screening primers ${metrics.primersReady ? "pass the configured checks" : "need review"}.`,
     ...problems, ...verdict.blockers,
   ];
+  if (type === "ko" && enzyme === "spcas9") {
+    reasons.unshift(outcomes
+      ? `SpCas9 guide pairs were selected using Lindel repair outcomes and protein-loss rules. The weaker guide has ${outcomes.minLofPct}% predicted loss-of-function alleles; this is not cutting efficiency or a cross-enzyme performance score.`
+      : `Repair-outcome ranking was not applied: ${repairOutcomeModel.reason}`);
+  }
   return { enzyme, name: config.name, pam: config.pam_pattern, eligible, status: verdict.status,
-    reasons, warnings: verdict.warnings, standingRequirements: verdict.standingRequirements, metrics, result };
+    repairOutcomeModel, reasons, warnings: verdict.warnings, standingRequirements: verdict.standingRequirements, metrics, result };
 }
 
 function rankKey(candidate, priority) {
@@ -110,7 +122,11 @@ export function rankAgentCandidates(candidates, priority = "balanced") {
   });
 }
 
-export async function runWorkflowAgent(request, { onProgress = () => {}, runner = runDesign } = {}) {
+async function loadAgentKoModel() {
+  return (await import("../engine/design/lindel/loadLindel.js")).loadLindel();
+}
+
+export async function runWorkflowAgent(request, { onProgress = () => {}, runner = runDesign, loadKoModel = loadAgentKoModel } = {}) {
   const results = [];
   for (let index = 0; index < request.enzymes.length; index++) {
     const enzyme = request.enzymes[index], config = getEnzyme(enzyme);
@@ -118,6 +134,20 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
     const options = { ...request.options, enzyme, spacerLength: config.spacer_len.default,
       directRepeat: config.direct_repeat || "", repeatVerified: false, repeatSource: "",
       expectedGene: request.gene, ensureGuidePair: true, allowNonCodingBlockers: true };
+    // Always load our own model. A saved project's parsed weights or stale failure
+    // message must never be transferred to another enzyme or reused silently.
+    delete options.koLindel;
+    delete options.koOutcomesUnavailable;
+    if (request.editType === "ko" && enzyme === "spcas9") {
+      onProgress({ completed: index, total: request.enzymes.length, enzyme: config.name, phase: "loading_model" });
+      try {
+        options.koLindel = await loadKoModel();
+        if (!options.koLindel) throw Error("No Lindel model returned.");
+      } catch (error) {
+        options.koOutcomesUnavailable = `the Lindel weights could not be loaded (${error.message || String(error)}).`;
+      }
+      onProgress({ completed: index, total: request.enzymes.length, enzyme: config.name, phase: "design" });
+    }
     let result;
     try {
       result = request.editType === "genomic-snv"
@@ -134,7 +164,8 @@ export async function runWorkflowAgent(request, { onProgress = () => {}, runner 
     configVersion: ENZYME_CONFIG_VERSION, createdAt: new Date().toISOString(),
     inputs: { gene: request.gene, editType: request.editType, mutation: request.mutation, tag: request.tag,
       homologyArmLength: request.homologyArmLength, options: request.options, ...(request.variant ? { variant: request.variant } : {}) },
-    knockoutRanking: "Within release gates: nominal frameshift, then splice-donor removal with frame-disrupting exon skipping, then other two-guide plans; then primer checks. This is mechanistic evidence, not a knockout probability.",
+    knockoutPairSelection: "SpCas9 uses the shared protein-loss assessment and Lindel repair-outcome ranking when its model is available. Missing Lindel predictions are recorded, not assigned zero. Other enzymes do not receive SpCas9-trained repair predictions.",
+    knockoutRanking: "Cross-enzyme ordering does not compare Lindel percentages. Within release gates: nominal frameshift, then splice-donor removal with frame-disrupting exon skipping, then other two-guide plans; then primer checks. This is mechanistic evidence, not a knockout probability.",
     rankingRule: "Eligible designs and configured release gates first; then selected priority; then primer readiness. Exact ties are retained.",
     priority: request.priority, enzymesCompared: request.enzymes,
     excludedEnzymes: Object.keys(ENZYMES).filter(id => !request.enzymes.includes(id)),
