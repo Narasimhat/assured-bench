@@ -3,6 +3,7 @@ import { RefreshCw, RotateCcw } from "lucide-react";
 import { previewKoPair } from "../../engine/design/designEngine.js";
 
 const fmt = (value, unit = "%") => (Number.isFinite(value) ? `${value}${unit}` : "\u2014");
+const OTHER_ISOFORMS_NOTE = "Share of this guide's predicted repair outcomes after which at least one other annotated isoform of the gene is still predicted to make protein (in-frame change, no effect on that isoform, or a stop so close to its start that translation can restart). Not the share of isoforms.";
 const TIER_NOTE = {
   robust: "Frameshifts in this guide trigger nonsense-mediated decay in every annotated isoform",
   marginal: "Frameshifts are borderline for nonsense-mediated decay",
@@ -36,6 +37,8 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
   const toggle = spacer => setSelected(list => (list.includes(spacer) ? list.filter(x => x !== spacer) : [...list, spacer].slice(-2)));
   const hasModel = Boolean(picker.outcomeModel);
   const hasCoverage = pickerRows.some(row => Number.isFinite(row.isoformCoveragePct));
+  // with one annotated coding sequence there is no other isoform to evaluate: the share is not 0%, it was not computed
+  const otherIsoforms = picker.isoformsEvaluated == null ? true : picker.isoformsEvaluated > 1;
   const recommendedRows = recommended ? recommended.map(rowOf) : [];
   const recommendedMin = recommendedRows.length === 2 && recommendedRows.every(r => r && Number.isFinite(r.lofPct)) ? Math.min(...recommendedRows.map(r => r.lofPct)) : null;
 
@@ -61,7 +64,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
           <thead style={{ position: "sticky", top: 0, background: "var(--bg-card, #fff)" }}>
             <tr>
               {["", "Rank", "Spacer (5\u2032 \u2192 3\u2032)", "Strand", "Cut (coding exon + nt)", "GC", "Tier", "Predicted LoF", "Frameshift", "+1 insertion", "In-frame", "Other isoforms left intact", ...(hasCoverage ? ["Annotated transcripts with the cut"] : []), ""].map((label, i) => (
-                <th key={i} style={{ padding: 6, textAlign: "left", whiteSpace: "nowrap" }}>{label}</th>
+                <th key={i} style={{ padding: 6, textAlign: "left", whiteSpace: "nowrap" }} title={label === "Other isoforms left intact" ? OTHER_ISOFORMS_NOTE : undefined}>{label}</th>
               ))}
             </tr>
           </thead>
@@ -81,7 +84,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
                   <td style={{ padding: 6 }}>{fmt(row.frameshiftPct)}</td>
                   <td style={{ padding: 6 }}>{fmt(row.plus1Pct)}</td>
                   <td style={{ padding: 6 }}>{fmt(row.inframePct)}</td>
-                  <td style={{ padding: 6 }}>{fmt(row.otherIsoformNotDisruptedPct)}</td>
+                  <td style={{ padding: 6 }} title={otherIsoforms ? OTHER_ISOFORMS_NOTE : "Only one coding sequence is annotated in this reference, so no other isoform was evaluated."}>{otherIsoforms ? fmt(row.otherIsoformNotDisruptedPct) : "\u2014"}</td>
                   {hasCoverage && <td style={{ padding: 6 }} title="Share of the annotated RefSeq and Ensembl coding transcripts whose coding sequence contains this cut (the smaller of the two)">{fmt(row.isoformCoveragePct)}</td>}
                   <td style={{ padding: 6, whiteSpace: "nowrap" }}>
                     {current.includes(row.spacer) && <span className="badge badge-ready" style={{ fontSize: "0.7rem" }}>in design</span>}{" "}
@@ -93,6 +96,11 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
           </tbody>
         </table>
       </div>
+
+      <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0.4rem 0 0" }}>
+        <strong>Other isoforms left intact:</strong> {OTHER_ISOFORMS_NOTE}
+        {!otherIsoforms && " Here only one coding sequence is annotated, so the column is not computed (shown as a dash); the transcript column and the Co-Scientist panel check the cut against RefSeq and Ensembl transcripts instead."}
+      </p>
 
       <div role="status" aria-live="polite" style={{ marginTop: "0.75rem", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid var(--border, #cbd5e1)", fontSize: "0.85rem" }}>
         {!preview && <span style={{ color: "var(--text-muted)" }}>Choose two guides to see the deletion between them and the predicted outcome.</span>}

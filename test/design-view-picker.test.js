@@ -61,3 +61,26 @@ test("the Design screen shows how many annotated transcripts contain the cuts, a
   assert.doesNotMatch(none, /Cuts inside/);
   assert.match(none, /Gene constraint and essentiality/); assert.match(none, /not retrieved/);
 });
+
+test("the picker does not show 0% for 'other isoforms left intact' when the reference annotates only one coding sequence", async () => {
+  const tp53 = fs.readFileSync(new URL("../public/references/tp53-NG_017013.2.gb", import.meta.url), "utf8");
+  const vite = await createServer({ server: { middlewareMode: true, ws: false }, appType: "custom", optimizeDeps: { noDiscovery: true }, logLevel: "error" });
+  try {
+    const { runDesign } = await vite.ssrLoadModule("/src/engine/design/designEngine.js");
+    const { KoGuidePicker } = await vite.ssrLoadModule("/src/components/design/KoGuidePicker.jsx");
+    const koLindel = await loadLindelNative();
+    const markup = (gene, raw) => {
+      const result = runDesign("ko", raw, "", "", "", { enzyme: "spcas9", expectedGene: gene, ensureGuidePair: true, allowNonCodingBlockers: true, koLindel });
+      return { result, html: renderToStaticMarkup(React.createElement(KoGuidePicker, { result, genbankRaw: raw, geneSymbol: gene, onUsePair() {}, onUseRecommended() {} })) };
+    };
+    const one = markup("TP53", tp53);
+    assert.equal(one.result.koPicker.isoformsEvaluated, 1);
+    assert.match(one.html, /only one coding sequence is annotated, so the column is not computed/);
+    assert.equal((one.html.match(/<td[^>]*>\u2014<\/td>/g) || []).length, one.result.koPicker.rows.length, "one dash per guide, in that column only");
+    const many = markup("DIPK2A", fs.readFileSync(new URL("../public/references/dipk2a-region.gb", import.meta.url), "utf8"));
+    assert.equal(many.result.koPicker.isoformsEvaluated, 3);
+    assert.doesNotMatch(many.html, /so the column is not computed/);
+    assert.doesNotMatch(many.html, /<td[^>]*>\u2014<\/td>/);
+    assert.match(many.html, /Share of this guide&#x27;s predicted repair outcomes after which at least one other annotated isoform/);
+  } finally { await vite.close(); }
+});

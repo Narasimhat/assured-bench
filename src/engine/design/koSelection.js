@@ -186,7 +186,7 @@ export function buildKoPicker(model, candidates, { enzyme = "spcas9", delivery =
       ...(row.inCommonExon === undefined ? {} : { inCommonExon: row.inCommonExon }) };
   });
   return { version: KO_SELECTION_VERSION, outcomeModel: koScorer ? "Lindel (Chen et al. 2019) with the Assured QC NMD and truncation rules" : null,
-    eligible: ranked.rows.length, listed: rows.length, scanned: ranked.candidatesScanned,
+    isoformsEvaluated: ranked.isoforms.length, eligible: ranked.rows.length, listed: rows.length, scanned: ranked.candidatesScanned,
     rejected: { quality: ranked.qualityRejected, coverage: ranked.coverageRejected, spliceBoundary: ranked.spliceBoundaryRejected }, rows };
 }
 
