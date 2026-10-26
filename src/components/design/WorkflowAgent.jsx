@@ -3,7 +3,8 @@ import { ENZYMES } from "../../engine/design/enzymeConfig.js";
 import { runDesign, summarizeProcurementReadiness } from "../../engine/design/designEngine.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/design/designScheme.js";
 import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
-import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, verifyCommonVariantShielding, computeWetLabGenotypingAssay } from "../../services/biomniAgent.js";
+import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAssay } from "../../services/biomniAgent.js";
+import { screenTargetVariants } from "../../services/variantScreen.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
   const [enzymes, setEnzymes] = useState(() => Object.keys(ENZYMES));
@@ -129,11 +130,15 @@ export function WorkflowAgent({ project, onUpdateProject }) {
           ...biomniResult,
           intent: { ...biomniResult.intent, enzyme: enzymeId },
           designResult: res,
-          variantShielding: verifyCommonVariantShielding({ gene: targetGene, genbankRaw: rawGb, designResult: res }),
+          variantScreen: { ok: true, status: "pending", summary: "Checking dbSNP for variants under the new guide targets and primers…" },
           genotypingAssay: computeWetLabGenotypingAssay({ editType: "ko", designResult: res, genbankRaw: rawGb }),
         }
       : null;
-    if (updatedBiomni) setBiomniResult(updatedBiomni);
+    if (updatedBiomni) {
+      setBiomniResult(updatedBiomni);
+      screenTargetVariants({ gene: targetGene, genbankRaw: rawGb, designResult: res })
+        .then((variantScreen) => setBiomniResult((current) => (current && current.designResult === res ? { ...current, variantScreen } : current)));
+    }
     onUpdateProject({
       gene: targetGene,
       editType: "ko",
@@ -585,15 +590,18 @@ export function WorkflowAgent({ project, onUpdateProject }) {
             </details>
           )}
 
-          {biomniResult.variantShielding?.ok && (
-            <div style={{ marginTop: "0.5rem", fontSize: "0.82rem", padding: "0.45rem 0.65rem", borderRadius: "6px", background: biomniResult.variantShielding.status === "clean" ? "#f8fafc" : "#fffbeb", border: biomniResult.variantShielding.status === "clean" ? "1px solid #cbd5e1" : "1px solid #fcd34d" }}>
-              <strong>🛡 Common Human SNP &amp; Allelic-Dropout Shielding (dbSNP / gnomAD MAF ≥ 1%):</strong>{" "}
-              <span style={{ color: biomniResult.variantShielding.status === "clean" ? "#15803d" : "#b45309", fontWeight: 600 }}>
-                {biomniResult.variantShielding.status === "clean" ? "✓ SNP-Clean PAM, Seed & Primer 3′ Ends" : "⚠ Common Polymorphism Near Target"}
-              </span>
-              <div className="muted" style={{ marginTop: "0.15rem" }}>{biomniResult.variantShielding.summary}</div>
-            </div>
-          )}
+          {biomniResult.variantScreen?.ok && (() => {
+            const vs = biomniResult.variantScreen;
+            const palette = { flagged: ["#fffbeb", "#b45309", "Common variant under the design"], none_found: ["#f8fafc", "#334155", "No common variant found in dbSNP"], partial: ["#f8fafc", "#b45309", "Variant screen incomplete"], not_assessed: ["#f8fafc", "#64748b", "Variants not assessed"], pending: ["#f8fafc", "#64748b", "Checking dbSNP"] };
+            const [background, color, title] = palette[vs.status] || palette.not_assessed;
+            return (
+              <div style={{ marginTop: "0.5rem", fontSize: "0.82rem", padding: "0.45rem 0.65rem", borderRadius: "6px", background, border: "1px solid #e2e8f0" }}>
+                <span style={{ color, fontWeight: 600 }}>{vs.status === "flagged" ? "⚠ " : ""}{title}</span>
+                <div className="muted" style={{ marginTop: "0.15rem" }}>{vs.summary}</div>
+                {vs.source && <div className="muted" style={{ marginTop: "0.15rem", fontSize: "0.75rem" }}>{vs.source}{vs.retrievedAt ? `, retrieved ${vs.retrievedAt.slice(0, 10)}` : ""}</div>}
+              </div>
+            );
+          })()}
 
           {biomniResult.genotypingAssay?.ok && (
             <div style={{ marginTop: "0.45rem", fontSize: "0.82rem", padding: "0.45rem 0.65rem", borderRadius: "6px", background: "#f0f9ff", border: "1px solid #bae6fd" }}>

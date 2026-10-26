@@ -139,9 +139,11 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.ok(manualBiomni.uniprot.pLI != null);
   assert.ok(manualBiomni.uniprot.constraintSummary);
   assert.ok(manualBiomni.lindelRanking.topGuides[0].cut_aa > 0);
-  // 2. Common human SNP & allelic-dropout shielding
-  assert.equal(manualBiomni.variantShielding?.ok, true);
-  assert.equal(manualBiomni.variantShielding.guideChecks.length, 2);
+  // 2. Known-variant screen (dbSNP). This mock serves no E-utilities response, so the honest result is "not assessed", never "clean".
+  assert.equal(manualBiomni.variantScreen?.ok, true);
+  assert.equal(manualBiomni.variantScreen.status, "not_assessed");
+  assert.deepEqual(manualBiomni.variantScreen.guideChecks, []);
+  assert.ok(!/clean|shielded|clear of/i.test(manualBiomni.variantScreen.summary));
   // 3. Wet-lab genotyping assay (PCR gel-shift band sizes)
   assert.equal(manualBiomni.genotypingAssay?.ok, true);
   assert.ok(manualBiomni.genotypingAssay.wtAmpliconBp > manualBiomni.genotypingAssay.editedAmpliconBp);

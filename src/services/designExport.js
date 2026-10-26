@@ -94,9 +94,9 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
       `<p style="margin:4px 0"><strong>Cell Fitness &amp; gnomAD Constraint:</strong> ${escapeHtml(biomniReport.uniprot.constraintSummary)}</p>`
     );
   }
-  if (biomniReport?.variantShielding?.ok) {
+  if (biomniReport?.variantScreen?.ok) {
     lines.push(
-      `<p style="margin:4px 0"><strong>Common Human SNP &amp; Allelic-Dropout Shielding:</strong> ${escapeHtml(biomniReport.variantShielding.summary)}</p>`
+      `<p style="margin:4px 0"><strong>Known population variants (${escapeHtml(biomniReport.variantScreen.source || "dbSNP")}):</strong> ${escapeHtml(biomniReport.variantScreen.summary)}</p>`
     );
   }
   if (biomniReport?.genotypingAssay?.ok) {

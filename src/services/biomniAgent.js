@@ -15,6 +15,7 @@ import { lindelEdits, predictLindel } from "../engine/design/lindel/lindel.js";
 import { cdsToGenomic, fetchGeneReference } from "../engine/design/geneFetch.js";
 import { fetchGeneGenbank } from "./ensembl.js";
 import { agentRequest, runWorkflowAgent } from "./workflowAgent.js";
+import { screenTargetVariants } from "./variantScreen.js";
 
 async function defaultLindelLoader() {
   const { loadLindel } = await import("../engine/design/lindel/loadLindel.js");
@@ -172,27 +173,6 @@ export const CURATED_GENE_PROFILES = Object.freeze({
 });
 
 /**
- * Curated common human polymorphisms (dbSNP / gnomAD MAF >= 1%) for SNP & allelic-dropout shielding.
- */
-export const CURATED_COMMON_SNPS = Object.freeze({
-  APOE: [
-    { rsid: "rs429358", cdsNt: 388, aaChange: "C130R (APOE-ε4)", maf: 0.14, motif: "TGCACCTCGGCCGCACACGTC" },
-    { rsid: "rs7412", cdsNt: 526, aaChange: "R176C (APOE-ε2)", maf: 0.08, motif: "GATGCCGATGACCTGCAGAAG" },
-  ],
-  TP53: [
-    { rsid: "rs1042522", cdsNt: 215, aaChange: "P72R", maf: 0.66, motif: "TCCCCCTTGCCGTCCCAAGCA" },
-    { rsid: "rs1800371", cdsNt: 139, aaChange: "P47S", maf: 0.015, motif: "GCTCCCCCCGTGGCCCCTGCA" },
-  ],
-  SCN5A: [
-    { rsid: "rs6599230", cdsNt: 87, aaChange: "A29A (Exon 2 synonymous)", maf: 0.22, motif: "GCGGCGGCTGCGGCTGCCAAG" },
-    { rsid: "rs1805124", cdsNt: 1673, aaChange: "H558R", maf: 0.23, motif: "GCCCACCATGCGCACCTGAGC" },
-  ],
-  DIPK2A: [
-    { rsid: "rs3732756", cdsNt: 468, aaChange: "L156L (Exon 2 synonymous)", maf: 0.11, motif: "TGCGCCATGGGG" },
-  ],
-});
-
-/**
  * Map a guide's coding exon + exon-offset cut site to its 1-based canonical amino acid position and any overlapping UniProt domain.
  */
 export function mapCutToAminoAcidAndDomain(model, codingExon, cutAfterExonNt, domains = []) {
@@ -218,93 +198,6 @@ export function mapCutToAminoAcidAndDomain(model, codingExon, cutAfterExonNt, do
           label: `${hit.description} (aa ${hit.start}–${hit.end})`,
         }
       : null,
-  };
-}
-
-/**
- * Check selected guides (spacer + PAM) and PCR genotyping primers (especially 3' 5-nt end) for common human SNP overlap (MAF >= 1%).
- */
-export function verifyCommonVariantShielding({ gene, genbankRaw, designResult }) {
-  const sym = String(gene || designResult?.gene || "").trim().toUpperCase();
-  const guides = designResult?.gs || [];
-  const primers = designResult?.ps || [];
-  const knownSnps = CURATED_COMMON_SNPS[sym] || [];
-  const rc = (s) => [...String(s || "").toUpperCase()].reverse().map(c => ({ A: "T", C: "G", G: "C", T: "A" }[c] || "N")).join("");
-
-  let model = null;
-  try {
-    if (genbankRaw) model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: sym });
-  } catch {
-    model = null;
-  }
-
-  const cdsCutRange = (cutPos, span = 23) => {
-    if (!model?.cdsSegments?.length || cutPos == null) return null;
-    let acc = 0;
-    for (const [s, e] of model.cdsSegments) {
-      if (cutPos >= s - span && cutPos <= e + span) {
-        const rel = Math.max(1, cutPos - s);
-        return [acc + Math.max(1, rel - 20), acc + rel + 6];
-      }
-      acc += e - s;
-    }
-    return null;
-  };
-
-  const guideChecks = guides.slice(0, 2).map(g => {
-    const spacer = String(g.sp || g.spacer || "").toUpperCase();
-    const pam = String(g.pm || g.pam || "").toUpperCase();
-    const range = cdsCutRange(g.cut);
-    const overlaps = knownSnps.filter(snp => {
-      if (range && snp.cdsNt >= range[0] && snp.cdsNt <= range[1]) return true;
-      if (snp.motif && (spacer.includes(snp.motif.slice(0, 10)) || rc(spacer).includes(snp.motif.slice(0, 10)))) return true;
-      return false;
-    });
-    return {
-      spacer,
-      pam,
-      strand: g.str,
-      clean: overlaps.length === 0,
-      overlappingSnps: overlaps,
-      note:
-        overlaps.length === 0
-          ? "PAM & 20-nt spacer free of common gnomAD/dbSNP variants (MAF ≥ 1%)"
-          : `Overlaps ${overlaps.map(o => `${o.rsid} (${o.aaChange}, MAF ${Math.round(o.maf * 100)}%)`).join(", ")} — verify cell-line zygosity`,
-    };
-  });
-
-  const primerChecks = [];
-  if (primers.length > 0) {
-    const p0 = primers[0] || {};
-    const p1 = primers[1] || {};
-    const fwdSeq = String(p0.s || p0.f || p0.fwd || "").toUpperCase();
-    const revSeq = String(p1.s || p0.r || p0.rev || "").toUpperCase();
-    for (const [label, seq] of [
-      ["Forward Primer (F1)", fwdSeq],
-      ["Reverse Primer (R1)", revSeq],
-    ]) {
-      if (!seq) continue;
-      const threePrime5 = seq.slice(-5);
-      primerChecks.push({
-        label,
-        sequence: seq,
-        threePrimePentamer: threePrime5,
-        clean: true,
-        note: `3′-terminal pentamer (${threePrime5}) shielded against known allelic-dropout SNPs`,
-      });
-    }
-  }
-
-  const anyWarning = guideChecks.some(g => !g.clean) || primerChecks.some(p => !p.clean);
-  return {
-    ok: true,
-    gene: sym,
-    status: anyWarning ? "warning" : "clean",
-    guideChecks,
-    primerChecks,
-    summary: anyWarning
-      ? "One or more guide/PAM regions lie near a known common human polymorphism (MAF ≥ 1%); confirm cell-line genotype to prevent allele-specific cleavage drop."
-      : `All selected guides (${guideChecks.length}) and genotyping primer 3′ ends (${primerChecks.length}) are clear of common human SNPs (dbSNP/gnomAD MAF ≥ 1%).`,
   };
 }
 
@@ -1538,8 +1431,9 @@ export async function runBiomniCoScientist(
     onStep({ status: "running", currentStep: null, completedSteps: [...steps], totalSteps: plan.length });
   }
 
-  const variantShielding = designResult
-    ? verifyCommonVariantShielding({ gene: intent.gene, genbankRaw, designResult })
+  // known population variants under the guide targets and primer sites (dbSNP); "not assessed" when the query cannot run
+  const variantScreen = designResult
+    ? await screenTargetVariants({ gene: intent.gene, genbankRaw, designResult, fetchFn })
     : null;
   const genotypingAssay = designResult
     ? computeWetLabGenotypingAssay({ editType: intent.editType, designResult, genbankRaw })
@@ -1562,7 +1456,7 @@ export async function runBiomniCoScientist(
     lindelRanking,
     enzymeComparison,
     screeningPower,
-    variantShielding,
+    variantScreen,
     genotypingAssay,
   };
 }
