@@ -31,6 +31,8 @@ import {
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
 import { exonLabel } from "../../services/exonLabels.js";
+import { buildTakeHome } from "../../services/takeHome.js";
+import { TakeHomeCard } from "./TakeHomeCard.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
@@ -268,6 +270,7 @@ export function DesignView({
 
   // Active design result
   const designResult = currentProject?.designResult || null;
+  const takeHome = designResult ? buildTakeHome({ designResult, biomniReport: currentProject?.biomniReport || null }) : null;
 
   // Gene Fetch via geneFetch.js (Ensembl or NCBI across Human, Mouse, Rat, Zebrafish) with fallback to local TP53 reference
   const handleFetchGene = async () => {
@@ -523,6 +526,8 @@ export function DesignView({
       };
 
       onUpdateProject(updated);
+      // bring the take-home into view: it is the answer, the rest is behind it
+      setTimeout(() => document.getElementById("bench-take-home")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     } catch (err) {
       setError("Design calculation failed: " + (err.message || String(err)));
     } finally {
@@ -1014,15 +1019,23 @@ export function DesignView({
         )}
       </div>
 
-      {/* Results Display: Single Unified ASSURED Design Report (Zero Duplication) */}
-      <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />
+      {/* Before a design exists the Co-Scientist panel is the way in; afterwards the take-home comes first and the panel is a closed reference below it. */}
+      {!designResult && <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />}
 
       {designResult && (
         <>
+          <TakeHomeCard
+            takeHome={takeHome}
+            onProceedToOrder={onProceedToOrder}
+            onDownloadReport={() => downloadReportHtml(currentProject, designResult)}
+            onDownloadOffTarget={() => { const built = downloadCasOffinderInput(currentProject, designResult); if (!built.ok) setError(`Cas-OFFinder input: ${built.error}`); }}
+            onChoosePair={designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 ? () => document.getElementById("bench-ko-picker")?.scrollIntoView({ behavior: "smooth", block: "start" }) : null}
+          />
+
           {designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 && (
-            <details id="bench-ko-picker" className="card" style={{ marginBottom: "1rem", borderColor: designResult.koPairChoice?.source === "user" ? "var(--primary)" : undefined }} open>
+            <details id="bench-ko-picker" className="card" style={{ marginTop: "1rem", borderColor: designResult.koPairChoice?.source === "user" ? "var(--primary)" : undefined }} open>
               <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-                Choose the guide pair ({designResult.koPicker.listed} guides ranked by predicted loss of function)
+                Choose the guide pair
               </summary>
               <div style={{ marginTop: "1rem" }}>
                 <KoGuidePicker
@@ -1038,7 +1051,7 @@ export function DesignView({
           )}
 
           {designResult.type === "ko" && !(designResult.koPicker?.rows?.length > 0) && (
-            <div id="bench-ko-picker" className="card" role="note" style={{ marginBottom: "1rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
+            <div id="bench-ko-picker" className="card" role="note" style={{ marginTop: "1rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
               <strong style={{ color: "var(--text-main)" }}>Guide list not available for this design.</strong>{" "}
               {designResult.koPickerError
                 ? `It could not be built (${designResult.koPickerError}).`
@@ -1046,115 +1059,26 @@ export function DesignView({
             </div>
           )}
 
-          <div id="bench-design-report" tabIndex={-1} className="card" style={{ padding: 0, overflow: "hidden", borderColor: designResult.procurement?.status === "ready" ? "var(--success)" : "var(--border-light)" }}>
-            {/* Integrated Report Header Toolbar */}
-            <div style={{ padding: "0.85rem 1.25rem", background: "linear-gradient(90deg, #f0f6fc 0%, #f8fbfe 100%)", borderBottom: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "1.02rem", fontWeight: 700, color: "var(--text-main)" }}>Design Report:</span>
-                {getStatusBadge(designResult.procurement?.status || "review")}
-              </div>
-
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => downloadReportHtml(currentProject, designResult)}
-                  title="Download standalone HTML report"
-                >
-                  <FileText size={16} />
-                  <span>Download HTML Report</span>
-                </button>
-
-                {currentProject?.svgScheme && (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)}
-                    title="Download standalone SVG vector schematic"
-                  >
-                    <Download size={16} />
-                    <span>Download SVG</span>
-                  </button>
-                )}
-
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => downloadDesignJson(currentProject, designResult)}
-                  title="Download machine-readable design specification JSON"
-                >
-                  <Download size={16} />
-                  <span>Design JSON</span>
-                </button>
-
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => { const built = downloadCasOffinderInput(currentProject, designResult); if (!built.ok) setError(`Cas-OFFinder input: ${built.error}`); }}
-                  title="Input file for Cas-OFFinder. Bench does not search the genome for off-targets; run this against the genome of your line."
-                >
-                  <Download size={16} />
-                  <span>Cas-OFFinder input</span>
-                </button>
-
-                <button className="btn btn-primary" onClick={onProceedToOrder}>
-                  <span>Proceed to Order</span>
-                  <ArrowRight size={16} />
-                </button>
-              </div>
+          <details id="bench-design-report" className="card" style={{ marginTop: "1rem", padding: 0, overflow: "hidden" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none", padding: "0.85rem 1.25rem" }}>
+              Full design report: guides, primers, sequences and every check
+            </summary>
+            <div style={{ padding: "0.5rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", borderTop: "1px solid var(--border-color)" }}>
+              <button className="btn btn-secondary" onClick={() => downloadReportHtml(currentProject, designResult)} title="Download standalone HTML report"><FileText size={16} /><span>Download HTML report</span></button>
+              {currentProject?.svgScheme && (
+                <button className="btn btn-secondary" onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)} title="Download standalone SVG vector schematic"><Download size={16} /><span>Download SVG</span></button>
+              )}
+              <button className="btn btn-secondary" onClick={() => downloadDesignJson(currentProject, designResult)} title="Download machine-readable design specification JSON"><Download size={16} /><span>Design JSON</span></button>
             </div>
-
-            {(currentProject?.biomniReport || designResult?.panIsoformMeta) && (
-              <div style={{ padding: "0.65rem 1.25rem", background: "#f0f9ff", borderBottom: "1px solid #bae6fd", fontSize: "0.84rem", color: "#0f172a", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.6rem" }}>
-                <span style={{ fontWeight: 700, color: "#0369a1" }}>🧬 Biomni Co-Scientist Integrated:</span>
-                {designResult?.panIsoformMeta && (
-                  <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: designResult.panIsoformMeta.isCommonExon ? "#dcfce7" : "#fef3c7", color: designResult.panIsoformMeta.isCommonExon ? "#166534" : "#92400e", fontWeight: 600 }}>
-                    {(() => { const text = exonLabel(designResult.panIsoformMeta.targetCodingExon, Number.isFinite(designResult.panIsoformMeta.transcriptExon) ? designResult.panIsoformMeta.transcriptExon - designResult.panIsoformMeta.targetCodingExon : null); return text.charAt(0).toUpperCase() + text.slice(1); })()} is in {designResult.panIsoformMeta.sharedIsoforms}/{designResult.panIsoformMeta.totalIsoforms} RefSeq isoforms
-                    {designResult.panIsoformMeta.isCommonExon ? " · shared exon" : ""}
-                  </span>
-                )}
-                {currentProject?.biomniReport?.cutCoverage?.ok && (() => {
-                  const guides = currentProject.biomniReport.cutCoverage.guides || [];
-                  const weakest = (key) => guides.map(g => g[key]).filter(Boolean).sort((a, b) => a.covered / a.total - b.covered / b.total)[0];
-                  const refseq = weakest("refseq"); const ensembl = weakest("ensembl");
-                  const full = [refseq, ensembl].filter(Boolean).every(c => c.covered === c.total);
-                  return (
-                    <span title="Share of annotated coding transcripts whose coding sequence contains the cut of the weaker-covered guide" style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: full ? "#dcfce7" : "#fef3c7", color: full ? "#166534" : "#92400e", fontWeight: 600 }}>
-                      Cuts inside {[refseq && `${refseq.covered}/${refseq.total} RefSeq`, ensembl && `${ensembl.covered}/${ensembl.total} Ensembl`].filter(Boolean).join(", ")} transcripts
-                    </span>
-                  );
-                })()}
-                {designResult?.singleCdsDefault && (
-                  <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1", fontWeight: 600 }}>
-                    Upgraded from single-CDS {designResult.singleCdsDefault.exon} → Pan-isoform {designResult.exon}
-                  </span>
-                )}
-                {currentProject?.biomniReport?.lindelRanking?.brunelloComparison?.some(b => b.selectedInAssuredPair) && (
-                  <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: "#f3e8ff", color: "#6b21a8", fontWeight: 600 }}>
-                    📚 Matches Broad GPP Brunello Library
-                  </span>
-                )}
-                {currentProject?.biomniReport?.screeningPower?.ok && (
-                  <span style={{ color: "#334155" }}>
-                    <strong>Screening estimate:</strong> ~{currentProject.biomniReport.screeningPower.predictedBiallelicClonePct}% biallelic LoF clones{currentProject.biomniReport.screeningPower.recommendedClonesToScreen != null ? <> → screen <strong>{currentProject.biomniReport.screeningPower.recommendedClonesToScreen} clones</strong> ({currentProject.biomniReport.screeningPower.plates96Well} × 96-well plate)</> : null} (model; assumptions in the Co-Scientist report)
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Single Authoritative ASSURED Design Report */}
             <div style={{ padding: "0.4rem" }}>
               <iframe
                 title="ASSURED design report"
                 srcDoc={generateReportHtml(currentProject, designResult)}
                 sandbox="allow-same-origin"
-                style={{
-                  width: "100%",
-                  height: "82vh",
-                  minHeight: "740px",
-                  border: "none",
-                  borderRadius: "8px",
-                  background: "#ffffff"
-                }}
+                style={{ width: "100%", height: "82vh", minHeight: "740px", border: "none", borderRadius: "8px", background: "#ffffff" }}
               />
             </div>
-          </div>
+          </details>
 
           {designResult.guideAlternatives?.candidates?.length > 0 && (
             <details className="card" style={{ marginTop: "1rem" }}>
@@ -1169,6 +1093,10 @@ export function DesignView({
               </div>
             </details>
           )}
+
+          <div style={{ marginTop: "1rem" }}>
+            <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} collapsed />
+          </div>
         </>
       )}
     </div>

@@ -13,6 +13,7 @@ import { describeViability } from "./geneViability.js";
 import { describeCutCoverage } from "./isoformCoverage.js";
 import { buildCasOffinderInput } from "./offTargetExport.js";
 import { exonLabel, exonListLabel, exonOffset } from "./exonLabels.js";
+import { buildTakeHome } from "./takeHome.js";
 
 /**
  * Generate full standalone HTML report string
@@ -48,8 +49,24 @@ export function generateReportHtml(project, designResult) {
     reviewItems,
     null
   );
-  const withBiomni = appendBiomniSummary(html, project?.biomniReport, designResult);
+  const takeHome = buildTakeHome({ designResult, biomniReport: project?.biomniReport || null });
+  const withTakeHome = html.replace("<!--TAKEHOME-->", takeHome ? renderTakeHomeHtml(takeHome) : "");
+  const withBiomni = appendBiomniSummary(withTakeHome, project?.biomniReport, designResult);
   return appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation);
+}
+
+/** The take-home as the first block of the report: status, what was designed, the bottom line, four numbers, what to watch, what to do next. */
+export function renderTakeHomeHtml(t) {
+  if (!t) return "";
+  const pill = t.status.tone === "ok" ? " ok" : t.status.tone === "bad" ? " bad" : "";
+  const border = t.status.tone === "ok" ? "#166534" : t.status.tone === "bad" ? "#991b1b" : "#b45309";
+  const facts = t.facts.map((f) => `<td><span class="lab">${escapeHtml(f.label)}</span><span class="val">${escapeHtml(f.value)}</span>${f.note ? `<span class="note2">${escapeHtml(f.note)}</span>` : ""}</td>`);
+  const rows = []; for (let i = 0; i < facts.length; i += 2) rows.push(`<tr>${facts[i]}${facts[i + 1] || "<td></td>"}</tr>`);
+  return `<section class="th" style="border-left-color:${border}"><span class="pill${pill}">${escapeHtml(t.status.label)}</span> <span class="meta">${escapeHtml(t.status.detail || "")}</span>
+    <h2>${escapeHtml(t.headline)}</h2><p class="bottom">${escapeHtml(t.bottomLine)}</p>
+    <table class="facts">${rows.join("")}</table>
+    ${t.watch.length ? `<h3>Watch</h3><ul>${t.watch.map((w) => `<li>${escapeHtml(w.text)}</li>`).join("")}</ul>${t.watchMore ? `<p class="sub">${t.watchMore} more under the details below.</p>` : ""}` : ""}
+    <h3>Next</h3><ol>${t.nextSteps.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ol></section>`;
 }
 
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -126,9 +143,9 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   } else if (sp && sp.ok === false) {
     lines.push(`<p style="margin:4px 0"><strong>Clonal screening estimate:</strong> ${escapeHtml(sp.reason)}</p>`);
   }
-  if (!lines.length) return html;
-  const section = `<section style="margin:16px 20px;padding:12px 16px;border:1px solid #bae6fd;background:#f0f9ff;border-radius:8px;font-family:system-ui,sans-serif;font-size:13px;color:#0f172a"><div style="font-weight:700;color:#0369a1;margin-bottom:4px">🧬 ASSURED-Biomni Co-Scientist Integrated Verification</div>${lines.join("")}</section>`;
-  return html.replace(/<body[^>]*>/i, body => body + section);
+  if (!lines.length) return html.replace("<!--EVIDENCE-->", "");
+  const section = `<details class="fold"><summary>Co-Scientist checks: isoforms, gene constraint, variants, library, screening</summary><div class="body" style="font-size:13px">${lines.join("")}</div></details>`;
+  return html.includes("<!--EVIDENCE-->") ? html.replace("<!--EVIDENCE-->", () => section) : html.replace(/<body[^>]*>/i, body => body + section);
 }
 export function appendWorkflowRecommendation(html, audit) {
   if (!isAgentAudit(audit)) return html;
@@ -148,9 +165,14 @@ export function appendWorkflowRecommendation(html, audit) {
 /**
  * Download HTML report
  */
+// the folds are closed on screen; the downloaded file opens them all when printed or saved as PDF (the in-app preview is sandboxed and has no scripts)
+const PRINT_OPENS_FOLDS = "<script>window.addEventListener('beforeprint',function(){document.querySelectorAll('details').forEach(function(d){d.setAttribute('data-was-open',d.open?'1':'0');d.open=true;});});window.addEventListener('afterprint',function(){document.querySelectorAll('details').forEach(function(d){d.open=d.getAttribute('data-was-open')==='1';});});</script>\n";
+export function withPrintOpeningFolds(html) { return html.includes("</body>") ? html.replace("</body>", () => `${PRINT_OPENS_FOLDS}</body>`) : html; }
+
 export function downloadReportHtml(project, designResult) {
-  const html = generateReportHtml(project, designResult);
-  if (!html) return;
+  const generated = generateReportHtml(project, designResult);
+  if (!generated) return;
+  const html = withPrintOpeningFolds(generated);
   const gene = (project.gene || "design").toLowerCase();
   downloadBlob(html, `${gene}_${project.editType || "edit"}_report.html`, "text/html;charset=utf-8;");
 }

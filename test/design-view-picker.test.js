@@ -24,15 +24,17 @@ async function render(designResultFor, biomniReport = null) {
   } finally { await vite.close(); }
 }
 
-test("the knockout guide picker is open and placed before the design report", async () => {
+test("the take-home comes first, then the open guide picker, then the closed full report", async () => {
   const html = await render(result => result);
+  const home = html.indexOf('id="bench-take-home"');
   const picker = html.indexOf('id="bench-ko-picker"');
-  const report = html.indexOf('title="ASSURED design report"');
-  assert.ok(picker > 0 && report > 0, "both sections render");
-  assert.ok(picker < report, "picker precedes the report");
+  const report = html.indexOf('id="bench-design-report"');
+  assert.ok(home > 0 && picker > 0 && report > 0, "all three sections render");
+  assert.ok(home < picker && picker < report, "take-home, picker, report in that order");
   assert.match(html.slice(picker - 20, picker + 120), /<details[^>]*id="bench-ko-picker"[^>]*open/);
-  assert.match(html, /Choose the guide pair \(\d+ guides ranked by predicted loss of function\)/);
-  assert.ok((html.match(/aria-label="Use this pair|Use this pair/g) || []).length >= 1);
+  assert.doesNotMatch(html.slice(report - 20, report + 120), /<details[^>]*id="bench-design-report"[^>]*open/, "the long report is closed until asked for");
+  assert.match(html, /Choose the guide pair/);
+  assert.ok((html.match(/Use this pair/g) || []).length >= 1);
 });
 
 test("a knockout design without a guide list says why instead of showing nothing", async () => {
@@ -43,23 +45,28 @@ test("a knockout design without a guide list says why instead of showing nothing
   assert.match(failed, /could not be built \(boom\)/);
 });
 
-test("the Design screen shows how many annotated transcripts contain the cuts, and offers the Cas-OFFinder input", async () => {
+test("the take-home states the transcripts hit, the watch-points and the next steps; the Cas-OFFinder input is one click away", async () => {
   const genbank = fs.readFileSync(new URL("../public/references/dipk2a-region.gb", import.meta.url), "utf8");
-  // a real Co-Scientist report (no network: constraint and coverage come back as not assessed), then given the coverage a connected run would find
+  // a real Co-Scientist report (no network: constraint and coverage come back as not assessed), then given what a connected run would find
   const report = await runBiomniCoScientist("Design a biallelic knockout for DIPK2A", { id: "p", gene: "DIPK2A", genbankRaw: genbank, options: { enzyme: "spcas9" } },
     { fetchFn: async () => ({ ok: false, status: 503 }), preloadedLindel: await loadLindelNative() });
   const guide = { refseq: { covered: 3, total: 3, missing: [] }, ensembl: { covered: 5, total: 6, missing: ["DIPK2A-209"] } };
   const fx = JSON.parse(fs.readFileSync(new URL("./fixtures/isoform-evidence.json", import.meta.url), "utf8")).genes.TP53.openTargets.target;
   const viability = { ok: true, source: "Open Targets Platform", ...summariseViability(fx.target, fx.meta) };
   const html = await render(result => result, { ...report, viability, cutCoverage: { ok: true, guides: [guide, guide], basis: "test" } });
-  assert.match(html, /Gene constraint and essentiality/); assert.match(html, /loss-of-function constrained/);
-  assert.match(html, /5 of \d+ DepMap screens depend on it/);
-  assert.match(html, /Transcripts that contain each cut/); assert.match(html, /not covered: DIPK2A-209/);
-  assert.match(html, /Cuts inside 3\/3 RefSeq, 5\/6 Ensembl transcripts/);
-  assert.match(html, /Cas-OFFinder input/);
+  const home = html.slice(html.indexOf('id="bench-take-home"'), html.indexOf('id="bench-ko-picker"'));
+  assert.match(home, /Review before ordering/);
+  assert.match(home, /Two guides cut \d+ bp apart in exon 2 of DIPK2A/);
+  assert.match(home, /3\/3 RefSeq/); assert.match(home, /5\/6 Ensembl/);
+  assert.match(home, /Constrained gene \(pLI 1/);
+  assert.match(home, /DIPK2A-209/);
+  assert.match(home, /Off-targets are not checked/);
+  assert.match(home, /Proceed to Order/); assert.match(home, /Cas-OFFinder input/); assert.match(home, /Download report/);
+  // the evidence behind it is still on the screen, inside the closed Co-Scientist reference
+  assert.match(html, /Co-Scientist: evidence behind the design/);
+  assert.match(html, /Transcripts that contain each cut/);
   const none = await render(result => result, report);
-  assert.doesNotMatch(none, /Cuts inside/);
-  assert.match(none, /Gene constraint and essentiality/); assert.match(none, /not retrieved/);
+  assert.match(none.slice(none.indexOf('id="bench-take-home"'), none.indexOf('id="bench-ko-picker"')), /Transcripts hit/);
 });
 
 test("the picker does not show 0% for 'other isoforms left intact' when the reference annotates only one coding sequence", async () => {
@@ -71,7 +78,7 @@ test("the picker does not show 0% for 'other isoforms left intact' when the refe
     const koLindel = await loadLindelNative();
     const markup = (gene, raw) => {
       const result = runDesign("ko", raw, "", "", "", { enzyme: "spcas9", expectedGene: gene, ensureGuidePair: true, allowNonCodingBlockers: true, koLindel });
-      return { result, html: renderToStaticMarkup(React.createElement(KoGuidePicker, { result, genbankRaw: raw, geneSymbol: gene, onUsePair() {}, onUseRecommended() {} })) };
+      return { result, html: renderToStaticMarkup(React.createElement(KoGuidePicker, { result, genbankRaw: raw, geneSymbol: gene, onUsePair() {}, onUseRecommended() {}, defaultShowDetails: true, defaultShowAll: true })) };
     };
     const one = markup("TP53", tp53);
     assert.equal(one.result.koPicker.isoformsEvaluated, 1);
@@ -82,5 +89,26 @@ test("the picker does not show 0% for 'other isoforms left intact' when the refe
     assert.doesNotMatch(many.html, /so the column is not computed/);
     assert.doesNotMatch(many.html, /<td[^>]*>\u2014<\/td>/);
     assert.match(many.html, /Share of this guide&#x27;s predicted repair outcomes after which at least one other annotated isoform/);
+  } finally { await vite.close(); }
+});
+
+test("the picker shows the eight best guides first, the rest on request", async () => {
+  const raw = fs.readFileSync(new URL("../public/references/dipk2a-region.gb", import.meta.url), "utf8");
+  const vite = await createServer({ server: { middlewareMode: true, ws: false }, appType: "custom", optimizeDeps: { noDiscovery: true }, logLevel: "error" });
+  try {
+    const { runDesign } = await vite.ssrLoadModule("/src/engine/design/designEngine.js");
+    const { KoGuidePicker } = await vite.ssrLoadModule("/src/components/design/KoGuidePicker.jsx");
+    const result = runDesign("ko", raw, "", "", "", { enzyme: "spcas9", expectedGene: "DIPK2A", ensureGuidePair: true, allowNonCodingBlockers: true, koLindel: await loadLindelNative() });
+    const render = props => renderToStaticMarkup(React.createElement(KoGuidePicker, { result, genbankRaw: raw, geneSymbol: "DIPK2A", onUsePair() {}, onUseRecommended() {}, ...props }));
+    const rows = html => (html.match(/<tr/g) || []).length - 1;
+    const total = result.koPicker.rows.length;
+    const short = render({});
+    assert.ok(rows(short) >= 8 && rows(short) < total, `first view lists the best few of ${total}, not all (${rows(short)})`);
+    assert.match(short, new RegExp(`Show all ${total} guides`));
+    assert.doesNotMatch(short, /<th[^>]*>(Frameshift|In-frame|Other isoforms left intact)<\/th>/, "repair-outcome columns are closed");
+    assert.match(render({ defaultShowDetails: true }), /<th[^>]*>Frameshift<\/th>/);
+    assert.match(short, /Show repair-outcome columns/);
+    assert.equal(rows(render({ defaultShowAll: true })), total);
+    for (const spacer of result.gs.map(g => g.sp)) assert.ok(short.includes(spacer), "the guides in the design are always listed");
   } finally { await vite.close(); }
 });

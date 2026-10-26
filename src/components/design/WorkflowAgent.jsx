@@ -7,10 +7,12 @@ import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAs
 import { screenTargetVariants } from "../../services/variantScreen.js";
 import { describeViability } from "../../services/geneViability.js";
 import { exonListLabel, exonOffset } from "../../services/exonLabels.js";
+import { buildTakeHome } from "../../services/takeHome.js";
+import { TakeHomeCard } from "./TakeHomeCard.jsx";
 import { describeCutCoverage } from "../../services/isoformCoverage.js";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 
-export function WorkflowAgent({ project, onUpdateProject }) {
+export function WorkflowAgent({ project, onUpdateProject, collapsed = false }) {
   const [enzymes, setEnzymes] = useState(() => Object.keys(ENZYMES));
   const [priority, setPriority] = useState("balanced");
   const [report, setReport] = useState(null);
@@ -212,7 +214,10 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     a.href = url; a.download = "assured-workflow-recommendation.json"; a.click(); URL.revokeObjectURL(url);
   };
   const recommended = visible?.candidates.filter(c => c.recommended) || [];
-  return <section ref={panel} className="card workflow-agent" aria-labelledby="workflow-agent-title">
+  // once a design exists the panel is a reference, not the next step: closed, with the take-home above it
+  const Shell = collapsed ? "details" : "section";
+  return <Shell ref={panel} className="card workflow-agent" {...(collapsed ? {} : { "aria-labelledby": "workflow-agent-title" })}>
+    {collapsed && <summary style={{ cursor: "pointer", fontWeight: 600, userSelect: "none" }}>Co-Scientist: evidence behind the design, step trace and re-run</summary>}
     <h2 id="workflow-agent-title">Workflow agent &amp; Biomni Co-Scientist <span className="agent-optional">Optional</span></h2>
     <p className="muted">Run a multi-step, Biomni-style workflow (fixed rules, no language model) or compare nuclease options for your modification.</p>
 
@@ -305,6 +310,15 @@ export function WorkflowAgent({ project, onUpdateProject }) {
               ))}
             </ol>
           </details>
+
+          {biomniResult.designResult && !biomniResult.designResult.err && (
+            <div style={{ marginTop: "0.75rem" }}>
+              <TakeHomeCard takeHome={buildTakeHome({ designResult: biomniResult.designResult, biomniReport: biomniResult })} showActions={false} />
+            </div>
+          )}
+
+          <details style={{ marginTop: "0.75rem" }}>
+            <summary><strong>Evidence, tables and screening details</strong></summary>
 
           {biomniResult.isoformAnalysis?.ok && (
             <div style={{ marginTop: "0.5rem", fontSize: "0.88rem", padding: "0.5rem 0.65rem", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
@@ -703,6 +717,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
           ) : (
             <p className="muted" style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.85rem" }}>Clonal screening estimate: {biomniResult.screeningPower.reason}</p>
           ))}
+          </details>
         </div>
       )}
     </details>
@@ -769,5 +784,5 @@ export function WorkflowAgent({ project, onUpdateProject }) {
       <p>{qcNextAction(project.qcResults)}</p>
       <ol>{workflowNextSteps(project.designResult).map((text, i) => <li key={i}>{text}</li>)}</ol>
     </details>}
-  </section>;
+  </Shell>;
 }
