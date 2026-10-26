@@ -1,3 +1,4 @@
+import { describeKoSelection } from "./koSelection.js";
 // Report and export rendering, extracted from App.jsx.
 //
 // Everything here is a pure function of a design result: no React, no hooks, no DOM. That
@@ -98,6 +99,7 @@ export function buildDesignSummary(result) {
       if (outcomes) outcomes.guides.forEach((g, index) => lines.push(`  Guide ${index + 1} predicted repair outcomes: ${g.lofPct}% loss-of-function alleles (${g.plus1Pct}% +1 insertions, ${g.frameshiftPct}% frameshifts, ${g.inframePct}% in-frame).`));
       else if (result.koAssessment.outcomesUnavailable) lines.push(`  Repair-outcome ranking not applied: ${result.koAssessment.outcomesUnavailable}`);
     }
+    describeKoSelection(result.koSelection).forEach(line => lines.push(line));
     if (result.strat) lines.push(`Strategy: ${result.strat}`);
     return lines.join("\n");
   }
@@ -1060,13 +1062,14 @@ function buildKnockoutFactsHtml(result) {
     if (outcome.cutBoundaryRange) rows.push({ label: "Staggered cut boundaries", value: `${outcome.cutBoundaryRange[0]}–${outcome.cutBoundaryRange[1]} bp between strand-cut combinations. End processing can change the final junction; confirm by sequencing.` });
     if (outcome.spliceDonorRemoved) rows.push({ label: "Splice donor", value: `Removed: exon skipping is plausible; exon length ${outcome.exonLength} bp (mod 3 = ${outcome.exonSkippingMod3}).` });
   }
+  describeKoSelection(result.koSelection).forEach(value => rows.push({ label: "Functional guide selection", value }));
   const ko = result.koAssessment;
   if (ko) {
     rows.push({ label: "Knockout confidence", value: `${ko.tier.toUpperCase()}. ${ko.summary}` });
     ko.guides.forEach((guide, index) => rows.push({ label: `Guide ${index + 1} frameshifts`, value: `${guide.robustPct}% predicted NMD by a clear margin, ${guide.marginalPct}% close to the 55-nt boundary, ${guide.escapePct}% not predicted to trigger NMD; the nearest stop is ${guide.minMarginNt} nt before the last exon junction (${guide.outcomes} simulated indels).` }));
     if (ko.outcomes) {
       ko.outcomes.guides.forEach((guide, index) => rows.push({ label: `Guide ${index + 1} predicted outcomes`, value: `${guide.lofPct}% of alleles predicted to lose the protein (${guide.plus1Pct}% +1 insertions, ${guide.frameshiftPct}% frameshifts, ${guide.inframePct}% in-frame); about ${guide.biallelicPct}% of clones with both alleles, if the alleles are independent.` }));
-      rows.push({ label: "Outcome model", value: `${ko.outcomes.model}. The pair was chosen so that the weaker guide has the larger predicted share. Trained on cell lines, not iPSC; cutting efficiency and off-target activity are not part of this estimate.` });
+      rows.push({ label: "Outcome model", value: `${ko.outcomes.model}. Repair predictions inform individual ranking in 5-point bins after functional tier and isoform escape checks. The coordinated pair is evaluated separately. Trained on cell lines, not iPSC; cutting efficiency and off-target activity are not part of this estimate.` });
     } else if (ko.outcomesUnavailable) rows.push({ label: "Outcome model", value: `Not applied: ${ko.outcomesUnavailable}` });
     rows.push({ label: "Deletion between the cuts", value: `${ko.between.sizeBp} bp: ${ko.between.nmd || ko.between.class}` });
     ko.reasons.forEach((reason) => rows.push({ label: "Why not robust", value: reason }));

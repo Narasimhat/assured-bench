@@ -117,18 +117,19 @@ export function classifyEdit(model, edit, options = {}) {
 const altCache = new WeakMap();
 const parseJoin = (loc) => { const m = [...String(loc).matchAll(/(\d+)\.\.(\d+)/g)]; return m.length ? m.map((x) => [Number(x[1]) - 1, Number(x[2])]).sort((l, r) => l[0] - r[0]) : null; };
 
-/** The coding sequences of the record to hold a design against: the model's own CDS first, then every other CDS feature of the same gene (at most 8). */
+/** The coding sequences of the record to hold a design against: the model's own CDS first, then every other CDS feature of the same gene (deduplicated). */
 export function codingModels(model) {
   if (altCache.has(model)) return altCache.get(model);
   const out = [{ id: model.transcriptId || model.gene || "main", model }];
   const mainKey = JSON.stringify(model.cdsSegments);
+  const seen = new Set([mainKey]);
   for (const f of (Array.isArray(model.rawFeatures) ? model.rawFeatures : [])) {
-    if (out.length >= 8) break;
     if (f.type !== "CDS" || !f.loc || /complement/.test(f.loc)) continue;
     const gene = f.q && f.q.gene; if (gene && model.gene && String(gene).toLowerCase() !== String(model.gene).toLowerCase()) continue;
-    const segs = parseJoin(f.loc); if (!segs || JSON.stringify(segs) === mainKey) continue;
+    const segs = parseJoin(f.loc); if (!segs || seen.has(JSON.stringify(segs)) || segs.some(([a, b]) => a < 0 || b > model.genomicSequence.length || a >= b)) continue;
     const cds = segs.map(([a, b]) => model.genomicSequence.slice(a, b)).join("");
     if (cds.length % 3 !== 0 || cds.length < 6) continue;
+    seen.add(JSON.stringify(segs));
     out.push({ id: (f.q && (f.q.transcript_id || f.q.protein_id)) || `CDS${out.length + 1}`, model: { cdsSegments: segs, cdsSequence: cds, genomicSequence: model.genomicSequence, proteinLength: cds.length / 3 - 1 } });
   }
   altCache.set(model, out); return out;

@@ -1,5 +1,6 @@
+import { selectFunctionalKoGuides, assessKoEligibility } from "./koSelection.js";
 import { calculateCfd } from "./cfd.js";
-import { assessKoPair, describeKoTier } from "./koOutcomes.js";
+import { assessKoPair, describeKoTier, codingModels } from "./koOutcomes.js";
 import { createKoOutcomeScorer } from "./koRank.js";
 import { getCodonFraction, introducesRareCodon } from "./codonUsage.js";
 import {
@@ -1828,6 +1829,7 @@ export function summarizeProcurementReadiness(result) {
 
   const guides = result.gs || [];
   if (!guides.length) blockers.push("No guide sequence is available.");
+  if (result.type === "ko" && result.koSelection) warnings.push(`Knockout selection has not assessed: ${result.koSelection.unassessed.join("; ")}. Experimental validation is required.`);
   // Knockout confidence: a frameshift is not a knockout if the cell makes the protein anyway (see koOutcomes.js).
   if (result.type === "ko" && result.koAssessment && result.koAssessment.isoformNote) warnings.push(result.koAssessment.isoformNote);
   if (result.type === "ko" && result.koAssessment && result.koAssessment.tier !== "robust") {
@@ -3624,8 +3626,9 @@ export function designKO(gb, options = {}) {
   const enzyme = getEnzyme(options.enzyme || "spcas9");
   const cds = getCdsFromModel(gb);
   if (!cds) return { err: "No CDS annotation found." };
-  if (gb.cdsSegments.length < 2) return { err: "Not enough coding exons available for KO design." };
+  if (!gb.cdsSegments.length) return { err: "No coding exons available for KO design." };
   let selectedPair;
+  let koSelection = null;
   let exonStart;
   let exonEnd;
   let bestLength;
@@ -3644,6 +3647,12 @@ export function designKO(gb, options = {}) {
       .slice(0, 2)
       .sort((left, right) => left.cut - right.cut)
       .map((guide) => ({ ...guide, d: null }));
+    if (guides.some(guide => !assessKoEligibility(guide, { enzyme: enzyme.id, delivery: options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp") }).passed)) {
+      return { err: "Custom knockout guides must meet strict 40–60% spacer GC and sequence-quality requirements." };
+    }
+    if (guides.some(guide => codingModels(gb).some(({ model }) => !model.cdsSegments.some(([a, b]) => a + 10 < guide.cut && guide.cut < b - 10)))) {
+      return { err: "Custom knockout guides must cut more than 10 bp inside a coding segment in every evaluated annotation." };
+    }
     if (guides[0].cut === guides[1].cut) return { err: "Custom knockout design requires two distinct cut sites." };
     selectedPair = {
       guides,
@@ -3657,11 +3666,16 @@ export function designKO(gb, options = {}) {
     exonEnd = exon?.end ?? 0;
     bestLength = exon ? (exon.end - exon.start) : 0;
   } else {
-    const target = findKoDesignTargetFromModel(gb, reverseComplement, selectKoGuidePair,
-      configured ? (model, rc, target, range) => findConfiguredModelGuides(model, target, range, { enzyme: enzyme.id, spacerLength: options.spacerLength }) : findSpCas9Guides,
-      { koAware: options.koAware, koScorer });
-    if (!target) return { err: "No gRNA pair found with cut-site spacing up to 140 bp across non-terminal coding exons, preferentially exons 2-4, including exon-intron boundaries." };
-    ({ start: exonStart, end: exonEnd, exonLength: bestLength, exonNumber, pair: selectedPair } = target);
+    const available = findConfiguredModelGuides(gb, Math.floor(gb.genomicSequence.length / 2), gb.genomicSequence.length,
+      { enzyme: enzyme.id, spacerLength: options.spacerLength });
+    const choice = selectFunctionalKoGuides(gb, available, { enzyme: enzyme.id, delivery: options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp"), koScorer });
+    if (choice.err) return { err: choice.err, koSelection: choice.selection };
+    selectedPair = choice.pair;
+    koSelection = choice.selection;
+    const segmentIndex = gb.cdsSegments.findIndex(([a, b]) => a < selectedPair.guides[0].cut && selectedPair.guides[0].cut < b);
+    [exonStart, exonEnd] = gb.cdsSegments[segmentIndex];
+    bestLength = exonEnd - exonStart;
+    exonNumber = segmentIndex + 1;
   }
   const seq = getGenomicSequence(gb);
   const cutCenter = Math.round(selectedPair.guides.reduce((sum, guide) => sum + guide.cut, 0) / selectedPair.guides.length);
@@ -3727,6 +3741,7 @@ export function designKO(gb, options = {}) {
     ],
     amp: `WT ~${primerPair.wtAmpliconLength} bp | deletion ~${primerPair.deletionAmpliconLength} bp`,
     deletionOutcome,
+    koSelection,
     koAssessment: koAssessment ? { ...koAssessment, summary: describeKoTier(koAssessment.tier), outcomes: koOutcomes, outcomesUnavailable: !koOutcomes && !configured && options.koOutcomesUnavailable ? String(options.koOutcomesUnavailable) : undefined } : null,
     strat: configured ? `NHEJ-mediated disruption using two ${enzyme.name} guides. Nominal deletion ${selectedPair.spacing} bp uses target-strand cut boundaries; staggered ends and end processing can change the repaired junction. Screen WT/deletion PCR products, sequence the junction, and confirm protein loss.` : longDeletion
       ? "NHEJ-mediated deletion using dual Cas9 guides. Screen with flanking junction PCR, then confirm the deletion by sequencing."

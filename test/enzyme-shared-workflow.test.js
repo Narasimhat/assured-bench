@@ -46,13 +46,12 @@ test("native nearest-window policy keeps the closest lead and adds a distinct po
 });
 
 for (const enzyme of ["mad7", "ascas12a", "lbcas12a"]) {
-  test(`${enzyme}: knockout uses exactly the shared Cas9 pair/exon policy and screening primers`, () => {
+  test(`${enzyme}: knockout uses shared strict functional selection and screening primers`, () => {
     const result = runDesign("ko", gb, "", "", "", { enzyme, deliveryMethod: "rnp" });
     assert.ok(!result.err, result.err);
-    const target = findKoDesignTargetFromModel(model, null, selectKoGuidePair,
-      (reference, rc, anchor, range) => findConfiguredModelGuides(reference, anchor, range, { enzyme }));
     assert.equal(result.gs.length, 2);
-    assert.deepEqual(result.gs.map(guide => guide.cut), target.pair.guides.map(guide => guide.cut));
+    assert.ok(result.gs.every(g => g.gc >= 40 && g.gc <= 60));
+    assert.equal(result.koSelection.version, "2.0.0");
     assert.ok(result.deletionOutcome.deletionSize > 0 && result.deletionOutcome.deletionSize <= 140);
     assert.ok(Array.isArray(result.deletionOutcome.cutBoundaryRange));
     assert.equal(result.ps.length, 2);
