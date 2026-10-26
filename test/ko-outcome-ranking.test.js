@@ -25,9 +25,11 @@ test("repair scores are retained separately for independent guides and the stric
   const r = design({ koLindel: lindel });
   const lof = r.gs.map((g) => g.ko.outcomes.lofPct);
   assert.ok(lof.every(Number.isFinite), String(lof));
-  assert.ok(r.koSelection.independentGuides.every(g => g.gc >= 40 && g.gc <= 60));
+  assert.ok(r.koSelection.independentGuides.every(g => g.gc >= 30 && g.gc <= 80 && Number.isFinite(g.gcPenaltyPts)));
   assert.equal(r.koAssessment.outcomes.minLofPct, Math.min(...lof));
-  assert.ok(!r.gs.some(g => g.sp === "ATTATGTTGGAGAAGAACTG"), "the old 35% GC guide is ineligible");
+  // a 35% GC guide is no longer excluded: it carries a 10-point penalty and still ranks into the pair because its predicted LoF (86.9%) beats the in-range alternatives by more
+  const attatg = r.gs.find(g => g.sp === "ATTATGTTGGAGAAGAACTG"); assert.ok(attatg, "ATTATG... is in the pair"); assert.equal(attatg.gc, 35);
+  assert.deepEqual(r.gs.map(g => g.sp), ["ATTATGTTGGAGAAGAACTG", "TTTCCATTAATTGCCAAGCG"]); assert.equal(r.koAssessment.outcomes.minLofPct, 86.9);
   assert.ok(!summarizeProcurementReadiness(r).warnings.some((w) => /loss-of-function alleles are/.test(w)), "no warning when both guides are strong");
   const cuts = r.gs.map((g) => g.cut); assert.ok(Math.abs(cuts[1] - cuts[0]) >= 10 && Math.abs(cuts[1] - cuts[0]) <= 140, "pair spacing rule still holds");
 });

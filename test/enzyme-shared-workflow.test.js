@@ -51,7 +51,7 @@ for (const enzyme of ["mad7", "ascas12a", "lbcas12a"]) {
     assert.ok(!result.err, result.err);
     assert.equal(result.gs.length, 2);
     assert.ok(result.gs.every(g => g.gc >= 40 && g.gc <= 60));
-    assert.equal(result.koSelection.version, "2.0.0");
+    assert.equal(result.koSelection.version, "3.0.0");
     assert.ok(result.deletionOutcome.deletionSize > 0 && result.deletionOutcome.deletionSize <= 140);
     assert.ok(Array.isArray(result.deletionOutcome.cutBoundaryRange));
     assert.equal(result.ps.length, 2);

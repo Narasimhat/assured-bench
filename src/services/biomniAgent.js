@@ -11,7 +11,8 @@ import { withoutRunOverrides } from "./runOptions.js";
 import { parseGB, runDesign, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
 import { assessKoGuide, codingModels } from "../engine/design/koOutcomes.js";
-import { koGuideWindow, rankKoGuides, summariseGuideOutcomes } from "../engine/design/koRank.js";
+import { koGuideWindow, rankKoGuides, summariseGuideOutcomes, createKoOutcomeScorer } from "../engine/design/koRank.js";
+import { rankKoSingles } from "../engine/design/koSelection.js";
 import { lindelEdits, predictLindel } from "../engine/design/lindel/lindel.js";
 import { cdsToGenomic, fetchGeneReference } from "../engine/design/geneFetch.js";
 import { fetchGeneGenbank } from "./ensembl.js";
@@ -915,62 +916,25 @@ export async function runBiomniCoScientist(
           ...(loadedLindel ? { koLindel: loadedLindel } : {}),
         };
         const armLen = ["ct", "nt"].includes(intent.editType) ? Number(currentProject?.homologyArmLength || 400) : "";
+        // One selector (koSelection.js) chooses the guides. The pan-isoform analysis is an input to it (exons shared by the coding isoforms rank first
+        // within a functional tier); this step never replaces the selector's pair with a pair chosen by another rule.
+        const commonKoExons = intent.editType === "ko" && !preserveCustomGuides && isoformAnalysis?.recommendedCommonKoExons?.length ? isoformAnalysis.recommendedCommonKoExons : null;
+        const exonOf = (design) => { const m = String(design?.exon || "").match(/Exon\s+(\d+)/i); return m ? Number(m[1]) : null; };
         let res =
           initialDesignResult && !initialDesignResult.err
             ? initialDesignResult
-            : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
-
-        // If KO design picked an exon that is not in recommendedCommonKoExons, check if a recommended common exon has a valid 2-guide pair
-        if (
-          !preserveCustomGuides &&
-          intent.editType === "ko" &&
-          res &&
-          !res.err &&
-          isoformAnalysis?.recommendedCommonKoExons?.length > 0 &&
-          loadedLindel
-        ) {
-          const exonMatch = String(res.exon || "").match(/Exon\s+(\d+)/i);
-          const chosenExon = exonMatch ? Number(exonMatch[1]) : null;
-          if (chosenExon && !isoformAnalysis.recommendedCommonKoExons.includes(chosenExon)) {
-            try {
-              const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
-              const allRows = rankKoGuides(model, loadedLindel).filter(
-                r =>
-                  isoformAnalysis.recommendedCommonKoExons.includes(r.coding_exon) &&
-                  r.gc_percent >= 40 &&
-                  r.gc_percent <= 60 &&
-                  r.panel_tier === "robust"
-              );
-              for (let a = 0; a < allRows.length; a += 1) {
-                let foundCommonPair = null;
-                for (let b = a + 1; b < allRows.length; b += 1) {
-                  if (allRows[a].coding_exon !== allRows[b].coding_exon) continue;
-                  const dist = Math.abs(allRows[a].cut_after_exon_nt - allRows[b].cut_after_exon_nt);
-                  if (dist >= 20 && dist <= 140) {
-                    const candidateRes = designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, {
-                      ...options,
-                      customGuides: [allRows[a].spacer, allRows[b].spacer],
-                    });
-                    if (candidateRes && !candidateRes.err) {
-                      foundCommonPair = candidateRes;
-                      break;
-                    }
-                  }
-                }
-                if (foundCommonPair) {
-                  foundCommonPair.singleCdsDefault = {
-                    exon: res.exon,
-                    codingExon: chosenExon,
-                    guides: (res.gs || []).slice(0, 2).map(g => g.sp),
-                  };
-                  res = foundCommonPair;
-                  break;
-                }
-              }
-            } catch {
-              // Keep primary design result
-            }
+            : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, { ...options, ...(commonKoExons ? { commonKoExons } : {}) });
+        if (commonKoExons && res && !res.err) {
+          // A design handed in by Manual Design was made before the isoform analysis; a design made here is compared with what the selector picks without it.
+          // Either way the report says when the pan-isoform evidence moved the selection to another exon.
+          const baseline = initialDesignResult && !initialDesignResult.err ? res : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
+          const informed = initialDesignResult && !initialDesignResult.err && !commonKoExons.includes(exonOf(res))
+            ? designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, { ...options, commonKoExons })
+            : res;
+          if (informed && !informed.err && baseline && !baseline.err && exonOf(informed) !== exonOf(baseline)) {
+            informed.singleCdsDefault = { exon: baseline.exon, codingExon: exonOf(baseline), guides: (baseline.gs || []).slice(0, 2).map(g => g.sp) };
           }
+          if (informed && !informed.err) res = informed;
         }
 
         if (res && !res.err) {
@@ -1096,18 +1060,26 @@ export async function runBiomniCoScientist(
             brunello_match: brunelloMatch,
           };
         });
-        // Prioritize NMD-Safe ('robust') tier FIRST, then Common Non-Terminal Exon + highest isoform coverage % + highest Lindel LoF %
-        rows.sort(
-          (a, b) =>
-            (KO_TIER_ORDER[a.panel_tier] ?? 9) - (KO_TIER_ORDER[b.panel_tier] ?? 9) ||
-            Number(b.is_common_exon) - Number(a.is_common_exon) ||
-            b.isoform_coverage_pct - a.isoform_coverage_pct ||
-            b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct ||
-            (a.other_isoform_not_disrupted_pct || 0) - (b.other_isoform_not_disrupted_pct || 0) ||
-            b.gc_percent - a.gc_percent
-        );
+        // The table is ordered by the same ranking the design step uses (rankKoSingles in koSelection.js): guides the selector excludes (spacer GC
+        // outside 30-80%, a cut within 10 bp of an exon boundary, not inside every coding annotation) are listed after the ranked ones, without a rank.
+        const scorer = createKoOutcomeScorer(model, loadedLindel);
+        const absoluteCut = (r) => model.cdsSegments[r.coding_exon - 1][0] + r.cut_after_exon_nt;
+        const guideOf = (r) => ({ sp: r.spacer, str: r.strand, pam: r.pam, cut: absoluteCut(r), d: null });
+        const guideKey = (g) => `${g.str}:${g.cut}:${g.sp}`;
+        const ranked = rankKoSingles(model, rows.map(guideOf), {
+          enzyme: "spcas9", delivery: currentProject?.options?.deliveryMethod === "u6" ? "poliii" : "rnp", koScorer: scorer,
+          commonKoExons: intent.editType === "ko" && isoformAnalysis?.recommendedCommonKoExons?.length ? isoformAnalysis.recommendedCommonKoExons : null,
+        });
+        const rankOf = new Map(ranked.rows.map(x => [guideKey(x.guide), x]));
+        for (const r of rows) {
+          const hit = rankOf.get(guideKey(guideOf(r)));
+          r.selector_rank = hit ? hit.rank : null;
+          r.gc_penalty_points = hit ? hit.gcPenaltyPts : null;
+          r.excluded_by_selector = !hit;
+        }
+        rows.sort((a, b) => (a.selector_rank ?? Infinity) - (b.selector_rank ?? Infinity) || b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct);
         rows.forEach((r, idx) => {
-          r.lindel_rank = idx + 1;
+          r.lindel_rank = r.selector_rank;
         });
         const topDisplay = rows.slice(0, 5);
         for (const r of rows) {

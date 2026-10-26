@@ -11,10 +11,13 @@ const model = () => normalizeGenBankToTranscriptModel(parseGB(text), {});
 const guide = (sp, cut = 14450) => ({ sp, cut, str: '+', pam: 'AGG' });
 
 test('GC limits use exact spacer fractions, including variable-length Cas12 guides', () => {
-  for (const sp of ['GCGCGCGCATATATATATAT', 'GCGCGCGCGCGCATATATAT']) assert.equal(assessKoEligibility(guide(sp)).passed, true);
-  assert.equal(assessKoEligibility(guide('GCGCGCATATATATATATAT')).passed, false);
-  assert.equal(assessKoEligibility(guide('GCGCGCGCGCGCGCATATAT')).passed, false);
-  assert.equal(assessKoEligibility(guide('GCGCGCGCG' + 'AT'.repeat(7)), { enzyme: 'mad7' }).passed, false);
+  // eligible from 30% to 80% spacer GC (the 20 nt guides below are 30%, 40%, 60% and 80%); outside it a guide is excluded, inside 40-60% it carries no penalty
+  for (const sp of ['GCGCGCATATATATATATAT', 'GCGCGCGCATATATATATAT', 'GCGCGCGCGCGCATATATAT', 'GCGCGCGCGCGCGCGCATAT']) assert.equal(assessKoEligibility(guide(sp)).passed, true, sp);
+  assert.equal(assessKoEligibility(guide('GCGCGATATATATATATATA')).passed, false);   // 25%
+  assert.equal(assessKoEligibility(guide('GCGCGCGCGCGCGCGCGATA')).passed, false);   // 85%
+  // exact fractions for a 23-nt Cas12 spacer: 7/23 = 30.4% passes, 6/23 = 26.1% does not
+  assert.equal(assessKoEligibility(guide('GCGCGCG' + 'AT'.repeat(8)), { enzyme: 'mad7' }).passed, true);
+  assert.equal(assessKoEligibility(guide('GCGCGC' + 'AT'.repeat(8) + 'A'), { enzyme: 'mad7' }).passed, false);
 });
 test('Pol III terminator restriction depends on delivery and homopolymers are rejected', () => {
   const g = guide('GCGCGCGCTTTTATATATAT');
@@ -39,7 +42,7 @@ test('all seven enzymes expose independent guides, pair assessment, backups and 
     assert.equal(s.independentGuides.length, 2); assert.ok(s.pairCandidatesEvaluated > 0);
     assert.ok(s.independentPair); assert.ok(s.recommendedPair);
     for (const g of [...s.independentGuides, ...s.backups, ...s.recommendedPair.guides]) {
-      assert.ok(g.gc >= 40 && g.gc <= 60); assert.ok(g.spliceMargin > 10);
+      assert.ok(g.gc >= 30 && g.gc <= 80); assert.ok(g.gcPenaltyPts >= 0 && Number.isFinite(g.gcPenaltyPts)); assert.ok(g.spliceMargin > 10);
       assert.equal(g.coveredIsoforms, s.isoformsEvaluated);
     }
     assert.ok(s.unassessed.includes('Genome-wide off-target specificity'));

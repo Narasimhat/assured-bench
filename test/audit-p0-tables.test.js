@@ -8,7 +8,8 @@ import { BRUNELLO_SUBSET, BRUNELLO_SOURCE } from "../src/services/data/brunelloS
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIPK2A = fs.readFileSync(path.join(HERE, "..", "public", "references", "dipk2a-region.gb"), "utf8");
-const dbsnp = JSON.parse(fs.readFileSync(path.join(HERE, "fixtures", "dbsnp-dipk2a.json"), "utf8")).responses;
+// responses recorded for the pair the selector recommends with the Lindel model (ATTATGTTGGAGAAGAACTG + TTTCCATTAATTGCCAAGCG)
+const dbsnp = JSON.parse(fs.readFileSync(path.join(HERE, "fixtures", "dbsnp-dipk2a-recommended-pair.json"), "utf8")).responses;
 // UniProt as it answers for DIPK2A: a signal peptide and the chain, no domain, region or site features
 const uniprotDipk2a = { results: [{ primaryAccession: "Q8NDZ4", proteinDescription: { recommendedName: { fullName: { value: "Divergent protein kinase domain 2A" } } }, sequence: { length: 430 }, comments: [], features: [{ type: "Signal", location: { start: { value: 1 }, end: { value: 35 } } }, { type: "Chain", location: { start: { value: 36 }, end: { value: 430 } } }] }] };
 

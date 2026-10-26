@@ -3648,7 +3648,7 @@ export function designKO(gb, options = {}) {
       .sort((left, right) => left.cut - right.cut)
       .map((guide) => ({ ...guide, d: null }));
     if (guides.some(guide => !assessKoEligibility(guide, { enzyme: enzyme.id, delivery: options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp") }).passed)) {
-      return { err: "Custom knockout guides must meet strict 40–60% spacer GC and sequence-quality requirements." };
+      return { err: "Custom knockout guides must have a spacer GC of 30–80% and meet the sequence-quality requirements." };
     }
     if (guides.some(guide => codingModels(gb).some(({ model }) => !model.cdsSegments.some(([a, b]) => a + 10 < guide.cut && guide.cut < b - 10)))) {
       return { err: "Custom knockout guides must cut more than 10 bp inside a coding segment in every evaluated annotation." };
@@ -3668,7 +3668,7 @@ export function designKO(gb, options = {}) {
   } else {
     const available = findConfiguredModelGuides(gb, Math.floor(gb.genomicSequence.length / 2), gb.genomicSequence.length,
       { enzyme: enzyme.id, spacerLength: options.spacerLength });
-    const choice = selectFunctionalKoGuides(gb, available, { enzyme: enzyme.id, delivery: options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp"), koScorer });
+    const choice = selectFunctionalKoGuides(gb, available, { enzyme: enzyme.id, delivery: options.delivery || (options.deliveryMethod === "u6" ? "poliii" : "rnp"), koScorer, commonKoExons: options.commonKoExons || null, gcPenaltyScale: options.gcPenaltyScale ?? 1 });
     if (choice.err) return { err: choice.err, koSelection: choice.selection };
     selectedPair = choice.pair;
     koSelection = choice.selection;

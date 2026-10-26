@@ -385,7 +385,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
 
           {biomniResult.lindelRanking?.topGuides?.length > 0 && (
             <details style={{ marginTop: "0.5rem" }} open>
-              <summary><strong>Lindel KO Repair Outcome Ranking (Common-Exon Prioritized · Top {(biomniResult.lindelRanking.displayGuides || biomniResult.lindelRanking.topGuides.slice(0, 5)).length} of {biomniResult.lindelRanking.totalCandidates} Guides)</strong></summary>
+              <summary><strong>Guide ranking (the selector's own order: functional tier, pan-isoform exon, predicted LoF after the GC penalty · Top {(biomniResult.lindelRanking.displayGuides || biomniResult.lindelRanking.topGuides.slice(0, 5)).length} of {biomniResult.lindelRanking.totalCandidates} Guides)</strong></summary>
               <div style={{ overflowX: "auto", marginTop: "0.4rem" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
                   <thead>
@@ -398,7 +398,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                       <th style={{ padding: "0.25rem" }}>Tier</th>
                       <th style={{ padding: "0.25rem" }}>Lindel FS %</th>
                       <th style={{ padding: "0.25rem" }}>Predicted LoF Allele %</th>
-                      <th style={{ padding: "0.25rem" }}>Biallelic KO Clone %</th>
+                      <th style={{ padding: "0.25rem" }} title="Predicted LoF fraction squared; delivery is not included">Biallelic LoF % (L²)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -410,7 +410,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                           background: g.selected_in_pair ? "#eff6ff" : "transparent",
                         }}
                       >
-                        <td style={{ padding: "0.25rem" }}>#{g.lindel_rank || idx + 1}</td>
+                        <td style={{ padding: "0.25rem" }}>{g.lindel_rank != null ? `#${g.lindel_rank}` : <span className="muted" title="Excluded by the selector: spacer GC outside 30–80%, a cut within 10 bp of an exon boundary, or not inside every coding annotation">not ranked</span>}</td>
                         <td style={{ padding: "0.25rem" }}>
                           <code>{g.spacer}</code> ({g.pam}, {g.strand}{g.cut_aa ? `, aa ${g.cut_aa}` : ""})
                           {g.selected_in_pair ? (
@@ -469,7 +469,7 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                           {g.shared_isoforms_label || `${g.isoform_coverage_pct ?? 100}%`}
                           {g.is_common_exon ? " ✅ Common" : g.is_terminal_exon ? " ⚠ Terminal" : ""}
                         </td>
-                        <td style={{ padding: "0.25rem" }}>{g.gc_percent}%</td>
+                        <td style={{ padding: "0.25rem" }}>{g.gc_percent}%{g.gc_penalty_points ? <span className="muted" title="Predicted LoF is reduced by this many points for ranking"> (−{g.gc_penalty_points} pts)</span> : null}</td>
                         <td style={{ padding: "0.25rem" }}>{g.panel_tier}</td>
                         <td style={{ padding: "0.25rem" }}>{g.lindel_frameshift_pct}%</td>
                         <td style={{ padding: "0.25rem" }}><strong>{g.predicted_LoF_allele_pct}%</strong></td>

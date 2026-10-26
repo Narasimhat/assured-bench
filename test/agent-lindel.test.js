@@ -20,7 +20,7 @@ test("agent loads Lindel for SpCas9 and selects exactly the standard outcome-ran
   assert.equal(candidate.result.err, undefined);
   const standard = runDesign("ko", raw, "", "", 400, { enzyme: "spcas9", koLindel: await loadLindel() });
   assert.deepEqual(candidate.result.gs.map(g => g.sp), standard.gs.map(g => g.sp));
-  assert.ok(candidate.result.gs.every(g => g.gc >= 40 && g.gc <= 60));
+  assert.ok(candidate.result.gs.every(g => g.gc >= 30 && g.gc <= 80), "spacer GC inside the eligible range; outside 40-60% it is penalised, not excluded");
   assert.equal(candidate.result.koSelection.independentGuides.length, 2);
   assert.ok(Number.isFinite(candidate.result.koAssessment.outcomes.minLofPct));
   assert.equal(candidate.repairOutcomeModel.status, "applied");
