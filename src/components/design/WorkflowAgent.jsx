@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ENZYMES } from "../../engine/design/enzymeConfig.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/design/designScheme.js";
 import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
+import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist } from "../../services/biomniAgent.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
   const [enzymes, setEnzymes] = useState(() => Object.keys(ENZYMES));
@@ -9,6 +10,11 @@ export function WorkflowAgent({ project, onUpdateProject }) {
   const [report, setReport] = useState(null);
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
+  const [biomniPrompt, setBiomniPrompt] = useState(() => BIOMNI_PRESET_MISSIONS[0].prompt);
+  const [biomniRunning, setBiomniRunning] = useState(false);
+  const [biomniProgress, setBiomniProgress] = useState(null);
+  const [biomniResult, setBiomniResult] = useState(null);
+  const [biomniError, setBiomniError] = useState("");
   const worker = useRef(null);
   const panel = useRef(null);
   let request, inputError = "";
@@ -22,6 +28,63 @@ export function WorkflowAgent({ project, onUpdateProject }) {
     setProgress(null); setReport(null); setError("");
     return () => { worker.current?.terminate(); worker.current = null; };
   }, [requestKey]);
+
+  const runCoScientist = async (customPrompt) => {
+    const activePrompt = (typeof customPrompt === "string" ? customPrompt : biomniPrompt).trim();
+    if (!activePrompt || biomniRunning) return;
+    if (typeof customPrompt === "string") setBiomniPrompt(customPrompt);
+    setBiomniRunning(true);
+    setBiomniError("");
+    setBiomniResult(null);
+    setBiomniProgress({ completedSteps: [], currentStep: { title: "Initializing ASSURED-E1 Biomedical Environment..." }, totalSteps: 5 });
+    try {
+      const res = await runBiomniCoScientist(activePrompt, project, {
+        onStep: (stepState) => setBiomniProgress(stepState),
+      });
+      setBiomniResult(res);
+      setBiomniProgress(null);
+    } catch (e) {
+      setBiomniError(e.message || String(e));
+      setBiomniProgress(null);
+    } finally {
+      setBiomniRunning(false);
+    }
+  };
+
+  const applyBiomniToWorkbench = () => {
+    if (!biomniResult?.designResult) return;
+    const { intent, geneMeta, genbankRaw, designResult, enzymeComparison } = biomniResult;
+    const config = ENZYMES[intent.enzyme] || ENZYMES.spcas9;
+    const audit = enzymeComparison ? agentAudit(enzymeComparison, intent.enzyme) : null;
+    const result = audit ? { ...designResult, workflowRecommendation: audit } : designResult;
+    onUpdateProject({
+      gene: intent.gene,
+      ...(geneMeta ? { geneMeta } : {}),
+      ...(genbankRaw ? { genbankRaw } : {}),
+      editType: intent.editType,
+      mutation: intent.mutation || "",
+      tag: intent.tag || project.tag || "FLAG",
+      options: {
+        ...project.options,
+        enzyme: intent.enzyme,
+        spacerLength: config.spacer_len.default,
+        directRepeat: config.direct_repeat || "",
+        repeatVerified: false,
+        repeatSource: "",
+        customGuides: [],
+      },
+      designResult: result,
+      svgScheme: buildDesignSchemeSvg(result),
+      caption: buildDesignSchemeCaption(result),
+      status: result.procurement?.status || "review",
+      ...(audit ? { workflowRecommendation: audit } : {}),
+    });
+    requestAnimationFrame(() => {
+      const target = document.getElementById("bench-design-report");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    });
+  };
 
   const compare = () => {
     if (!request || worker.current) return;
@@ -76,8 +139,150 @@ export function WorkflowAgent({ project, onUpdateProject }) {
   };
   const recommended = visible?.candidates.filter(c => c.recommended) || [];
   return <section ref={panel} className="card workflow-agent" aria-labelledby="workflow-agent-title">
-    <h2 id="workflow-agent-title">Workflow agent <span className="agent-optional">Optional</span></h2>
-    <p className="muted">Compare enzyme options for your modification.</p>
+    <h2 id="workflow-agent-title">Workflow agent &amp; Biomni Co-Scientist <span className="agent-optional">Optional</span></h2>
+    <p className="muted">Run an autonomous Stanford Biomni-style biomedical workflow or compare nuclease options for your modification.</p>
+
+    <details className="agent-details" open>
+      <summary><strong>🧬 Biomni Co-Scientist (Autonomous Multi-Step Agent · ASSURED-E1)</strong></summary>
+      <p className="muted" style={{ marginTop: "0.4rem" }}>
+        Describe your genome editing goal in plain English. The agent decomposes your prompt into a multi-step plan across Ensembl, UniProtKB, NCBI ClinVar, 7-enzyme ASSURED CRISPR Design, JavaScript Lindel KO repair modeling, and clonal screening power analysis.
+      </p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", margin: "0.5rem 0" }}>
+        {BIOMNI_PRESET_MISSIONS.map(m => (
+          <button
+            key={m.id}
+            type="button"
+            className="btn btn-secondary"
+            style={{ fontSize: "0.78rem", padding: "0.25rem 0.55rem" }}
+            disabled={biomniRunning}
+            onClick={() => runCoScientist(m.prompt)}
+          >
+            ✨ {m.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: " stretch", margin: "0.5rem 0" }}>
+        <input
+          type="text"
+          value={biomniPrompt}
+          disabled={biomniRunning}
+          onChange={e => setBiomniPrompt(e.target.value)}
+          placeholder="e.g., Design R175H point mutation knock-in for TP53, check ClinVar & UniProt domains, and compare all enzymes"
+          style={{ flex: 1, padding: "0.45rem 0.65rem", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+        />
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={biomniRunning || !biomniPrompt.trim()}
+          onClick={() => runCoScientist()}
+        >
+          {biomniRunning ? "Running Agent..." : "🚀 Run Co-Scientist"}
+        </button>
+      </div>
+
+      {biomniProgress && (
+        <div role="status" aria-live="polite" style={{ padding: "0.6rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0", marginTop: "0.5rem" }}>
+          <strong>⚡ Executing ASSURED-E1 Plan ({biomniProgress.completedSteps?.length || 0}/{biomniProgress.totalSteps} steps)</strong>
+          {biomniProgress.currentStep && <p className="muted" style={{ margin: "0.25rem 0 0" }}>Current: {biomniProgress.currentStep.title}</p>}
+        </div>
+      )}
+
+      {biomniError && <p role="alert" className="error">{biomniError}</p>}
+
+      {biomniResult && (
+        <div className="biomni-result" style={{ marginTop: "0.75rem", padding: "0.75rem", background: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+            <h3 style={{ margin: 0 }}>
+              Co-Scientist Report: {biomniResult.intent.gene} ({biomniResult.intent.editType.toUpperCase()}
+              {biomniResult.intent.mutation ? ` · ${biomniResult.intent.mutation}` : ""})
+            </h3>
+            {biomniResult.designResult && (
+              <button type="button" className="btn btn-primary" onClick={applyBiomniToWorkbench}>
+                ✅ Apply Co-Scientist Design to Workbench
+              </button>
+            )}
+          </div>
+
+          <p className="muted" style={{ margin: "0.4rem 0" }}>
+            Executed {biomniResult.steps.length} autonomous tool steps across ASSURED-E1 ({ENZYMES[biomniResult.intent.enzyme]?.name || biomniResult.intent.enzyme}).
+          </p>
+
+          <details style={{ marginTop: "0.5rem" }}>
+            <summary><strong>Step-by-Step ASSURED-E1 Tool Execution Trace ({biomniResult.steps.length} steps)</strong></summary>
+            <ol style={{ margin: "0.4rem 0", paddingLeft: "1.25rem" }}>
+              {biomniResult.steps.map(s => (
+                <li key={s.step} style={{ marginBottom: "0.35rem" }}>
+                  <strong>{s.title}</strong> <code>[{s.tool}]</code> ({s.durationMs} ms) —{" "}
+                  <span style={{ color: s.status === "completed" ? "#15803d" : "#b45309" }}>{s.status.toUpperCase()}</span>
+                  <div className="muted" style={{ fontSize: "0.82rem" }}>{s.rationale}</div>
+                </li>
+              ))}
+            </ol>
+          </details>
+
+          {biomniResult.uniprot?.found && (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
+              <strong>UniProtKB ({biomniResult.uniprot.accession}):</strong> {biomniResult.uniprot.proteinName} ({biomniResult.uniprot.lengthAa} aa)
+              {biomniResult.uniprot.domains?.length > 0 && (
+                <div className="muted">
+                  Domains/Sites: {biomniResult.uniprot.domains.map(d => `${d.description} (${d.start}–${d.end} aa)`).join(", ")}
+                </div>
+              )}
+            </div>
+          )}
+
+          {biomniResult.clinvar?.variants?.length > 0 && (
+            <div style={{ marginTop: "0.45rem", fontSize: "0.9rem" }}>
+              <strong>ClinVar Evidence:</strong>{" "}
+              {biomniResult.clinvar.variants.slice(0, 2).map(v => `${v.accession || v.uid}: ${v.title} (${v.clinicalSignificance})`).join(" | ")}
+            </div>
+          )}
+
+          {biomniResult.lindelRanking?.topGuides?.length > 0 && (
+            <details style={{ marginTop: "0.5rem" }} open>
+              <summary><strong>Lindel KO Repair Outcome Ranking (Top {Math.min(5, biomniResult.lindelRanking.topGuides.length)} of {biomniResult.lindelRanking.totalCandidates} Exon Guides)</strong></summary>
+              <div style={{ overflowX: "auto", marginTop: "0.4rem" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #cbd5e1", textAlign: "left" }}>
+                      <th style={{ padding: "0.25rem" }}>Rank</th>
+                      <th style={{ padding: "0.25rem" }}>Spacer</th>
+                      <th style={{ padding: "0.25rem" }}>Exon</th>
+                      <th style={{ padding: "0.25rem" }}>Tier</th>
+                      <th style={{ padding: "0.25rem" }}>Lindel FS %</th>
+                      <th style={{ padding: "0.25rem" }}>Predicted LoF Allele %</th>
+                      <th style={{ padding: "0.25rem" }}>Biallelic KO Clone %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {biomniResult.lindelRanking.topGuides.slice(0, 5).map((g, idx) => (
+                      <tr key={`${g.spacer}-${idx}`} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "0.25rem" }}>#{idx + 1}</td>
+                        <td style={{ padding: "0.25rem" }}><code>{g.spacer}</code></td>
+                        <td style={{ padding: "0.25rem" }}>Exon {g.coding_exon}</td>
+                        <td style={{ padding: "0.25rem" }}>{g.panel_tier}</td>
+                        <td style={{ padding: "0.25rem" }}>{g.lindel_frameshift_pct}%</td>
+                        <td style={{ padding: "0.25rem" }}><strong>{g.predicted_LoF_allele_pct}%</strong></td>
+                        <td style={{ padding: "0.25rem" }}><strong>{g.predicted_biallelic_LoF_clone_pct}%</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+
+          {biomniResult.screeningPower && (
+            <p style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.88rem" }}>
+              <strong>Clonal Screening Power ({biomniResult.screeningPower.mode}):</strong>{" "}
+              Predicted biallelic clone rate ~<code>{biomniResult.screeningPower.predictedBiallelicClonePct}%</code> → Screen{" "}
+              <strong>{biomniResult.screeningPower.recommendedClonesToScreen} clones</strong> ({biomniResult.screeningPower.plates96Well} × 96-well plate) for ≥95% probability of recovering ≥2 verified clones.
+            </p>
+          )}
+        </div>
+      )}
+    </details>
+
     <details className="agent-details">
       <summary>Comparison settings · {enzymes.length} enzymes</summary>
       <fieldset disabled={Boolean(progress)}>
