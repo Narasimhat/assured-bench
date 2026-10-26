@@ -1051,33 +1051,64 @@ export function buildDonorFormatHtml(result) {
   `;
 }
 
-// Facts the plain-text summary used to be the only place to find, shown where they belong.
+// Compact, scannable KO summary table with collapsible deep-dive rationale.
 function buildKnockoutFactsHtml(result) {
-  const rows = [];
-  if (result.exon) rows.push({ label: "Target exon", value: result.exon });
-  if (result.gs?.length >= 2 && Number.isFinite(result.gs[0]?.d) && Number.isFinite(result.gs[1]?.d)) rows.push({ label: "Pair spacing", value: `${Math.abs(result.gs[1].d - result.gs[0].d)} bp` });
+  const summaryRows = [];
+  const detailRows = [];
+  if (result.exon) summaryRows.push({ label: "Target exon", value: result.exon });
+  const spacingBp = (result.gs?.length >= 2 && Number.isFinite(result.gs[0]?.d) && Number.isFinite(result.gs[1]?.d))
+    ? `${Math.abs(result.gs[1].d - result.gs[0].d)} bp`
+    : null;
   const outcome = result.deletionOutcome;
   if (outcome) {
-    rows.push({ label: "Expected deletion", value: `${outcome.deletionSize} bp (mod 3 = ${outcome.deletionMod3}; ${outcome.frameshiftPredicted ? "frameshift predicted" : "in-frame"})` });
-    if (outcome.cutBoundaryRange) rows.push({ label: "Staggered cut boundaries", value: `${outcome.cutBoundaryRange[0]}–${outcome.cutBoundaryRange[1]} bp between strand-cut combinations. End processing can change the final junction; confirm by sequencing.` });
-    if (outcome.spliceDonorRemoved) rows.push({ label: "Splice donor", value: `Removed: exon skipping is plausible; exon length ${outcome.exonLength} bp (mod 3 = ${outcome.exonSkippingMod3}).` });
+    summaryRows.push({
+      label: "Expected excision",
+      value: `${outcome.deletionSize} bp${spacingBp ? ` (cut spacing ${spacingBp})` : ""} · mod 3 = ${outcome.deletionMod3} (${outcome.frameshiftPredicted ? "frameshift" : "in-frame"})`,
+    });
+    if (outcome.cutBoundaryRange) {
+      detailRows.push({ label: "Staggered cut boundaries", value: `${outcome.cutBoundaryRange[0]}–${outcome.cutBoundaryRange[1]} bp between strand-cut combinations.` });
+    }
+    if (outcome.spliceDonorRemoved) {
+      summaryRows.push({ label: "Splice donor", value: `Removed (exon skipping plausible; exon ${outcome.exonLength} bp, mod 3 = ${outcome.exonSkippingMod3})` });
+    }
+  } else if (spacingBp) {
+    summaryRows.push({ label: "Pair spacing", value: spacingBp });
   }
-  describeKoSelection(result.koSelection).forEach(value => rows.push({ label: "Functional guide selection", value }));
+
   const ko = result.koAssessment;
   if (ko) {
-    rows.push({ label: "Knockout confidence", value: `${ko.tier.toUpperCase()}. ${ko.summary}` });
-    ko.guides.forEach((guide, index) => rows.push({ label: `Guide ${index + 1} frameshifts`, value: `${guide.robustPct}% predicted NMD by a clear margin, ${guide.marginalPct}% close to the 55-nt boundary, ${guide.escapePct}% not predicted to trigger NMD; the nearest stop is ${guide.minMarginNt} nt before the last exon junction (${guide.outcomes} simulated indels).` }));
+    summaryRows.push({ label: "KO confidence tier", value: `${ko.tier.toUpperCase()} — ${ko.summary}` });
+    summaryRows.push({ label: "Inter-cut deletion", value: `${ko.between.sizeBp} bp (${ko.between.nmd || ko.between.class})` });
+    if (ko.outcomes?.guides?.length) {
+      const lofSummary = ko.outcomes.guides
+        .map((g, i) => `gRNA${i + 1}: ${g.lofPct}% LoF (${g.frameshiftPct}% FS, ${g.biallelicPct}% biallelic)`)
+        .join(" · ");
+      summaryRows.push({ label: "Single-cut Lindel LoF", value: lofSummary });
+    }
+    if (ko.isoformNote) {
+      summaryRows.push({ label: "Isoform coverage", value: ko.isoformNote.replace(/^Isoform coverage:\s*/, "") });
+    }
+    ko.reasons.forEach((reason) => detailRows.push({ label: "Tier note", value: reason }));
+    ko.guides.forEach((guide, index) => {
+      detailRows.push({
+        label: `gRNA${index + 1} NMD margin`,
+        value: `${guide.robustPct}% robust NMD, ${guide.marginalPct}% borderline, ${guide.escapePct}% NMD-escape (nearest PTC ${guide.minMarginNt} nt upstream of last EJC across ${guide.outcomes} simulated indels).`,
+      });
+    });
     if (ko.outcomes) {
-      ko.outcomes.guides.forEach((guide, index) => rows.push({ label: `Guide ${index + 1} predicted outcomes`, value: `${guide.lofPct}% of alleles predicted to lose the protein (${guide.plus1Pct}% +1 insertions, ${guide.frameshiftPct}% frameshifts, ${guide.inframePct}% in-frame); about ${guide.biallelicPct}% of clones with both alleles, if the alleles are independent.` }));
-      rows.push({ label: "Outcome model", value: `${ko.outcomes.model}. Repair predictions inform individual ranking in 5-point bins after functional tier and isoform escape checks. The coordinated pair is evaluated separately. Trained on cell lines, not iPSC; cutting efficiency and off-target activity are not part of this estimate.` });
-    } else if (ko.outcomesUnavailable) rows.push({ label: "Outcome model", value: `Not applied: ${ko.outcomesUnavailable}` });
-    rows.push({ label: "Deletion between the cuts", value: `${ko.between.sizeBp} bp: ${ko.between.nmd || ko.between.class}` });
-    ko.reasons.forEach((reason) => rows.push({ label: "Why not robust", value: reason }));
-    if (ko.isoformNote) rows.push({ label: "Isoform coverage", value: ko.isoformNote.replace(/^Isoform coverage:\s*/, "") });
-    rows.push({ label: "Basis", value: "Predicted from sequence with the Assured QC engine's NMD and truncation rules. Confirm loss of protein by Western blot or mass spectrometry." });
+      detailRows.push({ label: "Outcome model", value: `${ko.outcomes.model} (single-cut repair prior; confirm protein loss by Western blot or MS).` });
+    } else if (ko.outcomesUnavailable) {
+      detailRows.push({ label: "Outcome model", value: `Not applied: ${ko.outcomesUnavailable}` });
+    }
   }
-  if (result.strat) rows.push({ label: "Strategy", value: result.strat });
-  return buildKeyValueTableHtml(rows, 1);
+  describeKoSelection(result.koSelection).forEach((value) => detailRows.push({ label: "Guide selection filter", value }));
+  if (result.strat) detailRows.push({ label: "Strategy", value: result.strat });
+
+  const mainTable = buildKeyValueTableHtml(summaryRows, 2);
+  const foldBlock = detailRows.length
+    ? `<details class="fold"><summary>Detailed candidate selection &amp; repair simulation rationale (${detailRows.length})</summary><div class="body">${buildKeyValueTableHtml(detailRows, 1)}</div></details>`
+    : "";
+  return `${mainTable}${foldBlock}`;
 }
 
 function buildBlockingChangesHtml(result) {
@@ -1396,7 +1427,7 @@ export function buildReportHtml(meta, result, fileName, historicalContext, revie
       ? (result.os || []).map((donor) => buildPmDonorHtml(donor, donorStatus(donor))).join("")
       : `<p style="font-size:13px;line-height:1.45;color:#B42318;">No ssODN donor could be rendered for this SNP design. This usually means the asymmetric donor window ran outside the uploaded sequence bounds.</p>`)
       : result.type === "ko"
-      ? `<p style="font-size:13px;line-height:1.45;">${result.referenceOnly ? "No donor is required for knockout design. This report is in gene-list KO mode, so the paired gRNAs below are reference guides and exact spacing/primer geometry still need a GenBank-backed follow-up." : "No donor is required for knockout design. Use the paired gRNAs below for deletion/NHEJ-based disruption."}</p>${buildKnockoutFactsHtml(result)}`
+      ? `${result.referenceOnly ? `<p class="sub">Gene-list reference mode: exact cut spacing and primer geometry require a GenBank-backed locus run.</p>` : ""}${buildKnockoutFactsHtml(result)}`
       : result.type === "it"
         ? `${buildInsertVerificationHtml(result)}${(result.os || []).map((donor) => buildInternalDonorHtml(donor, donorStatus(donor))).join("") || `<p style="font-size:13px;line-height:1.45;color:#B42318;">No internal ssODN donor could be rendered for this in-frame tag design.</p>`}`
       : `${buildDonorFormatHtml(result)}${buildBlockingChangesHtml(result)}${buildInsertVerificationHtml(result)}${buildAnnotatedDonorHtml(result.donor || "", result.donorAnnotations || [])}`;
