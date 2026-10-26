@@ -414,7 +414,7 @@ function buildPmStrandCardHtml(strand, releaseStatus = "ready") {
         <span style="font-weight:700;color:#1f2937;">${strand.title}</span>
         <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:${badge.fg};background:${badge.bg};">${badge.label}</span>
       </div>
-      <p style="font-size:12px;color:#555;margin:0 0 8px 0;">${strand.note}</p>
+      <p style="font-size:12px;color:#555;margin:0 0 8px 0;">${escapeText(strand.note)}</p>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         ${strand.regions.map((region) => `<span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#1f2937;background:${region.color};">${region.label} (${region.end - region.start} nt)</span>`).join("")}
         <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#1f2937;background:${PM_GUIDE_COLORS.site};">gRNA site</span>
@@ -477,7 +477,7 @@ function buildKnockinProteinHtml(preview, title = "Protein Translation View") {
     return `
       <div style="margin:0 0 14px 0;padding:12px;border:1px solid #d7dee7;border-radius:12px;background:#f8fafc;">
         <div style="color:#667085;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">Coding Frame View</div>
-        <p style="font-size:12px;color:#555;margin:0 0 10px 0;">${preview.note}</p>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;">${escapeText(preview.note)}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
           <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#92400E;background:#FDE68A;">Inserted tag / reporter codons and amino acids</span>
         </div>
@@ -491,7 +491,7 @@ function buildKnockinProteinHtml(preview, title = "Protein Translation View") {
   return `
     <div style="margin:0 0 14px 0;padding:12px;border:1px solid #d7dee7;border-radius:12px;background:#f8fafc;">
       <div style="color:#667085;font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">${title}</div>
-      <p style="font-size:12px;color:#555;margin:0 0 10px 0;">${preview.note}</p>
+      <p style="font-size:12px;color:#555;margin:0 0 10px 0;">${escapeText(preview.note)}</p>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#92400E;background:#FDE68A;">Inserted tag / reporter</span>
       </div>
@@ -878,7 +878,7 @@ function buildDesignReadinessHtml(result) {
     <table class="checks">${ordered.map((check) => {
       const badge = pill(check.status);
       const muted = check.status === "pass";
-      return `<tr><td style="width:62px;"><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;color:${badge.color};background:${badge.background};">${badge.label}</span></td><td style="width:210px;font-weight:700;color:#111827;">${check.label}</td><td style="color:${muted ? "#667085" : "#344054"};font-size:${muted ? 12 : 12.5}px;">${check.detail}</td></tr>`;
+      return `<tr><td style="width:62px;"><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;color:${badge.color};background:${badge.background};">${badge.label}</span></td><td style="width:210px;font-weight:700;color:#111827;">${escapeText(check.label)}</td><td style="color:${muted ? "#667085" : "#344054"};font-size:${muted ? 12 : 12.5}px;">${escapeText(check.detail)}</td></tr>`;
     }).join("")}</table>
   `;
 }
@@ -1277,7 +1277,7 @@ function buildInternalDonorHtml(donor, releaseStatus = "ready") {
           <span style="font-weight:700;color:#1f2937;">${strand.title}</span>
           <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:${badge.fg};background:${badge.bg};">${badge.label}</span>
         </div>
-        <p style="font-size:12px;color:#555;margin:0 0 10px 0;">${strand.note}</p>
+        <p style="font-size:12px;color:#555;margin:0 0 10px 0;">${escapeText(strand.note)}</p>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
           <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#1f2937;background:${PM_GUIDE_COLORS.site};">gRNA site</span>
           <span style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#92400E;background:${PM_GUIDE_COLORS.pam};">PAM</span>
@@ -1310,7 +1310,7 @@ function buildAnnotatedDonorHtml(sequence, annotations = []) {
 
 function buildReviewListHtml(items) {
   if (!items.length) return "<p style=\"font-size:13px;line-height:1.45;\">No automated warnings were triggered. Manual review is still required before synthesis or ordering.</p>";
-  return `<ul style="padding-left:18px;">${items.map((item) => `<li style="margin:0 0 8px 0;color:${item.level === "warning" ? "#B42318" : "#344054"};"><strong>${item.level === "warning" ? "Warning" : "Check"}:</strong> ${item.text}</li>`).join("")}</ul>`;
+  return `<ul style="padding-left:18px;">${items.map((item) => `<li style="margin:0 0 8px 0;color:${item.level === "warning" ? "#B42318" : "#344054"};"><strong>${item.level === "warning" ? "Warning" : "Check"}:</strong> ${escapeText(item.text)}</li>`).join("")}</ul>`;
 }
 
 function buildHistoricalRowsHtml(matches) {
@@ -1332,7 +1332,7 @@ function buildCoDeliveryHtml(result) {
   if (!result.coDeliveryBlockingRequested) return "";
   const selection = result.coDeliverySelection;
   const risk = result.dualCutDeletionRisk;
-  const rows = [`<li style="font-size:13px;line-height:1.5;">${result.guideDonorInstruction || ""}</li>`];
+  const rows = [`<li style="font-size:13px;line-height:1.5;">${escapeText(result.guideDonorInstruction || "")}</li>`];
   if (selection) {
     rows.push(`<li style="font-size:13px;line-height:1.5;">Searched ${selection.searched} candidate guide${selection.searched === 1 ? "" : "s"} in the window; ${selection.stronglyBlockableSelected} of the selected guides can be destroyed by a synonymous PAM change.</li>`);
   }
@@ -1340,7 +1340,7 @@ function buildCoDeliveryHtml(result) {
     rows.push('<li style="font-size:13px;line-height:1.5;">At least one guide target lies outside the other donor window, so no additional blocking change can cover it. Co-delivery needs guides whose targets both fall inside a single ssODN.</li>');
   }
   if (risk) {
-    rows.push(`<li style="font-size:13px;line-height:1.5;"><strong>Screen for the deletion product.</strong> ${risk.note}</li>`);
+    rows.push(`<li style="font-size:13px;line-height:1.5;"><strong>Screen for the deletion product.</strong> ${escapeText(risk.note)}</li>`);
   }
   return `
     <div style="margin:0 0 18px 0;padding:12px 14px;border:1px solid #B45309;border-left-width:6px;border-radius:10px;background:#FFFAEB;">
@@ -1362,13 +1362,13 @@ function buildReleaseVerdictHtml(result) {
   // Same verdict object the on-screen panel renders, so the two cannot word it differently.
   const verdict = getReleaseVerdict(result);
   const sections = getReleaseVerdictSections(verdict).map((section) => (
-    `<div style="margin-top:10px;"><div style="font-size:12px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:${section.color};margin-bottom:4px;">${section.title}</div><ul style="margin:0;padding-left:18px;">${section.items.map((item) => `<li style="font-size:13px;line-height:1.5;color:#344054;">${item}</li>`).join("")}</ul></div>`
+    `<div style="margin-top:10px;"><div style="font-size:12px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:${section.color};margin-bottom:4px;">${section.title}</div><ul style="margin:0;padding-left:18px;">${section.items.map((item) => `<li style="font-size:13px;line-height:1.5;color:#344054;">${escapeText(item)}</li>`).join("")}</ul></div>`
   )).join("");
   return `
     <div style="margin:14px 0 18px 0;padding:14px 16px;border:2px solid ${verdict.border};border-left-width:8px;border-radius:10px;background:${verdict.bg};">
       <div style="font-size:12px;font-weight:800;letter-spacing:1px;color:#667085;text-transform:uppercase;">Release status</div>
       <div style="font-size:22px;font-weight:800;color:${verdict.fg};margin:2px 0 6px 0;">${verdict.label}</div>
-      <div style="font-size:13px;line-height:1.5;color:#344054;">${verdict.lead}</div>
+      <div style="font-size:13px;line-height:1.5;color:#344054;">${escapeText(verdict.lead)}</div>
       ${sections}
     </div>
   `;
@@ -1401,8 +1401,28 @@ export function buildGuideAlternativesHtml(result) {
       : `<p>No additional candidates passed the existing PAM and spacer filters within ±${search.radius} bp.</p>`}`;
 }
 
+// Text typed by a user (project fields, file name) or carried in an uploaded record (gene, transcript id) is data, not markup.
+// buildReportHtml receives it unescaped because the same objects feed text exports and JSON; it is escaped once, here, at the
+// boundary of the HTML renderer. (Escaping inside each template would leave every future interpolation to be remembered.)
+const escapeText = (value) => escapeSchemeHtml(value);
+function escapedMeta(meta) {
+  return Object.fromEntries(Object.entries(meta || {}).map(([key, value]) => [key, typeof value === "string" ? escapeText(value) : value]));
+}
+function escapedResult(result) {
+  return {
+    ...result,
+    gene: typeof result.gene === "string" ? escapeText(result.gene) : result.gene,
+    tag: typeof result.tag === "string" ? escapeText(result.tag) : result.tag,
+    ...(result.gb && typeof result.gb === "object" ? { gb: { ...result.gb, transcriptId: typeof result.gb.transcriptId === "string" ? escapeText(result.gb.transcriptId) : result.gb.transcriptId } } : {}),
+  };
+}
+
 export function buildReportHtml(meta, result, fileName, historicalContext, reviewItems, brunelloLibrary = null) {
   if (!result) return "";
+  const unescapedResult = result;
+  meta = escapedMeta(meta);
+  fileName = typeof fileName === "string" ? escapeText(fileName) : fileName;
+  result = escapedResult(result);
   const headerRows = [
     ["Group", meta.clientName || "n/a"],
     ["IRIS ID", meta.irisId || "[to be assigned]"],
@@ -1413,7 +1433,7 @@ export function buildReportHtml(meta, result, fileName, historicalContext, revie
   const ssOdnNotes = buildSsOdnNotes(result);
   const sectionTitle = ["pm", "genomic-snv"].includes(result.type) ? "ssODN Donor Templates" : result.type === "ko" ? "Knockout Design" : "Donor Design";
   const hasHistoricalMatches = Boolean(historicalContext?.topMatches?.length);
-  const brunelloReferenceGuideSet = getBrunelloReferenceGuideSet(result, brunelloLibrary);
+  const brunelloReferenceGuideSet = getBrunelloReferenceGuideSet(unescapedResult, brunelloLibrary);
   const releaseVerdictBlock = buildReleaseVerdictHtml(result);
   const coDeliveryBlock = buildCoDeliveryHtml(result);
   const readinessBlock = buildDesignReadinessHtml(result);
@@ -1511,7 +1531,7 @@ details.fold>.body{padding:8px 12px 10px 12px}
   <p class="note">${["pm", "genomic-snv"].includes(result.type) ? "WT and donor templates are listed together for review." : result.type === "ko" ? "Knockout designs use paired gRNAs and do not require an HDR donor." : result.type === "it" ? "Guide-linked internal ssODN donors are listed with protein-frame review." : "HDR donor sequence is listed in full below."}</p>
   ${donorBlock}
   ${result.type === "ko" && brunelloReferenceGuideSet ? `<details style="margin:0 0 14px 0;padding:12px;border:1px solid #FDBA74;border-radius:12px;background:#FFF7ED;"><summary style="cursor:pointer;font-weight:700;color:#9A3412;">Brunello CRISPRko Reference Guides (${brunelloReferenceGuideSet.guides.length})</summary><div style="margin-top:10px;"><p>${brunelloReferenceGuideSet.source}. ${brunelloReferenceGuideSet.summary}${brunelloReferenceGuideSet.requestedGene !== brunelloReferenceGuideSet.libraryGene ? ` Library symbol: ${brunelloReferenceGuideSet.libraryGene}.` : ""}</p><table>${tableHtml([["Spacer", "PAM", "Exon", "Rule Set 2", "Transcript", "Strand"]], true)}${tableHtml(brunelloReferenceGuideSet.guides.map((guide) => [guide.spacer, guide.pam, `Exon ${guide.exon}`, String(guide.ruleSet2), guide.transcript, guide.strand]))}</table></div></details>` : ""}
-  ${ssOdnNotes.length ? `<div>${ssOdnNotes.map((line) => `<p style="color:#CC0000;font-weight:700;margin:6px 0;">${line}</p>`).join("")}</div>` : ""}
+  ${ssOdnNotes.length ? `<div>${ssOdnNotes.map((line) => `<p style="color:#CC0000;font-weight:700;margin:6px 0;">${escapeText(line)}</p>`).join("")}</div>` : ""}
   ${hasHistoricalMatches ? `<h2>${historicalNumber}. Matched Historical Records</h2>${buildHistoricalRowsHtml(historicalContext.topMatches)}` : ""}
   <h2>${readinessNumber}. Design Readiness</h2>
   ${readinessBlock}
