@@ -164,3 +164,6 @@ The Workflow agent starts compact. Open **Comparison settings** to restrict enzy
 
 
 Workflow agent 1.2.0 loads the shared Lindel model lazily for SpCas9 knockout comparisons, so its selected guide pair matches the outcome-ranked standard Designer path. Other enzymes and HDR edits never receive the SpCas9 model. Recommendation reasons/audits record whether Lindel was applied or why the engine used its fallback; missing predictions remain unknown. Predicted loss-of-function allele shares are not cutting efficiency and are not compared as cross-enzyme performance scores. Stored model weights/failure messages are removed from agent requests, and a later comparison retries a failed model load.
+
+
+Workflow agent 1.3.0 prioritizes functional knockout evidence for the complete two-guide plan: the worst assessed consequence of either guide acting alone and the deletion between them, followed by annotated-isoform coverage. A simple frameshift in the nominal deletion is a later tie-breaker. Stronger functional evidence cannot override a blocked design. SpCas9 guide pairs retain Lindel-based repair-outcome selection; uncalibrated cross-enzyme outcome frequencies are not invented. Final protein loss still needs experimental confirmation, and superiority over another tool requires a held-out benchmark.

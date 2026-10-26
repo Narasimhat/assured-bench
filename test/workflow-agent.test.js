@@ -133,3 +133,28 @@ test("exact genomic SNPs compare enzymes with nucleotide validation and QC hando
   const bad=await runWorkflowAgent(agentRequest({...genomic,genomicDesignInput:{genbankRaw:genomicRaw,input:{...variant,ref:variant.alt}}},["mad7"]));
   assert.ok(bad.candidates.every(c=>!c.recommended));
 });
+
+test("functional pair assessment outranks nominal frameshift geometry for knockout recommendations", () => {
+  const robust = candidate("robust", { result: { type: "ko" }, metrics: {
+    knockoutTierRank: 0, knockoutIsoformGapScore: 0, knockoutPenalty: 2, primersReady: true } });
+  const escaping = candidate("escaping", { result: { type: "ko" }, metrics: {
+    knockoutTierRank: 3, knockoutIsoformGapScore: 0, knockoutPenalty: 0, primersReady: true } });
+  assert.equal(rankAgentCandidates([escaping, robust])[0].enzyme, "robust",
+    "a nominal frameshift must not favour a protein-escaping plan over a robust functional plan");
+});
+
+test("annotated isoform coverage precedes geometry and unknown assessment is not treated as robust", () => {
+  const make = (enzyme, metrics) => candidate(enzyme, { result: { type: "ko" }, metrics: { primersReady: true, ...metrics } });
+  const covered = make("covered", { knockoutTierRank: 0, knockoutIsoformGapScore: 0, knockoutPenalty: 2 });
+  const escape = make("isoform-escape", { knockoutTierRank: 0, knockoutIsoformGapScore: 100, knockoutPenalty: 0 });
+  const unknown = make("unknown", { knockoutPenalty: 0 });
+  assert.equal(rankAgentCandidates([unknown, escape, covered])[0].enzyme, "covered");
+});
+
+test("release blockers still exclude a pair with stronger functional predictions", () => {
+  const blocked = candidate("blocked", { eligible: false, status: "blocked", result: { type: "ko" },
+    metrics: { knockoutTierRank: 0, knockoutIsoformGapScore: 0, knockoutPenalty: 0, primersReady: true } });
+  const review = candidate("review", { result: { type: "ko" },
+    metrics: { knockoutTierRank: 1, knockoutIsoformGapScore: 0, knockoutPenalty: 1, primersReady: true } });
+  assert.equal(rankAgentCandidates([blocked, review])[0].enzyme, "review");
+});
