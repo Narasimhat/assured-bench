@@ -5,6 +5,8 @@ import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../../engine/des
 import { AGENT_PRIORITIES, agentRequest, agentAudit, agentEvidenceGaps, isAgentAudit, workflowNextSteps, qcNextAction } from "../../services/workflowAgent.js";
 import { BIOMNI_PRESET_MISSIONS, runBiomniCoScientist, computeWetLabGenotypingAssay, parseBiomniPrompt } from "../../services/biomniAgent.js";
 import { screenTargetVariants } from "../../services/variantScreen.js";
+import { describeViability } from "../../services/geneViability.js";
+import { describeCutCoverage } from "../../services/isoformCoverage.js";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 
 export function WorkflowAgent({ project, onUpdateProject }) {
@@ -380,10 +382,44 @@ export function WorkflowAgent({ project, onUpdateProject }) {
                   Domains/Sites annotated in UniProt: {biomniResult.uniprot.domains.map(d => `${d.description} (${d.start}–${d.end} aa)`).join(", ")}
                 </div>
               ) : (
-                <div className="muted">No domain, region or site is annotated in UniProt for this protein, so no cut is mapped to a domain. Gene constraint (gnomAD) and essentiality (DepMap) are not retrieved.</div>
+                <div className="muted">No domain, region or site is annotated in UniProt for this protein, so no cut is mapped to a domain.</div>
               )}
             </div>
           )}
+
+          {biomniResult.viability && (() => {
+            const v = biomniResult.viability;
+            const constrained = v.ok && v.gnomad && (v.gnomad.pLI >= 0.9 || v.gnomad.loeuf < 0.6);
+            const dependency = v.ok && v.depmap && v.depmap.screensAtOrBelowCutoff > 0;
+            return (
+              <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
+                <strong>Gene constraint and essentiality:</strong>{" "}
+                {constrained && <span className="badge badge-review" style={{ marginRight: "0.4rem" }}>loss-of-function constrained</span>}
+                {dependency && <span className="badge badge-review" style={{ marginRight: "0.4rem" }}>{v.depmap.screensAtOrBelowCutoff} of {v.depmap.screens} DepMap screens depend on it</span>}
+                {v.ok && !constrained && !dependency && <span className="badge badge-ready" style={{ marginRight: "0.4rem" }}>not constrained, no DepMap dependency</span>}
+                <div className="muted" style={{ fontSize: "0.85rem" }}>{describeViability(v)}</div>
+                {(constrained || dependency) && <div className="muted" style={{ fontSize: "0.85rem" }}>Expect selection against knockout cells: check the line for pre-existing variants in the gene and plan heterozygous or conditional alleles if clones fail to grow.</div>}
+              </div>
+            );
+          })()}
+
+          {biomniResult.cutCoverage && (
+            <div style={{ marginTop: "0.5rem", fontSize: "0.9rem" }}>
+              <strong>Transcripts that contain each cut:</strong>
+              {describeCutCoverage(biomniResult.cutCoverage).map((line, i) => <div key={i} className="muted" style={{ fontSize: "0.85rem" }}>{line}</div>)}
+              {biomniResult.cutCoverage.ok && biomniResult.cutCoverage.basis && <div className="muted" style={{ fontSize: "0.82rem" }}>Genomic position of the cuts: {biomniResult.cutCoverage.basis}.</div>}
+              {biomniResult.cutCoverage.ok && biomniResult.cutCoverage.notes?.length > 0 && <div className="muted" style={{ fontSize: "0.82rem" }}>{biomniResult.cutCoverage.notes.join(" ")}</div>}
+            </div>
+          )}
+
+          {biomniResult.designResult?.pairChangedByIsoformEvidence && (() => {
+            const c = biomniResult.designResult.pairChangedByIsoformEvidence;
+            return (
+              <div className="muted" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+                Pair changed by transcript evidence: <code>{(c.before || []).join(" + ")}</code>{c.beforeMinLofPct != null ? ` (weaker guide ${c.beforeMinLofPct}% LoF)` : ""} &rarr; <code>{(c.after || []).join(" + ")}</code>{c.afterMinLofPct != null ? ` (${c.afterMinLofPct}%)` : ""}. {c.reason}
+              </div>
+            );
+          })()}
 
           {biomniResult.clinvar?.variants?.length > 0 && (
             <div style={{ marginTop: "0.45rem", fontSize: "0.9rem" }}>

@@ -35,6 +35,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
   const unchanged = selected.length === current.length && selected.every(spacer => current.includes(spacer));
   const toggle = spacer => setSelected(list => (list.includes(spacer) ? list.filter(x => x !== spacer) : [...list, spacer].slice(-2)));
   const hasModel = Boolean(picker.outcomeModel);
+  const hasCoverage = pickerRows.some(row => Number.isFinite(row.isoformCoveragePct));
   const recommendedRows = recommended ? recommended.map(rowOf) : [];
   const recommendedMin = recommendedRows.length === 2 && recommendedRows.every(r => r && Number.isFinite(r.lofPct)) ? Math.min(...recommendedRows.map(r => r.lofPct)) : null;
 
@@ -59,7 +60,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem" }}>
           <thead style={{ position: "sticky", top: 0, background: "var(--bg-card, #fff)" }}>
             <tr>
-              {["", "Rank", "Spacer (5\u2032 \u2192 3\u2032)", "Strand", "Cut", "GC", "Tier", "Predicted LoF", "Frameshift", "+1 insertion", "In-frame", "Other isoforms left intact", ""].map((label, i) => (
+              {["", "Rank", "Spacer (5\u2032 \u2192 3\u2032)", "Strand", "Cut (coding exon + nt)", "GC", "Tier", "Predicted LoF", "Frameshift", "+1 insertion", "In-frame", "Other isoforms left intact", ...(hasCoverage ? ["Annotated transcripts with the cut"] : []), ""].map((label, i) => (
                 <th key={i} style={{ padding: 6, textAlign: "left", whiteSpace: "nowrap" }}>{label}</th>
               ))}
             </tr>
@@ -73,7 +74,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
                   <td style={{ padding: 6 }}>#{row.rank}</td>
                   <td style={{ padding: 6, fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{row.spacer} <span style={{ color: "var(--warning)" }}>{row.pam}</span></td>
                   <td style={{ padding: 6 }}>{row.strand}</td>
-                  <td style={{ padding: 6, whiteSpace: "nowrap" }}>Exon {row.exon} +{row.offsetInExon}</td>
+                  <td style={{ padding: 6, whiteSpace: "nowrap" }} title="Coding exon: counted from the first exon of the coding sequence, not the annotated transcript exon number">Exon {row.exon} +{row.offsetInExon}</td>
                   <td style={{ padding: 6, whiteSpace: "nowrap" }}>{row.gc}%{row.gcPenaltyPts ? <span className="muted" title="Points subtracted from the predicted loss of function for ranking"> (&minus;{row.gcPenaltyPts})</span> : null}</td>
                   <td style={{ padding: 6 }} title={TIER_NOTE[row.tier]}>{row.tier}</td>
                   <td style={{ padding: 6 }}><strong>{fmt(row.lofPct)}</strong></td>
@@ -81,6 +82,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
                   <td style={{ padding: 6 }}>{fmt(row.plus1Pct)}</td>
                   <td style={{ padding: 6 }}>{fmt(row.inframePct)}</td>
                   <td style={{ padding: 6 }}>{fmt(row.otherIsoformNotDisruptedPct)}</td>
+                  {hasCoverage && <td style={{ padding: 6 }} title="Share of the annotated RefSeq and Ensembl coding transcripts whose coding sequence contains this cut (the smaller of the two)">{fmt(row.isoformCoveragePct)}</td>}
                   <td style={{ padding: 6, whiteSpace: "nowrap" }}>
                     {current.includes(row.spacer) && <span className="badge badge-ready" style={{ fontSize: "0.7rem" }}>in design</span>}{" "}
                     {recommended?.includes(row.spacer) && <span className="badge badge-review" style={{ fontSize: "0.7rem" }}>recommended</span>}

@@ -9,6 +9,9 @@ import { buildQcDesignSpec } from "../engine/design/qcExport.js";
 import { buildDesignSchemeSvg } from "../engine/design/designScheme.js";
 import { agentEvidenceGaps, isAgentAudit } from "./workflowAgent.js";
 import { buildGenomicSnpReport } from "../engine/design/genomicSnp.js";
+import { describeViability } from "./geneViability.js";
+import { describeCutCoverage } from "./isoformCoverage.js";
+import { buildCasOffinderInput } from "./offTargetExport.js";
 
 /**
  * Generate full standalone HTML report string
@@ -62,7 +65,7 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   const lines = [];
   if (panMeta) {
     lines.push(
-      `<p style="margin:4px 0"><strong>Pan-Isoform Target Exon:</strong> Coding Exon ${escapeHtml(panMeta.targetCodingExon)} — shared across <strong>${escapeHtml(panMeta.sharedIsoforms)}/${escapeHtml(panMeta.totalIsoforms)} (${escapeHtml(panMeta.coveragePct)}%)</strong> protein-coding isoforms (${panMeta.isCommonExon ? "✓ NMD-Safe Common Exon" : panMeta.isTerminalExon ? "⚠ Terminal Exon" : "⚠ Partial/Escape Exon"}).</p>`
+      `<p style="margin:4px 0"><strong>Exon-level isoform sharing:</strong> coding exon ${escapeHtml(panMeta.targetCodingExon)} is present in ${escapeHtml(panMeta.sharedIsoforms)} of ${escapeHtml(panMeta.totalIsoforms)} RefSeq coding isoforms in the reference used (${panMeta.isCommonExon ? "an exon shared by all of them" : panMeta.isTerminalExon ? "terminal exon: nonsense-mediated decay is not expected" : "not shared by all of them"}). This is a property of the exon; whether each guide cuts inside every annotated transcript is listed separately below.</p>`
     );
   } else if (iso?.ok) {
     lines.push(
@@ -88,6 +91,17 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
     lines.push(
       `<p style="margin:4px 0;color:#92400e"><strong>NMD-Escape Locus Rescue:</strong> ${escapeHtml(rescue.reason)} Use dual-guide excision or 5′ terminal-exon early truncation (&lt;50% retained CDS).</p>`
     );
+  }
+  if (biomniReport?.viability) {
+    lines.push(`<p style="margin:4px 0"><strong>Gene constraint and essentiality:</strong> ${escapeHtml(describeViability(biomniReport.viability))}</p>`);
+  }
+  if (biomniReport?.cutCoverage) {
+    const cc = biomniReport.cutCoverage;
+    lines.push(`<p style="margin:4px 0"><strong>Transcripts that contain each cut:</strong> ${describeCutCoverage(cc).map(escapeHtml).join("<br>")}${cc.ok && cc.basis ? `<br>Genomic position of the cuts: ${escapeHtml(cc.basis)}.` : ""}${cc.ok && cc.notes?.length ? `<br>${escapeHtml(cc.notes.join(" "))}` : ""}</p>`);
+  }
+  if (designResult?.pairChangedByIsoformEvidence) {
+    const c = designResult.pairChangedByIsoformEvidence; const pct = list => (Array.isArray(list) && list.every(Number.isFinite) ? ` (cuts in ${list.map(x => `${x}%`).join(" and ")} of the annotated transcripts)` : "");
+    lines.push(`<p style="margin:4px 0"><strong>Pair changed by transcript evidence:</strong> without it the selector chose ${escapeHtml((c.before || []).join(" + "))}${escapeHtml(pct(c.beforeIsoformCoveragePct))}${c.beforeMinLofPct != null ? `, weaker-guide predicted loss of function ${escapeHtml(c.beforeMinLofPct)}%` : ""}; with it, ${escapeHtml((c.after || []).join(" + "))}${escapeHtml(pct(c.afterIsoformCoveragePct))}${c.afterMinLofPct != null ? `, ${escapeHtml(c.afterMinLofPct)}%` : ""}. ${escapeHtml(c.reason || "")}</p>`);
   }
   if (biomniReport?.variantScreen?.ok) {
     lines.push(
@@ -161,6 +175,17 @@ export function downloadDesignJson(project, designResult) {
   }
   const gene = (project.gene || "design").toLowerCase();
   downloadBlob(JSON.stringify(jsonContent, null, 2), `${gene}_${project.editType || "edit"}_design.json`, "application/json");
+}
+
+/**
+ * Download the Cas-OFFinder input for the design's guides (the off-target search itself is run outside Bench). Returns the build result.
+ */
+export function downloadCasOffinderInput(project, designResult) {
+  const built = buildCasOffinderInput(designResult);
+  if (!built.ok) return built;
+  const gene = (project.gene || "design").toLowerCase();
+  downloadBlob(built.text, `${gene}_cas-offinder_input.txt`, "text/plain;charset=utf-8;");
+  return built;
 }
 
 /**

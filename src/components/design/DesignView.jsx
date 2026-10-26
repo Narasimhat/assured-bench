@@ -25,6 +25,7 @@ import {
   generateReportHtml,
   downloadReportHtml,
   downloadDesignJson,
+  downloadCasOffinderInput,
   downloadSchemeSvg
 } from "../../services/designExport.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
@@ -1082,6 +1083,15 @@ export function DesignView({
                   <span>Design JSON</span>
                 </button>
 
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => { const built = downloadCasOffinderInput(currentProject, designResult); if (!built.ok) setError(`Cas-OFFinder input: ${built.error}`); }}
+                  title="Input file for Cas-OFFinder. Bench does not search the genome for off-targets; run this against the genome of your line."
+                >
+                  <Download size={16} />
+                  <span>Cas-OFFinder input</span>
+                </button>
+
                 <button className="btn btn-primary" onClick={onProceedToOrder}>
                   <span>Proceed to Order</span>
                   <ArrowRight size={16} />
@@ -1094,10 +1104,21 @@ export function DesignView({
                 <span style={{ fontWeight: 700, color: "#0369a1" }}>🧬 Biomni Co-Scientist Integrated:</span>
                 {designResult?.panIsoformMeta && (
                   <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: designResult.panIsoformMeta.isCommonExon ? "#dcfce7" : "#fef3c7", color: designResult.panIsoformMeta.isCommonExon ? "#166534" : "#92400e", fontWeight: 600 }}>
-                    Coding Exon {designResult.panIsoformMeta.targetCodingExon} · {designResult.panIsoformMeta.sharedIsoforms}/{designResult.panIsoformMeta.totalIsoforms} isoforms ({designResult.panIsoformMeta.coveragePct}%)
-                    {designResult.panIsoformMeta.isCommonExon ? " · ✓ NMD-Safe Common Exon" : ""}
+                    Coding exon {designResult.panIsoformMeta.targetCodingExon} is in {designResult.panIsoformMeta.sharedIsoforms}/{designResult.panIsoformMeta.totalIsoforms} RefSeq isoforms
+                    {designResult.panIsoformMeta.isCommonExon ? " · shared exon" : ""}
                   </span>
                 )}
+                {currentProject?.biomniReport?.cutCoverage?.ok && (() => {
+                  const guides = currentProject.biomniReport.cutCoverage.guides || [];
+                  const weakest = (key) => guides.map(g => g[key]).filter(Boolean).sort((a, b) => a.covered / a.total - b.covered / b.total)[0];
+                  const refseq = weakest("refseq"); const ensembl = weakest("ensembl");
+                  const full = [refseq, ensembl].filter(Boolean).every(c => c.covered === c.total);
+                  return (
+                    <span title="Share of annotated coding transcripts whose coding sequence contains the cut of the weaker-covered guide" style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: full ? "#dcfce7" : "#fef3c7", color: full ? "#166534" : "#92400e", fontWeight: 600 }}>
+                      Cuts inside {[refseq && `${refseq.covered}/${refseq.total} RefSeq`, ensembl && `${ensembl.covered}/${ensembl.total} Ensembl`].filter(Boolean).join(", ")} transcripts
+                    </span>
+                  );
+                })()}
                 {designResult?.singleCdsDefault && (
                   <span style={{ padding: "0.15rem 0.5rem", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1", fontWeight: 600 }}>
                     Upgraded from single-CDS {designResult.singleCdsDefault.exon} → Pan-isoform {designResult.exon}

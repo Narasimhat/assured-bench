@@ -10,7 +10,7 @@ Scan the supplied reference for the selected enzyme. Exclude spacers with GC bel
 
 The Co-Scientist panel no longer chooses guides by a second rule. It passes the pan-isoform exons to this selector (`commonKoExons`: within a functional tier, guides in those exons rank first), and its ranking table is ordered by the same single-guide ranking (`rankKoSingles`); guides the selector excludes are listed after the ranked ones without a rank.
 
-Rank by coding coverage, existing frameshift-panel functional tier, pan-isoform exon when supplied, escape in other annotated coding sequences, and supported repair predictions after the GC penalty in five-percentage-point bins. Potential in-frame exon skipping, a sequence self-complementarity screen, distance from coding boundaries, and balanced GC break remaining ties. Exon length divisible by three is a rescue flag, not evidence that skipping occurs. Individual tiers remain conditional on frameshift outcomes and are not cutting efficiencies.
+Rank by coding coverage, existing frameshift-panel functional tier, pan-isoform exon when supplied, the share of annotated transcripts that contain the cut when supplied (below), escape in other annotated coding sequences, and supported repair predictions after the GC penalty in five-percentage-point bins. Potential in-frame exon skipping, a sequence self-complementarity screen, distance from coding boundaries, and balanced GC break remaining ties. Exon length divisible by three is a rescue flag, not evidence that skipping occurs. Individual tiers remain conditional on frameshift outcomes and are not cutting efficiencies.
 
 The functional panel already checks NMD escape, retained truncated protein and possible downstream translation initiation. SpCas9 can additionally use loaded Lindel weights. Cas9 repair predictions are never transferred to other enzymes. Distinct same-gene CDS structures are deduplicated; the previous eight-structure cap has been removed. Unsupported or absent transcript annotations cannot establish full biological isoform coverage.
 
@@ -19,6 +19,18 @@ The functional panel already checks NMD escape, retained truncated protein and p
 The result records the top two individuals, their combined nominal deletion assessment and up to six backup individual guides. Pair search retains the top two, adds high-ranked guides with cut-position diversity, and examines all combinations in a maximum 24-guide shortlist. Cuts must be 10–140 bp apart; 40–140 bp is preferred among equivalent functional assessments. Pair tier, pan-isoform exon and isoform escape precede the pair's predicted loss of function (weaker guide first, then both), which precedes spacing preference and individual ranks. The coordinated pair can differ from the top individuals. The design's guides, primers, ordering and QC export describe this coordinated pair; the report identifies the difference explicitly.
 
 If no coordinated pair qualifies, return a diagnostic with the individual rankings in `koSelection`; do not silently widen spacing or GC. Pair search is bounded and disclosed, not an assertion of global optimality. Cas12 cut positions are nominal; staggered-end processing can change the repaired junction.
+
+## Transcripts that contain the cut
+
+The record's own annotations (usually the RefSeq CDS features) define eligibility. The Co-Scientist run adds an independent check at the cut itself: each guide's cut is placed on GRCh38 and tested against the coding segments of every RefSeq NM_ transcript (NCBI Datasets) and every Ensembl protein-coding transcript. The placement uses the genomic coordinates of the NCBI isoform analysis when the record is a RefSeqGene, and otherwise the coordinates the record states, accepted only when the record's coding segments reproduce those of an Ensembl transcript; when neither holds, coverage is reported as not assessed.
+
+The selector receives the result as `cutCoverage` (cut position to the smaller of the RefSeq and Ensembl fractions). It is a ranking key placed after functional tier and pan-isoform exon and before predicted loss of function, for single guides and, as the weaker of the two cuts, for pairs. It is a key and not a multiplier on loss of function: a multiplier mixes a fraction with the GC penalty (in loss-of-function points) and reorders guides that share the same coverage, which the first version did. Equal weights per transcript are an assumption; a transcript that skips the exon cannot be reached by any guide in it and counts against all of them alike. Counts depend on the Ensembl and RefSeq releases and are shown with the transcript names, not as a percentage.
+
+When transcript evidence changes the pair, the report names the pair without it, the pair with it, the share of transcripts containing each cut and the weaker guide's predicted loss of function for both. For TP53 it does: the exon-3 pair of the single-record selector (cuts in 19/25 RefSeq and 26/34 Ensembl transcripts) gives way to an exon-4 pair whose cuts lie in 25/25 and 34/34, at a lower predicted loss of function.
+
+## Exon numbering
+
+A result names the exon twice: `Exon N (coding exon; exon M of the annotated transcript, a-b, L bp)`. N counts coding exons from the first exon with coding sequence; M is the exon number in the annotated transcript, so for a gene whose first exon is untranslated M = N + 1. The guide picker and the isoform text use the coding-exon number.
 
 ## Reports and traceability
 

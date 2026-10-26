@@ -1,4 +1,4 @@
-import { selectFunctionalKoGuides, assessKoEligibility, buildKoPicker } from "./koSelection.js";
+import { selectFunctionalKoGuides, assessKoEligibility, buildKoPicker, KO_UNASSESSED } from "./koSelection.js";
 import { calculateCfd } from "./cfd.js";
 import { assessKoPair, describeKoTier, codingModels } from "./koOutcomes.js";
 import { createKoOutcomeScorer } from "./koRank.js";
@@ -1829,7 +1829,8 @@ export function summarizeProcurementReadiness(result) {
 
   const guides = result.gs || [];
   if (!guides.length) blockers.push("No guide sequence is available.");
-  if (result.type === "ko" && result.koSelection) warnings.push(`Knockout selection has not assessed: ${result.koSelection.unassessed.join("; ")}. Experimental validation is required.`);
+  // for every knockout, including a pair chosen by hand (its selection record is absent, the gaps are the same)
+  if (result.type === "ko") warnings.push(`Knockout selection has not assessed: ${(result.koSelection?.unassessed || KO_UNASSESSED).join("; ")}. Experimental validation is required.`);
   // Knockout confidence: a frameshift is not a knockout if the cell makes the protein anyway (see koOutcomes.js).
   if (result.type === "ko" && result.koAssessment && result.koAssessment.isoformNote) warnings.push(result.koAssessment.isoformNote);
   if (result.type === "ko" && result.koAssessment && result.koAssessment.tier !== "robust") {
@@ -3663,24 +3664,23 @@ export function designKO(gb, options = {}) {
       guides,
       spacing: Math.abs(guides[1].cut - guides[0].cut),
     };
-    const contexts = guides.map((guide) => describeKoGenomicContextFromModel(gb, guide.cut));
-    const exonMatch = contexts[0]?.label?.match(/Exon\s+(\d+)/i);
-    exonNumber = exonMatch ? parseInt(exonMatch[1], 10) : null;
-    const exon = Array.isArray(gb.exons) ? gb.exons.find((entry) => entry.exonNumber === exonNumber) : null;
-    exonStart = exon?.start ?? 0;
-    exonEnd = exon?.end ?? 0;
-    bestLength = exon ? (exon.end - exon.start) : 0;
   } else {
-    const choice = selectFunctionalKoGuides(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1 });
+    const choice = selectFunctionalKoGuides(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, cutCoverage: options.cutCoverage || null });
     if (choice.err) return { err: choice.err, koSelection: choice.selection };
     selectedPair = choice.pair;
     koSelection = choice.selection;
     recommendedKoPair = choice.pair.guides.map(guide => guide.sp);
-    const segmentIndex = gb.cdsSegments.findIndex(([a, b]) => a < selectedPair.guides[0].cut && selectedPair.guides[0].cut < b);
-    [exonStart, exonEnd] = gb.cdsSegments[segmentIndex];
-    bestLength = exonEnd - exonStart;
-    exonNumber = segmentIndex + 1;
   }
+  // The coding exon the (first) cut lies in, counted over the coding segments of the CDS. The annotated transcript numbers exons from its first
+  // exon, which can be non-coding, so the two numbers can differ (TP53: coding exon 4 is exon 5); both are named wherever an exon is.
+  const codingSegmentIndex = gb.cdsSegments.findIndex(([a, b]) => a < selectedPair.guides[0].cut && selectedPair.guides[0].cut < b);
+  if (codingSegmentIndex >= 0) {
+    [exonStart, exonEnd] = gb.cdsSegments[codingSegmentIndex];
+    bestLength = exonEnd - exonStart;
+    exonNumber = codingSegmentIndex + 1;
+  } else { exonStart = 0; exonEnd = 0; bestLength = 0; exonNumber = null; }
+  const transcriptExonOf = (cut) => { const m = String(describeKoGenomicContextFromModel(gb, cut)?.label || "").match(/^exon (\d+)$/i); return m ? Number(m[1]) : null; };
+  const transcriptExon = codingSegmentIndex >= 0 ? transcriptExonOf(selectedPair.guides[0].cut) : null;
   const seq = getGenomicSequence(gb);
   const cutCenter = Math.round(selectedPair.guides.reduce((sum, guide) => sum + guide.cut, 0) / selectedPair.guides.length);
   const sortedCuts = selectedPair.guides.map((guide) => guide.cut).filter(Number.isFinite).sort((left, right) => left - right);
@@ -3710,10 +3710,10 @@ export function designKO(gb, options = {}) {
   // the ranked guides for choosing a pair by hand, and how the pair used here relates to the selector's recommendation
   let koPicker = null; let koPairChoice = null; let koPickerError = null;
   try {
-    koPicker = buildKoPicker(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, include: selectedPair.guides.map(guide => guide.sp) });
+    koPicker = buildKoPicker(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, cutCoverage: options.cutCoverage || null, include: selectedPair.guides.map(guide => guide.sp) });
     const userPair = Boolean(options.customGuides?.length);
     if (userPair && !recommendedKoPair) {
-      const rec = selectFunctionalKoGuides(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, sensitivity: false });
+      const rec = selectFunctionalKoGuides(gb, koCandidates, { enzyme: enzyme.id, delivery: koDelivery, koScorer, commonKoExons: koCommon, gcPenaltyScale: options.gcPenaltyScale ?? 1, cutCoverage: options.cutCoverage || null, sensitivity: false });
       recommendedKoPair = rec.err ? null : rec.pair.guides.map(guide => guide.sp);
     }
     const minLof = spacers => { const found = spacers.map(sp => koPicker.rows.find(row => row.spacer === sp)?.lofPct); return found.every(Number.isFinite) ? Math.min(...found) : null; };
@@ -3735,7 +3735,8 @@ export function designKO(gb, options = {}) {
   return {
     type: "ko",
     gene: gb.gene,
-    exon: `Exon ${exonNumber} (${exonStart + 1}-${exonEnd}, ${bestLength} bp)`,
+    exon: `Exon ${exonNumber} (coding exon${transcriptExon && transcriptExon !== exonNumber ? `; exon ${transcriptExon} of the annotated transcript` : ""}, ${exonStart + 1}-${exonEnd}, ${bestLength} bp)`,
+    codingExon: exonNumber, transcriptExon,
     exSz: bestLength,
     prot: gb.proteinLength,
     gs: selectedPair.guides.map((guide, index) => {
@@ -3751,7 +3752,7 @@ export function designKO(gb, options = {}) {
         cut: guide.cut,
         d: configured ? guide.cut - cutCenter : guide.d,
         ko: koAssessment ? { tier: koAssessment.guides[index].tier, robustPct: koAssessment.guides[index].robustPct, marginalPct: koAssessment.guides[index].marginalPct, escapePct: koAssessment.guides[index].escapePct, minMarginNt: koAssessment.guides[index].minMarginNt, outcomes: koOutcomes ? koOutcomes.guides[index] : undefined } : undefined,
-        note: `Cut at ${guide.cut + 1}, ${context.label} (${context.detail}) | ${placement.label}: ${placement.detail} | pair spacing ${selectedPair.spacing} bp`,
+        note: `Cut at ${guide.cut + 1}, ${context.label}${(() => { const idx = gb.cdsSegments.findIndex(([a, b]) => a < guide.cut && guide.cut < b); const m = String(context.label).match(/^exon (\d+)$/i); return idx >= 0 && m && Number(m[1]) !== idx + 1 ? ` (coding exon ${idx + 1})` : ""; })()} (${context.detail}) | ${placement.label}: ${placement.detail} | pair spacing ${selectedPair.spacing} bp`,
       };
     }),
     ps: [

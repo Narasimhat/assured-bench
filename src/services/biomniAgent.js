@@ -19,6 +19,8 @@ import { fetchGeneGenbank } from "./ensembl.js";
 import { agentRequest, runWorkflowAgent } from "./workflowAgent.js";
 import { screenTargetVariants } from "./variantScreen.js";
 import { BRUNELLO_SUBSET } from "./data/brunelloSubset.js";
+import { queryGeneViability, describeViability } from "./geneViability.js";
+import { fetchEnsemblCodingTranscripts, fetchRefseqCodingTranscripts, makeCutMapper, summariseCutCoverage, coverageAtCut } from "./isoformCoverage.js";
 
 async function defaultLindelLoader() {
   const { loadLindel } = await import("../engine/design/lindel/loadLindel.js");
@@ -418,6 +420,14 @@ export function buildBiomniPlan(intent) {
     });
   }
 
+  plan.push({
+    step: plan.length + 1,
+    id: "query_gene_viability",
+    title: `Query Gene Constraint & Cell-Line Essentiality (${intent.gene})`,
+    tool: "query_gene_viability",
+    rationale: "Retrieve gnomAD loss-of-function constraint and DepMap CRISPR gene effect (Open Targets) so a knockout of a constrained or essential gene is seen before it is planned.",
+  });
+
   if (intent.wantsClinvar) {
     plan.push({
       step: plan.length + 1,
@@ -435,6 +445,16 @@ export function buildBiomniPlan(intent) {
     tool: "design_crispr_edit",
     rationale: "Synthesize candidate sgRNAs/crRNAs, silent-blocked HDR donors, and thermodynamic primers.",
   });
+
+  if (intent.editType === "ko") {
+    plan.push({
+      step: plan.length + 1,
+      id: "check_cut_isoform_coverage",
+      title: `Check Each Cut Against Every Annotated Isoform (${intent.gene})`,
+      tool: "check_cut_isoform_coverage",
+      rationale: "Count, per cut, the RefSeq and Ensembl protein-coding transcripts whose coding sequence contains it, and name those that do not.",
+    });
+  }
 
   if (intent.wantsLindel) {
     plan.push({
@@ -575,6 +595,7 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
   let totalIsoforms = inRecordIsoforms.length;
   let isoformIds = inRecordIsoforms.map(i => i.id);
   let source = inRecordIsoforms.length > 1 ? "GenBank multi-CDS annotations" : "Canonical CDS";
+  let genomic = null; // coding segments of the main transcript and of every RefSeq isoform in GRCh38 coordinates, for cut-level coverage (isoformCoverage.js)
 
   // Default sharing counts from in-record CDS models
   const sharingCounts = mainSegs.map(([s, e]) =>
@@ -616,6 +637,7 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
                 Number(t.cds.range[t.cds.range.length - 1].end)
               );
             });
+            genomic = { strand: orient, exons: mainGenomic, isoforms: codingTxs.map((t, i) => ({ id: t.accession_version, segs: allIsoformSegs[i] })) };
             totalIsoforms = codingTxs.length;
             isoformIds = codingTxs.map(t => t.accession_version);
             source = `NCBI RefSeq (${codingTxs.length} NM_ coding isoforms)`;
@@ -689,6 +711,7 @@ export async function analyzeCommonIsoformExons(geneSymbol, genbankRaw, fetchFn 
     source,
     totalIsoforms,
     isoformIds: isoformIds.slice(0, 12),
+    genomic,
     commonCodingExons,
     recommendedCommonKoExons,
     exons,
@@ -850,6 +873,18 @@ export async function runBiomniCoScientist(
   let geneMeta = null;
   let isoformAnalysis = null;
   let uniprot = null;
+  let viability = null;
+  let ensemblTx = null;
+  let refseqTx = null;
+  let cutCoverage = null;
+  let cutMapperCache = null;
+  // maps a cut of the analysed record to a GRCh38 coordinate (isoformCoverage.js); built once the isoform sets are in
+  const cutMapper = () => {
+    if (cutMapperCache) return cutMapperCache;
+    const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
+    cutMapperCache = { model, mapper: makeCutMapper({ isoformAnalysis, model, genbankRaw, ensembl: ensemblTx }) };
+    return cutMapperCache;
+  };
   let clinvar = null;
   let designResult = null;
   let lindelRanking = null;
@@ -894,10 +929,31 @@ export async function runBiomniCoScientist(
         const again = reuse && reuse.gene === intent.gene ? reuse : null;
         isoformAnalysis = again?.isoformAnalysis?.ok ? again.isoformAnalysis : await analyzeCommonIsoformExons(intent.gene, genbankRaw, fetchFn);
         output = again?.isoformAnalysis?.ok ? { ...isoformAnalysis, reusedFromEarlierRun: true } : isoformAnalysis;
+        if (intent.editType === "ko") {
+          // the second annotation set, used for the cut-level coverage; a failure leaves RefSeq alone and is reported there
+          ensemblTx = await fetchEnsemblCodingTranscripts(intent.gene, fetchFn);
+          refseqTx = isoformAnalysis?.genomic?.isoforms?.length
+            ? { ok: true, transcripts: isoformAnalysis.genomic.isoforms.map(x => ({ id: x.id, name: x.id, segs: x.segs })) }
+            : await fetchRefseqCodingTranscripts(intent.gene, fetchFn);
+          output = { ...output, ensembl: ensemblTx.ok ? { ok: true, transcripts: ensemblTx.transcripts.length } : { ok: false, error: ensemblTx.error }, refseqTranscripts: refseqTx.ok ? refseqTx.transcripts.length : { ok: false, error: refseqTx.error } };
+        }
       } else if (item.tool === "query_uniprot_protein") {
         const again = reuse && reuse.gene === intent.gene ? reuse : null;
         uniprot = again?.uniprot?.ok ? again.uniprot : await queryUniprotProtein(intent.gene, fetchFn);
         output = again?.uniprot?.ok ? { ...uniprot, reusedFromEarlierRun: true } : uniprot;
+      } else if (item.tool === "query_gene_viability") {
+        const again = reuse && reuse.gene === intent.gene ? reuse : null;
+        viability = again?.viability?.ok ? again.viability : await queryGeneViability({ symbol: intent.gene, ensemblId: /^ENSG\d{11}$/.test(String(geneMeta?.ensemblId || "")) ? geneMeta.ensemblId : null }, fetchFn);
+        output = again?.viability?.ok ? { ...viability, reusedFromEarlierRun: true } : viability;
+      } else if (item.tool === "check_cut_isoform_coverage") {
+        if (!designResult?.gs?.length) { output = { ok: false, error: "No design to check." }; }
+        else {
+          const { mapper } = cutMapper();
+          const cuts = designResult.gs.map((g, i) => ({ label: g.n || `gRNA${i + 1}`, spacer: g.sp, genomicCut: mapper.toGenomic(g.cut) }));
+          cutCoverage = summariseCutCoverage({ cuts, refseq: refseqTx?.ok ? refseqTx.transcripts : null, ensembl: ensemblTx, basis: mapper.basis,
+            notes: mapper.basis ? [] : [`The cuts could not be placed on the genome: ${mapper.reason}.`] });
+          output = { ok: cutCoverage.ok, guides: cutCoverage.guides, sources: cutCoverage.sources, notes: cutCoverage.notes };
+        }
       } else if (item.tool === "search_clinvar_variants") {
         const again = reuse && reuse.gene === intent.gene && reuse.mutation === intent.mutation ? reuse : null;
         clinvar = again?.clinvar?.ok ? again.clinvar : await searchClinvarVariants(intent.gene, intent.mutation, fetchFn);
@@ -924,20 +980,39 @@ export async function runBiomniCoScientist(
         // One selector (koSelection.js) chooses the guides. The pan-isoform analysis is an input to it (exons shared by the coding isoforms rank first
         // within a functional tier); this step never replaces the selector's pair with a pair chosen by another rule.
         const commonKoExons = intent.editType === "ko" && !preserveCustomGuides && isoformAnalysis?.recommendedCommonKoExons?.length ? isoformAnalysis.recommendedCommonKoExons : null;
+        // share of the annotated isoforms (RefSeq and Ensembl, the smaller of the two) whose coding sequence contains a cut; the selector ranks on it before predicted LoF
+        const cutCoverageFn = (() => {
+          if (intent.editType !== "ko" || preserveCustomGuides || (!refseqTx?.ok && !ensemblTx?.ok)) return null;
+          const { mapper } = cutMapper();
+          if (!mapper.basis) return null;
+          return (cut) => {
+            const position = mapper.toGenomic(cut);
+            if (position == null) return null;
+            const parts = [...(refseqTx?.ok ? [coverageAtCut(refseqTx.transcripts, position)] : []), ...(ensemblTx?.ok ? [coverageAtCut(ensemblTx.transcripts, position)] : [])];
+            return Math.min(...parts.map(c => (c.total ? c.covered / c.total : 1)));
+          };
+        })();
         const exonOf = (design) => { const m = String(design?.exon || "").match(/Exon\s+(\d+)/i); return m ? Number(m[1]) : null; };
-        let res =
-          initialDesignResult && !initialDesignResult.err
-            ? initialDesignResult
-            : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, { ...options, ...(commonKoExons ? { commonKoExons } : {}) });
-        if (commonKoExons && res && !res.err) {
-          // A design handed in by Manual Design was made before the isoform analysis; a design made here is compared with what the selector picks without it.
-          // Either way the report says when the pan-isoform evidence moved the selection to another exon.
-          const baseline = initialDesignResult && !initialDesignResult.err ? res : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
-          const informed = initialDesignResult && !initialDesignResult.err && !commonKoExons.includes(exonOf(res))
-            ? designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, { ...options, commonKoExons })
-            : res;
-          if (informed && !informed.err && baseline && !baseline.err && exonOf(informed) !== exonOf(baseline)) {
-            informed.singleCdsDefault = { exon: baseline.exon, codingExon: exonOf(baseline), guides: (baseline.gs || []).slice(0, 2).map(g => g.sp) };
+        const informedOptions = { ...options, ...(commonKoExons ? { commonKoExons } : {}), ...(cutCoverageFn ? { cutCoverage: cutCoverageFn } : {}) };
+        const handedOver = initialDesignResult && !initialDesignResult.err;
+        // One selector (koSelection.js) chooses the guides; the pan-isoform exons and the per-cut isoform coverage are inputs to it. A design handed over by Manual Design was
+        // made before this evidence existed, so the same selector runs again with it; nothing else replaces the selector's pair.
+        let res = handedOver ? initialDesignResult : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, informedOptions);
+        // a handed-over design is selected again only when the new evidence can change it: cut-level coverage is available, or its exon is not a pan-isoform common exon
+        const needsSecondSelection = !handedOver || Boolean(cutCoverageFn) || Boolean(commonKoExons && !commonKoExons.includes(exonOf(initialDesignResult)));
+        if ((commonKoExons || cutCoverageFn) && needsSecondSelection && res && !res.err) {
+          const baseline = handedOver ? res : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
+          const informed = handedOver ? designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, informedOptions) : res;
+          if (informed && !informed.err && baseline && !baseline.err) {
+            const spacersOf = (design) => (design.gs || []).map(g => g.sp).sort().join("|");
+            if (exonOf(informed) !== exonOf(baseline)) informed.singleCdsDefault = { exon: baseline.exon, codingExon: exonOf(baseline), guides: (baseline.gs || []).slice(0, 2).map(g => g.sp) };
+            if (spacersOf(informed) !== spacersOf(baseline)) {
+              const minLof = design => design.koOutcomes?.minLofPct ?? design.koAssessment?.outcomes?.minLofPct ?? null;
+              const coverageOf = design => (cutCoverageFn ? (design.gs || []).map(g => { const f = cutCoverageFn(g.cut); return Number.isFinite(f) ? Math.round(f * 1000) / 10 : null; }) : null);
+              informed.pairChangedByIsoformEvidence = { before: (baseline.gs || []).map(g => g.sp), beforeMinLofPct: minLof(baseline), beforeIsoformCoveragePct: coverageOf(baseline),
+                after: (informed.gs || []).map(g => g.sp), afterMinLofPct: minLof(informed), afterIsoformCoveragePct: coverageOf(informed),
+                reason: "The RefSeq and Ensembl transcripts that contain each cut (and the pan-isoform exons) were supplied to the selector, which ranks a pair whose cuts lie in more annotated transcripts first, before predicted loss of function." };
+            }
           }
           if (informed && !informed.err) res = informed;
         }
@@ -1245,6 +1320,8 @@ export async function runBiomniCoScientist(
     genbankRaw,
     isoformAnalysis,
     uniprot,
+    viability,
+    cutCoverage,
     clinvar,
     designResult,
     lindelRanking,

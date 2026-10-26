@@ -87,7 +87,10 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
     { fetchFn: mockFetch }
   );
   assert.equal(dipkRes.intent.gene, "DIPK2A");
-  assert.equal(dipkRes.steps.every(s => s.status === "completed"), true);
+  // gene constraint and cut-level isoform coverage need Open Targets, Ensembl and NCBI Datasets; this mock serves none of them, so those two steps report "warning" (not assessed) and everything else completes
+  const NEEDS_EXTERNAL = new Set(["query_gene_viability", "check_cut_isoform_coverage"]);
+  assert.equal(dipkRes.steps.every(s => s.status === "completed" || (NEEDS_EXTERNAL.has(s.id) && s.status === "warning")), true);
+  assert.equal(dipkRes.viability.ok, false); assert.equal(dipkRes.cutCoverage.ok, false);
   assert.ok(dipkRes.designResult && dipkRes.designResult.gs.length === 2);
   assert.ok(dipkRes.lindelRanking && dipkRes.lindelRanking.totalCandidates > 0);
   assert.equal(dipkRes.lindelRanking.topGuides[0].coding_exon, 2);
@@ -169,7 +172,8 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
     manualBiomni.designResult
   );
   assert.match(reportHtml, /ASSURED-Biomni Co-Scientist Integrated Verification/);
-  assert.match(reportHtml, /Coding Exon 2/);
+  assert.match(reportHtml, /coding exon 2 is present in \d+ of \d+ RefSeq coding isoforms/);
+  assert.doesNotMatch(reportHtml, /\(100%\)/, "an exon-level share is not reported as a percentage of isoforms covered");
   assert.match(reportHtml, /Broad GPP Brunello Library/);
   assert.match(reportHtml, /Wet-Lab Pre-Sequencing Genotyping Assay/);
 });
