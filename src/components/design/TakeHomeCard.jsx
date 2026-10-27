@@ -12,7 +12,17 @@ const TONE = {
  * The take-home message of a design (src/services/takeHome.js): what was designed, what to expect, what to watch and what to do next.
  * Everything else about the design is behind it, one click away.
  */
-export function TakeHomeCard({ takeHome, onProceedToOrder, onDownloadReport, onDownloadOffTarget, onChoosePair, showActions = true }) {
+export function TakeHomeCard({
+  takeHome,
+  onProceedToOrder,
+  onDownloadReport,
+  onDownloadOffTarget,
+  onChoosePair,
+  showActions = true,
+  showProceed = true,
+  proceedLabel = "Proceed to Order",
+  leadingAction = null,
+}) {
   if (!takeHome) return null;
   const status = TONE[takeHome.status.tone] || TONE.warn;
   return (
@@ -52,7 +62,13 @@ export function TakeHomeCard({ takeHome, onProceedToOrder, onDownloadReport, onD
       </div>
 
       {showActions && <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button className="btn btn-primary" onClick={onProceedToOrder}><span>Proceed to Order</span><ArrowRight size={16} /></button>
+        {leadingAction}
+        {showProceed && onProceedToOrder && (
+          <button className="btn btn-primary" onClick={onProceedToOrder}>
+            <span>{proceedLabel}</span>
+            <ArrowRight size={16} />
+          </button>
+        )}
         {onChoosePair && <button className="btn btn-secondary" onClick={onChoosePair}><span>Choose a different pair</span></button>}
         <button className="btn btn-secondary" onClick={onDownloadReport}><FileText size={16} /><span>Download report</span></button>
         <button className="btn btn-secondary" onClick={onDownloadOffTarget} title="Input file for Cas-OFFinder. Bench does not search the genome for off-targets; run this against the genome of your line."><Download size={16} /><span>Cas-OFFinder input</span></button>

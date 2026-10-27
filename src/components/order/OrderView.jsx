@@ -6,6 +6,7 @@ import {
   formatBulkPasteTsv,
   formatOligosFasta
 } from "../../services/vendorExport.js";
+import { projectDesignReagents } from "../../services/projectReagents.js";
 import { ShoppingCart, Copy, Download, Check, ArrowRight, ClipboardList } from "lucide-react";
 
 export function OrderView({ currentProject, onProceedToQc }) {
@@ -63,16 +64,13 @@ export function OrderView({ currentProject, onProceedToQc }) {
     );
   }
 
-  const guideCount = (currentProject.designResult.gs || currentProject.designResult.guides || []).length;
-  const donorList = currentProject.designResult.os?.length
-    ? currentProject.designResult.os.map((d) => d.od || d.sequence || d.genomicDonor || "")
-    : currentProject.designResult.donors?.length
-      ? currentProject.designResult.donors.map((d) => typeof d === "string" ? d : (d.sequence || d.od || ""))
-      : currentProject.designResult.donor
-        ? [currentProject.designResult.donor]
-        : [];
-  const validDonors = donorList.filter(Boolean);
-  const primerCount = (currentProject.designResult.ps || []).length;
+  const reagents = projectDesignReagents(
+    currentProject.designResult,
+    currentProject.gene || currentProject.designResult.gene || ""
+  );
+  const guideCount = reagents.counts.guides;
+  const validDonors = reagents.donors.map((d) => d.sequence);
+  const primerCount = reagents.counts.primers;
 
   return (
     <div>

@@ -33,7 +33,8 @@ import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
 import { exonLabel } from "../../services/exonLabels.js";
 import { buildTakeHome } from "../../services/takeHome.js";
-import { TakeHomeCard } from "./TakeHomeCard.jsx";
+import { projectDesignReagents } from "../../services/projectReagents.js";
+import { DesignResult } from "./DesignResult.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
@@ -41,10 +42,6 @@ import { KoGuidePicker } from "./KoGuidePicker.jsx";
 import {
   Search,
   Play,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  ArrowRight,
   Upload,
   Download,
   FileText,
@@ -253,6 +250,8 @@ export function DesignView({
   const [isDesigning, setIsDesigning] = useState(false);
   const [designProgress, setDesignProgress] = useState("");
   const [error, setError] = useState(null);
+  // Result mode hides the parameter form; Edit design returns to Configure without clearing the result.
+  const [editingDesign, setEditingDesign] = useState(false);
 
   const setGeneInput = (gene) => onUpdateProject({ gene, geneMeta: null, genbankRaw: "" });
   const setEditType = (nextType) => {
@@ -273,6 +272,11 @@ export function DesignView({
   // Active design result
   const designResult = currentProject?.designResult || null;
   const takeHome = designResult ? buildTakeHome({ designResult, biomniReport: currentProject?.biomniReport || null }) : null;
+  const reagents = designResult
+    ? projectDesignReagents(designResult, geneMeta?.geneSymbol || geneInput.trim() || designResult.gene || "")
+    : null;
+  const showConfigure = !designResult || editingDesign;
+  const showResult = Boolean(designResult) && !editingDesign;
 
   // Gene Fetch via geneFetch.js (Ensembl or NCBI across Human, Mouse, Rat, Zebrafish) with fallback to local TP53 reference
   const handleFetchGene = async () => {
@@ -407,6 +411,7 @@ export function DesignView({
       caption,
       status: normalizedResult.procurement.status
     });
+    setEditingDesign(false);
   };
 
   // Generate design (with optional customGuides override)
@@ -540,8 +545,9 @@ export function DesignView({
       };
 
       onUpdateProject(updated);
-      // bring the take-home into view: it is the answer, the rest is behind it
-      setTimeout(() => document.getElementById("bench-take-home")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+      setEditingDesign(false);
+      // Result mode: product first (take-home + reagents); process stays collapsed below
+      setTimeout(() => document.getElementById("bench-design-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     } catch (err) {
       setError("Design calculation failed: " + (err.message || String(err)));
     } finally {
@@ -561,15 +567,6 @@ export function DesignView({
     executeDesign([spacer]);
   };
 
-  const getStatusBadge = (status) => {
-    if (status === "ready") {
-      return <span className="badge badge-ready"><CheckCircle size={14} /> READY FOR PROCUREMENT</span>;
-    } else if (status === "review") {
-      return <span className="badge badge-review"><AlertTriangle size={14} /> REVIEW REQUIRED</span>;
-    }
-    return <span className="badge badge-blocked"><XCircle size={14} /> BLOCKED</span>;
-  };
-
   const constructSelection = (editType === "ct" || editType === "nt")
     ? resolveConstructSelection(tag, editType)
     : null;
@@ -577,13 +574,15 @@ export function DesignView({
 
   return (
     <div>
-      {/* Parameter Input Card */}
-      <div className="card">
+      {/* Configure mode: parameter form. Hidden in Result mode so the product (reagents + continue) leads. */}
+      {showConfigure && <div className="card">
         <div className="card-title" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
           <div>
-            <span>1. Design your edit</span>
+            <span>{designResult ? "Edit design parameters" : "1. Design your edit"}</span>
             <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal", marginTop: "0.15rem" }}>
-              Choose any of the 6 ASSURED project types, fetch a MANE Select reference from Ensembl/NCBI or ClinVar, or launch a preset.
+              {designResult
+                ? "Change parameters and regenerate. Your current result stays until you generate again."
+                : "Choose any of the 6 ASSURED project types, fetch a MANE Select reference from Ensembl/NCBI or ClinVar, or launch a preset."}
             </div>
           </div>
 
@@ -1036,23 +1035,33 @@ export function DesignView({
                 {error}
               </div>
             )}
+
+            {designResult && (
+              <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setEditingDesign(false)}>
+                  Cancel edit — back to result
+                </button>
+              </div>
+            )}
           </>
         )}
-      </div>
+      </div>}
 
-      {/* Before a design exists the Co-Scientist panel is the way in; afterwards the take-home comes first and the panel is a closed reference below it. */}
+      {/* Before a design exists the Co-Scientist panel is the way in; Result mode demotes it under Advanced. */}
       {!designResult && <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />}
 
-      {designResult && (
-        <>
-          <TakeHomeCard
-            takeHome={takeHome}
-            onProceedToOrder={onProceedToOrder}
-            onDownloadReport={() => downloadReportHtml(currentProject, designResult)}
-            onDownloadOffTarget={() => { const built = downloadCasOffinderInput(currentProject, designResult); if (!built.ok) setError(`Cas-OFFinder input: ${built.error}`); }}
-            onChoosePair={designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 ? () => document.getElementById("bench-ko-picker")?.scrollIntoView({ behavior: "smooth", block: "start" }) : null}
-          />
-
+      {showResult && (
+        <DesignResult
+          currentProject={currentProject}
+          designResult={designResult}
+          takeHome={takeHome}
+          reagents={reagents}
+          onProceedToOrder={onProceedToOrder}
+          onEditDesign={() => setEditingDesign(true)}
+          onDownloadReport={() => downloadReportHtml(currentProject, designResult)}
+          onDownloadOffTarget={() => { const built = downloadCasOffinderInput(currentProject, designResult); if (!built.ok) setError(`Cas-OFFinder input: ${built.error}`); }}
+          onChoosePair={designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 ? () => document.getElementById("bench-ko-picker")?.scrollIntoView({ behavior: "smooth", block: "start" }) : null}
+        >
           {designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 && (
             <details id="bench-ko-picker" className="card" style={{ marginTop: "1rem", borderColor: designResult.koPairChoice?.source === "user" ? "var(--primary)" : undefined }} open>
               <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
@@ -1115,11 +1124,16 @@ export function DesignView({
             </details>
           )}
 
-          <div style={{ marginTop: "1rem" }}>
-            <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} collapsed />
-            <AlphaGenomeReview key={currentProject.id} project={currentProject} />
-          </div>
-        </>
+          <details className="card" style={{ marginTop: "1rem" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
+              Advanced: Co-Scientist &amp; enzyme compare
+            </summary>
+            <div style={{ marginTop: "0.75rem" }}>
+              <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />
+              <AlphaGenomeReview key={currentProject.id} project={currentProject} />
+            </div>
+          </details>
+        </DesignResult>
       )}
     </div>
   );
