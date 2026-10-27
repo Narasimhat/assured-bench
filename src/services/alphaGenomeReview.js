@@ -18,14 +18,108 @@ const rc = sequence => [...sequence].reverse().map(b => ({ A: "T", C: "G", G: "C
 const stable = value => value && typeof value === "object"
   ? Array.isArray(value) ? value.map(stable) : Object.fromEntries(Object.keys(value).sort().map(k => [k, stable(value[k])]))
   : value;
+
+/** Normalize common human assembly synonyms for AlphaGenome (GRCh38 only). */
+export function normalizeHumanAssembly(name) {
+  const raw = String(name || "").trim();
+  if (/^(?:GRCh38(?:\.p\d+)?|hg38)$/i.test(raw)) return "GRCh38";
+  if (/^(?:GRCh37(?:\.p\d+)?|hg19)$/i.test(raw)) return "GRCh37";
+  return raw || null;
+}
+
+function chromosomeFromNcAccession(accession) {
+  const m = String(accession || "").match(/^NC_0*(\d+)\./i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (n >= 1 && n <= 22) return String(n);
+  if (n === 23) return "X";
+  if (n === 24) return "Y";
+  return null;
+}
+
+/**
+ * Detect GRCh38 genomic mapping from GenBank text for research AlphaGenome review.
+ * Supports Assured/Ensembl Location lines and common region DEFINITION annotations.
+ * Returns null when coordinates cannot be verified — never invents an assembly or start.
+ */
+export function detectGenomicMappingFromGenbank(raw) {
+  const text = String(raw || "");
+  if (!text.trim()) return null;
+
+  const canonical = readGenomicReferenceMetadata(text);
+  if (canonical) {
+    return {
+      assembly: normalizeHumanAssembly(canonical.assembly) || canonical.assembly,
+      chromosome: String(canonical.chromosome).replace(/^chr/i, ""),
+      referenceStart: canonical.start,
+      orientation: canonical.orientation === -1 ? -1 : 1,
+      end: canonical.end,
+      source: "location-chromosome",
+      label: "GenBank Location (chromosome:assembly:chr:start:end:strand)",
+    };
+  }
+
+  const importedAssembly = text.match(/Imported from genome:\s*(GRCh38(?:\.p\d+)?|hg38|GRCh37(?:\.p\d+)?|hg19)\b/i);
+  const chrRange = text.match(/Location:\s*chr([0-9XYM]+)\s+(\d+)\s*-\s*(\d+)\b/i);
+  if (importedAssembly && chrRange) {
+    const start = Number(chrRange[2]);
+    const end = Number(chrRange[3]);
+    if (Number.isSafeInteger(start) && Number.isSafeInteger(end) && end >= start) {
+      return {
+        assembly: normalizeHumanAssembly(importedAssembly[1]),
+        chromosome: chrRange[1].toUpperCase(),
+        referenceStart: start,
+        orientation: 1,
+        end,
+        source: "location-chr-range",
+        label: "GenBank Location (chrN start-end) with imported assembly",
+      };
+    }
+  }
+
+  const region = text.match(
+    /\b(NC_\d+\.\d+)\s*:\s*(\d+)\s*\.\.\s*(\d+)\s*\((GRCh38(?:\.p\d+)?|hg38|GRCh37(?:\.p\d+)?|hg19)\)[^\n]{0,80}?\b(plus|minus|forward|reverse)\s+strand\b/i
+  );
+  if (region) {
+    const chrom = chromosomeFromNcAccession(region[1]);
+    const start = Number(region[2]);
+    const end = Number(region[3]);
+    if (chrom && Number.isSafeInteger(start) && Number.isSafeInteger(end) && end >= start) {
+      const strand = region[5].toLowerCase();
+      return {
+        assembly: normalizeHumanAssembly(region[4]),
+        chromosome: chrom,
+        referenceStart: start,
+        orientation: strand === "minus" || strand === "reverse" ? -1 : 1,
+        end,
+        source: "definition-nc-region",
+        label: "DEFINITION NC accession genomic region",
+      };
+    }
+  }
+
+  return null;
+}
+
 export async function reviewRequestId(payload) {
   const bytes = new TextEncoder().encode(JSON.stringify(stable(payload)));
   return [...new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes))].map(n => n.toString(16).padStart(2, "0")).join("");
 }
 
+/** Mapping used for AlphaGenome form auto-fill and conflict checks. */
 export function alphaGenomeMapping(project) {
-  const meta = readGenomicReferenceMetadata(project?.genbankRaw || "");
-  return meta ? { assembly: meta.assembly, chromosome: meta.chromosome, referenceStart: meta.start, orientation: meta.orientation } : null;
+  const detected = detectGenomicMappingFromGenbank(project?.genbankRaw || "");
+  if (!detected) return null;
+  return {
+    assembly: detected.assembly,
+    chromosome: detected.chromosome,
+    referenceStart: detected.referenceStart,
+    orientation: detected.orientation,
+    end: detected.end,
+    source: detected.source,
+    label: detected.label,
+    grch38: detected.assembly === "GRCh38",
+  };
 }
 
 /** A single matched donor, not the union of blocking edits from different donor alternatives. */

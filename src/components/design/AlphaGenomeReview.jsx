@@ -30,9 +30,20 @@ export function AlphaGenomeReview({ project }) {
 
   useEffect(() => {
     const mapping = alphaGenomeMapping(project);
-    setChromosome(mapping?.chromosome || ""); setReferenceStart(mapping?.referenceStart || "");
-    setOrientation(mapping?.orientation || ""); setConfirmed(false); setDonorIndex(0);
+    setChromosome(mapping?.chromosome || "");
+    setReferenceStart(mapping?.referenceStart != null ? String(mapping.referenceStart) : "");
+    setOrientation(mapping?.orientation != null ? String(mapping.orientation) : "");
+    setConfirmed(false);
+    setDonorIndex(0);
   }, [project.id, project.genbankRaw]);
+
+  const detectedMapping = alphaGenomeMapping(project);
+  const mappingAutoFilled = Boolean(
+    detectedMapping?.grch38
+    && String(detectedMapping.chromosome) === String(chromosome)
+    && Number(detectedMapping.referenceStart) === Number(referenceStart)
+    && Number(detectedMapping.orientation) === Number(orientation)
+  );
 
   async function exportRequest() {
     const current = generation.current;
@@ -74,6 +85,37 @@ export function AlphaGenomeReview({ project }) {
     </p>
     {!supported ? <p className="muted">Generate a point-mutation or genomic SNP design to review a matched donor. Knockout and tag reviews are not supported in this research adapter yet.</p> : <>
       <p className="muted">Exporting stays local. Running the Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome. Your API key stays in your local environment — never in the browser or Vercel.</p>
+      {detectedMapping?.grch38 ? (
+        <p role="status" style={{ margin: "0.5rem 0", padding: "0.5rem 0.75rem", borderRadius: 8, background: "#ecfdf5", border: "1px solid #a7f3d0", fontSize: "0.88rem" }}>
+          <strong>Mapping detected from GenBank.</strong>{" "}
+          {detectedMapping.label}: chr{detectedMapping.chromosome}:{detectedMapping.referenceStart}
+          {detectedMapping.end ? `–${detectedMapping.end}` : ""} · strand {detectedMapping.orientation === -1 ? "−1" : "+1"} · {detectedMapping.assembly}.
+          Fields below were auto-filled — confirm them before export.
+          {!mappingAutoFilled && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ marginLeft: "0.5rem", padding: "0.15rem 0.5rem", fontSize: "0.78rem" }}
+              onClick={() => {
+                setChromosome(String(detectedMapping.chromosome));
+                setReferenceStart(String(detectedMapping.referenceStart));
+                setOrientation(String(detectedMapping.orientation));
+                setConfirmed(false);
+              }}
+            >
+              Restore detected mapping
+            </button>
+          )}
+        </p>
+      ) : detectedMapping && !detectedMapping.grch38 ? (
+        <p role="status" style={{ margin: "0.5rem 0", padding: "0.5rem 0.75rem", borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a", fontSize: "0.88rem" }}>
+          Annotation found for {detectedMapping.assembly || "an unsupported assembly"} — AlphaGenome research review needs human GRCh38. No liftover is applied.
+        </p>
+      ) : (
+        <p className="muted" style={{ margin: "0.5rem 0" }}>
+          No verified genomic Location was found in this GenBank record (common for some RefSeqGene NG_ files). Enter chromosome, start and orientation manually, or re-fetch an Ensembl GRCh38 region.
+        </p>
+      )}
       <fieldset disabled={busy} style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
         <legend>Human GRCh38 reference mapping</legend>
         <label>Chromosome <input aria-label="AlphaGenome chromosome" value={chromosome} onChange={e => { setChromosome(e.target.value); setConfirmed(false); }} placeholder="17" size={5} /></label>

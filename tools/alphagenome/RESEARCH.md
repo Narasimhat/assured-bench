@@ -17,11 +17,11 @@ Hosted AlphaGenome access is offered by DeepMind for **non-commercial research**
 
 ## Research goals (in order)
 
-1. **Blocker safety** — detect when silent PAM/seed changes add large splice/expression deltas beyond the intended edit.
-2. **Tissue-matched reviews** — presets for common research lines (iPSC, hepatocyte, cardiomyocyte, T cell, etc.).
-3. **Lower friction** — auto-fill GRCh38 mapping from annotated GenBank when available.
-4. **Report attachment** — optional fold in the design HTML for research exports (still not a gate).
-5. **Later** — tag/knock-in junction windows; donor A vs B comparison.
+1. **Lower friction (done on this branch)** — auto-fill GRCh38 mapping from annotated GenBank when available (Assured Location lines, Ensembl `chrN start-end`, NC region DEFINITION). User still confirms before export; NG_ RefSeqGene records without coordinates are not invented.
+2. **Tissue-matched reviews (done)** — presets for common research lines (iPSC, hepatocyte, cardiomyocyte, T cell, etc.).
+3. **Report attachment** — optional fold in the design HTML for research exports (still not a gate).
+4. **Donor A vs B** — compare blocker layouts for the same intended edit.
+5. **Later** — tag/knock-in junction windows; blocker-safety watch lines in take-home.
 
 ## How researchers use it today
 

@@ -102,3 +102,37 @@ test("research tissue presets are ontology IDs AlphaGenome can be asked for", as
     assert.ok(tissue.label.includes(tissue.id));
   }
 });
+
+test("step 1: GenBank annotations auto-detect GRCh38 mapping for AlphaGenome", async () => {
+  const { detectGenomicMappingFromGenbank, normalizeHumanAssembly, alphaGenomeMapping } = await import("../src/services/alphaGenomeReview.js");
+  assert.equal(normalizeHumanAssembly("hg38"), "GRCh38");
+  assert.equal(normalizeHumanAssembly("GRCh38.p14"), "GRCh38");
+
+  const canonical = detectGenomicMappingFromGenbank("COMMENT Location: chromosome:GRCh38:17:7661779:7687538:1");
+  assert.deepEqual(
+    { assembly: canonical.assembly, chromosome: canonical.chromosome, referenceStart: canonical.referenceStart, orientation: canonical.orientation },
+    { assembly: "GRCh38", chromosome: "17", referenceStart: 7661779, orientation: 1 }
+  );
+
+  const apoe = readFileSync(new URL("../public/references/apoe-ensg00000130203.gb", import.meta.url), "utf8");
+  const fromApoe = detectGenomicMappingFromGenbank(apoe);
+  assert.equal(fromApoe.assembly, "GRCh38");
+  assert.equal(fromApoe.chromosome, "19");
+  assert.equal(fromApoe.referenceStart, 44905754);
+  assert.equal(fromApoe.orientation, 1);
+  assert.equal(fromApoe.source, "location-chr-range");
+
+  const dipk = readFileSync(new URL("../public/references/dipk2a-region.gb", import.meta.url), "utf8");
+  const fromDipk = detectGenomicMappingFromGenbank(dipk);
+  assert.equal(fromDipk.assembly, "GRCh38");
+  assert.equal(fromDipk.chromosome, "3");
+  assert.equal(fromDipk.referenceStart, 143971198);
+  assert.equal(fromDipk.orientation, 1);
+  assert.equal(fromDipk.source, "definition-nc-region");
+
+  const tp53 = readFileSync(new URL("../public/references/tp53-NG_017013.2.gb", import.meta.url), "utf8");
+  assert.equal(detectGenomicMappingFromGenbank(tp53), null, "RefSeqGene NG_ without genomic interval is not invented");
+
+  assert.equal(alphaGenomeMapping({ genbankRaw: apoe }).grch38, true);
+  assert.equal(alphaGenomeMapping({ genbankRaw: tp53 }), null);
+});
