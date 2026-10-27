@@ -13,7 +13,13 @@ test("CSP: scripts only from the app's own files, no eval, no plugins, no base-t
   assert.deepEqual(csp["script-src"], ["'self'"]);
   assert.deepEqual(csp["object-src"], ["'none'"]); assert.deepEqual(csp["base-uri"], ["'self'"]); assert.deepEqual(csp["frame-ancestors"], ["'self'"]);
   assert.deepEqual(csp["default-src"], ["'self'"]);
-  for (const [name, values] of Object.entries(csp)) { assert.ok(!values.includes("*"), name); assert.ok(!values.some((v) => v === "http:" || v.startsWith("http://")), name); assert.ok(!values.includes("'unsafe-eval'"), name); }
+  // Plain http appears only in connect-src, only for this computer (the optional local AlphaGenome helper, tools/alphagenome/rank.py --serve).
+  const LOOPBACK_CONNECT = ["http://127.0.0.1:*", "http://localhost:*"];
+  for (const [name, values] of Object.entries(csp)) {
+    assert.ok(!values.includes("*"), name); assert.ok(!values.includes("'unsafe-eval'"), name); assert.ok(!values.includes("http:"), name);
+    const plainHttp = values.filter((v) => v.startsWith("http://"));
+    assert.deepEqual(plainHttp, name === "connect-src" ? LOOPBACK_CONNECT : [], `${name}: plain http`);
+  }
   assert.ok(!csp["script-src"].includes("'unsafe-inline'"));
 });
 
@@ -26,7 +32,8 @@ test("CSP matches what the app loads: stylesheet and fonts from Google Fonts, bl
   const origins = new Set();
   const walk = (dir) => { for (const f of fs.readdirSync(dir, { withFileTypes: true })) { const p = path.join(dir, f.name); if (f.isDirectory()) walk(p); else if (/\.(jsx?|mjs)$/.test(f.name)) for (const m of fs.readFileSync(p, "utf8").matchAll(/["'`](http:\/\/[^"'`$ ]+)/g)) origins.add(`${p}: ${m[1]}`); } };
   walk(path.join(ROOT, "src"));
-  const insecure = [...origins].filter((o) => !/w3\.org|openxmlformats/.test(o));
+  // the only plain-http origins the app may request are this computer's, for the local AlphaGenome helper (connect-src lists exactly those)
+  const insecure = [...origins].filter((o) => !/w3\.org|openxmlformats/.test(o) && !/: http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/.test(o));
   assert.deepEqual(insecure, [], "an http:// origin in the source would be blocked by the policy");
 });
 
