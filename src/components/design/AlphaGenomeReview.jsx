@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { alphaGenomeMapping, buildAlphaGenomeRequest, validateAlphaGenomeReport } from "../../services/alphaGenomeReview.js";
+import { Search } from "lucide-react";
+import { alphaGenomeMapping, buildAlphaGenomeRequest, intendedEditIndex, validateAlphaGenomeReport } from "../../services/alphaGenomeReview.js";
+import { HUMAN_CHROMOSOMES, normalizeChromosome } from "../../services/candidateRanking.js";
+import { mappingNote, useMappingLookup } from "./useMappingLookup.js";
 
-export function AlphaGenomeReview({ project }) {
+export function AlphaGenomeReview({ project, lookupFetch, initialLookup = null }) {
   const declared = alphaGenomeMapping(project);
   const [chromosome, setChromosome] = useState(declared?.chromosome || "");
   const [referenceStart, setReferenceStart] = useState(declared?.referenceStart || "");
@@ -27,6 +30,29 @@ export function AlphaGenomeReview({ project }) {
     setChromosome(mapping?.chromosome || ""); setReferenceStart(mapping?.referenceStart || "");
     setOrientation(mapping?.orientation || ""); setConfirmed(false); setDonorIndex(0);
   }, [project.id, project.genbankRaw]);
+
+  // The position of the reference in GRCh38, from the design (gene and edit site) and Ensembl, when the record does not state it.
+  const supported = ["pm", "genomic-snv"].includes(project.designResult?.type);
+  const geneSymbol = project.designResult?.gene || project.gene;
+  const editIndex = supported ? intendedEditIndex(project) : null;
+  const current = useRef({});
+  current.current = { chromosome, referenceStart };
+  const { lookup, start: runLookup } = useMappingLookup({
+    enabled: supported && !declared && Boolean(geneSymbol) && editIndex != null, gene: geneSymbol, sequence: project.designResult?.gb?.genomicSequence, editIndex,
+    orientations: [1, -1], resetKey: project.genbankRaw, fetchImpl: lookupFetch, initial: initialLookup,
+    apply: (out, overwrite) => {
+      if (!overwrite && (current.current.chromosome || current.current.referenceStart)) return; // never replace what the user typed
+      setChromosome(out.chromosome); setReferenceStart(out.referenceStart); setOrientation(String(out.orientation)); setConfirmed(false);
+    },
+  });
+  const start = Number(referenceStart);
+  const missing = [
+    ...(HUMAN_CHROMOSOMES.includes(normalizeChromosome(chromosome)) ? [] : ["select the chromosome"]),
+    ...(Number.isSafeInteger(start) && start >= 1 ? [] : ["enter the GRCh38 position (1-based) of the first base of the uploaded sequence"]),
+    ...(["1", "-1"].includes(String(orientation)) ? [] : ["choose the orientation"]),
+    ...(confirmed ? [] : ["tick the confirmation"]),
+  ];
+  const fromLookup = lookup.status === "ok" && String(lookup.result.referenceStart) === String(referenceStart) && lookup.result.chromosome === normalizeChromosome(chromosome) && String(lookup.result.orientation) === String(orientation);
 
   async function exportRequest() {
     const current = generation.current;
@@ -57,7 +83,6 @@ export function AlphaGenomeReview({ project }) {
     finally { if (generation.current === current) setBusy(false); }
   }
 
-  const supported = ["pm", "genomic-snv"].includes(project.designResult?.type);
   return <details className="card alphagenome-review" style={{ marginTop: "1rem", padding: "1rem" }}>
     <summary><strong>AlphaGenome · optional donor functional review</strong></summary>
     <p>Compare reference, intended substitution, and intended substitution plus donor blockers for expression and splicing effects. Results are exploratory model evidence and do not change guide ranking or QC decisions.</p>
@@ -65,7 +90,7 @@ export function AlphaGenomeReview({ project }) {
       <p className="muted">Exporting stays local. Running the Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome. Your API key stays in your local environment.</p>
       <fieldset disabled={busy} style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
         <legend>Human GRCh38 reference mapping</legend>
-        <label>Chromosome <input aria-label="AlphaGenome chromosome" value={chromosome} onChange={e => { setChromosome(e.target.value); setConfirmed(false); }} placeholder="17" size={5} /></label>
+        <label>Chromosome <select aria-label="AlphaGenome chromosome" value={HUMAN_CHROMOSOMES.includes(normalizeChromosome(chromosome)) ? normalizeChromosome(chromosome) : ""} onChange={e => { setChromosome(e.target.value); setConfirmed(false); }}><option value="">Select…</option>{HUMAN_CHROMOSOMES.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
         <label>Reference start (1-based, chromosome plus) <input type="number" min="1" value={referenceStart} onChange={e => { setReferenceStart(e.target.value); setConfirmed(false); }} /></label>
         <label>Uploaded reference orientation <select value={orientation} onChange={e => { setOrientation(e.target.value); setConfirmed(false); }}>
           <option value="">Select orientation</option><option value="1">Chromosome plus (+1)</option><option value="-1">Chromosome minus (−1)</option>
@@ -77,8 +102,10 @@ export function AlphaGenomeReview({ project }) {
         <label>Context <select value={sequenceLength} onChange={e => setSequenceLength(Number(e.target.value))}>
           <option value={16384}>16,384 bp · local context</option><option value={131072}>131,072 bp · wider context</option>
         </select></label>
+        <button type="button" className="btn btn-secondary" disabled={lookup.status === "running" || !geneSymbol || editIndex == null} onClick={() => runLookup({ overwrite: true })} title="Looks up the gene's position in Ensembl (GRCh38), finds your sequence inside it and compares them. Only the gene symbol and coordinates are sent."><Search size={14} /> Fill from design</button>
         <label className="alpha-review-confirmation" style={{ flexBasis: "100%" }}><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I verified that this reference maps to human GRCh38 at the chromosome start and orientation above.</label>
       </fieldset>
+      <p role="note" className="muted">{mappingNote({ missing, detected: Boolean(declared), lookup, geneSymbol, ready: !missing.length, fromLookup, before: "Before exporting", readySuffix: "Mapping ready: the review tool checks it against GRCh38 before predicting and refuses a mismatch." })}</p>
       <p className="muted">Choose an ontology identifier supported by AlphaGenome output metadata for your experimental tissue/cell type. A missing match is reported as unavailable; no substitute tissue is chosen.</p>
       <div className="alpha-review-actions" style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "0.75rem" }}>
         <button className="btn btn-secondary" type="button" disabled={busy || !confirmed} onClick={exportRequest}>1. Export review request</button>

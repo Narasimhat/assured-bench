@@ -172,10 +172,12 @@ test("autofill from the design: the lookup is offered, runs only for a reference
   });
 });
 
-test("the picker starts the lookup after mount only when the location is unreadable and a gene is known, and cancels it when the reference changes", () => {
+test("the picker hands the lookup to the shared hook, enabled only when the location is unreadable and a gene is known", () => {
   const source = read("../src/components/design/PmCandidatePicker.jsx");
-  assert.match(source, /const lookupWanted = !detected && Boolean\(built && !built\.err && geneSymbol\);/);
-  assert.match(source, /useEffect\(\(\) => \{ if \(lookupWanted\) runLookup\(\{ overwrite: false \}\); return \(\) => \{ lookupRun\.current \+= 1; \}; \}, \[project\?\.genbankRaw, lookupWanted\]\);/);
-  assert.match(source, /if \(run !== lookupRun\.current\) return;/);
+  assert.match(source, /useMappingLookup\(\{\s*enabled: !detected && Boolean\(built && !built\.err && geneSymbol\)/);
+  assert.match(source, /orientations: \[1\]/, "this panel can use plus-strand references only");
   assert.match(source, /\(overwrite \|\| \(!m\.chromosome && !m\.referenceStart\) \? \{ chromosome: out\.chromosome, referenceStart: out\.referenceStart, confirmed: false \} : m\)/, "an automatic result never overwrites what the user typed; the confirmation is never pre-ticked");
+  const hook = read("../src/components/design/useMappingLookup.js");
+  assert.match(hook, /if \(id !== run\.current\) return;/);
+  assert.match(hook, /useEffect\(\(\) => \{ if \(enabled\) start\(\{ overwrite: false \}\); return \(\) => \{ run\.current \+= 1; \}; \}, \[resetKey, enabled\]\)/);
 });

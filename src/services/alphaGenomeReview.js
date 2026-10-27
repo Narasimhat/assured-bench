@@ -16,6 +16,18 @@ export function alphaGenomeMapping(project) {
   return meta ? { assembly: meta.assembly, chromosome: meta.chromosome, referenceStart: meta.start, orientation: meta.orientation } : null;
 }
 
+/** Index (0-based, in the uploaded reference) of the intended substitution of the current design, or null; used to place the reference on the genome. */
+export function intendedEditIndex(project) {
+  try {
+    const result = project?.designResult;
+    if (!result || result.err || !["pm", "genomic-snv"].includes(result.type)) return null;
+    const spec = buildQcDesignSpec(result);
+    if (spec.err) return null;
+    const marker = (spec.markers || []).find(m => m.role === "intended");
+    return marker ? marker.pos + spec.reference.offset : null;
+  } catch { return null; }
+}
+
 /** A single matched donor, not the union of blocking edits from different donor alternatives. */
 export async function buildAlphaGenomeRequest(project, {
   assembly, chromosome, referenceStart, orientation, ontologyTerm, donorIndex = 0,
@@ -28,9 +40,9 @@ export async function buildAlphaGenomeRequest(project, {
   if (!mappingConfirmed) throw new Error("Confirm the assembly and genomic mapping of the uploaded reference.");
   if (assembly !== "GRCh38") throw new Error("This first integration supports human GRCh38 only; no automatic liftover or assembly inference.");
   const chrom = String(chromosome || "").replace(/^chr/i, "").toUpperCase();
-  if (!/^(?:[1-9]|1\d|2[0-2]|X|Y)$/.test(chrom)) throw new Error("Choose a human chromosome 1–22, X or Y.");
+  if (!/^(?:[1-9]|1\d|2[0-2]|X|Y)$/.test(chrom)) throw new Error("Select the human chromosome the uploaded reference sits on (1–22, X or Y). Bench could not read it from the reference, so it has to be chosen.");
   if (!Number.isSafeInteger(referenceStart) || referenceStart < 1 || ![1, -1].includes(orientation)) {
-    throw new Error("Provide the 1-based chromosome start and reference orientation (+1 or -1).");
+    throw new Error("Enter the 1-based chromosome position of the first base of the uploaded reference and choose its orientation (+1 or −1).");
   }
   if (typeof ontologyTerm !== "string" || !/^(?:UBERON|CL|EFO):\d+$/.test(ontologyTerm)) {
     throw new Error("Provide a tissue/cell ontology identifier from AlphaGenome output metadata (UBERON, CL or EFO).");

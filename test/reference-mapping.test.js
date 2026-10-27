@@ -138,3 +138,31 @@ test("anchor choice: the stretch before the edit first, then after, then further
   assert.deepEqual(anchorStarts(100, 10), [11], "an edit near the start has only the stretch after it");
   assert.deepEqual(anchorStarts(30, 10), [], "a sequence shorter than the stretch has none");
 });
+
+const rc = (seq) => [...seq].reverse().map((b) => ({ A: "T", C: "G", G: "C", T: "A", N: "N" }[b])).join("");
+
+test("a reference written along a reverse-strand gene is placed after reverse-complementing it, when the caller can use that", async () => {
+  const origin = 50000; const genome = randomDna(6000, 21);
+  const gene = { strand: -1, start: origin + 500, end: origin + 5499, seq_region_name: "17", display_name: "REV1" };
+  const ens = () => fakeEnsembl({ genome, origin, gene });
+  // the record starts 300 bases into the genome and ends at 5800; written along the gene, so it is the reverse complement of the chromosome there
+  const record = rc(genome.slice(300, 5800));
+  const genomeEdit = 3000; const editIndex = record.length - 1 - (genomeEdit - 300);
+  const out = await resolveReferenceMapping({ gene: "REV1", sequence: record, editIndex, orientations: [1, -1], fetchImpl: ens().fetchImpl, sleep: noWait });
+  assert.equal(out.ok, true);
+  assert.deepEqual([out.chromosome, out.orientation, out.referenceStart, out.referenceEnd], ["17", -1, origin + 300, origin + 5799], "start is the lowest chromosome coordinate the record covers");
+  assert.deepEqual(out.comparison, { length: 5500, compared: 5500, mismatches: 0, identity: 1 });
+  assert.match(describeMapping(out), /^Filled from Ensembl: REV1 is on chromosome 17 \(GRCh38\) and the uploaded sequence is written on the opposite strand \(reverse complement of the chromosome\) and covers chromosome positions from 50,300; it matches GRCh38 at all 5,500 bases\./);
+  // the position convention is the one the review tool uses: index i of the record is chromosome position start + length - 1 - i
+  assert.equal(out.referenceStart + record.length - 1 - editIndex, origin + genomeEdit);
+  // a caller that only handles plus-strand references is told, and nothing but the lookup is requested
+  const plusOnly = ens();
+  const refused = await resolveReferenceMapping({ gene: "REV1", sequence: record, editIndex, fetchImpl: plusOnly.fetchImpl, sleep: noWait });
+  assert.deepEqual([refused.ok, refused.reason], [false, "minus-strand"]); assert.equal(plusOnly.log.length, 1);
+  // a plus-strand gene whose record happens to be written the other way round is recognised too, not silently misplaced
+  const plusGene = { strand: 1, start: origin + 500, end: origin + 5499, seq_region_name: "17", display_name: "FWD1" };
+  const backwards = await resolveReferenceMapping({ gene: "FWD1", sequence: record, editIndex, orientations: [1, -1], fetchImpl: fakeEnsembl({ genome, origin, gene: plusGene }).fetchImpl, sleep: noWait });
+  assert.deepEqual([backwards.ok, backwards.orientation], [true, -1]);
+  const notThere = await resolveReferenceMapping({ gene: "FWD1", sequence: randomDna(5500, 22), editIndex: 2700, orientations: [1, -1], fetchImpl: fakeEnsembl({ genome, origin, gene: plusGene }).fetchImpl, sleep: noWait });
+  assert.equal(notThere.reason, "not-found-in-gene"); assert.match(notThere.message, /in either orientation/);
+});

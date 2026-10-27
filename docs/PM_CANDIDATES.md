@@ -136,8 +136,12 @@ APOE and TP53 candidate.
   bases, a gene on the reverse strand, another assembly, or a span over 2 Mb is not filled and the page says why. Only the gene
   symbol and coordinates are sent to Ensembl; the reference sequence stays in the browser. The lookup starts by itself only when
   the record does not state its location, never overwrites values you typed, never ticks the confirmation, and can be run again
-  with "Fill from design". Cross-check: for the bundled APOE record it returns chr19:44905754, the position the record states,
-  with 3,640 of 3,640 bases identical (checked against live Ensembl and, in the test suite, against a stand-in for it).
+  with "Fill from design". The older single-donor review panel (Analysis & evidence) uses the same lookup and also accepts a record written
+  on the opposite strand, which is what RefSeqGene records of reverse-strand genes are: it is placed after reverse-complementing it and
+  reported as orientation -1 with the lowest chromosome coordinate it covers as its start. Cross-check: for the bundled APOE record it returns chr19:44905754, the position the record states,
+  with 3,640 of 3,640 bases identical (checked against live Ensembl and, in the test suite, against a stand-in for it). For the bundled
+  TP53 RefSeqGene record (NG_017013.2, 32,772 bp) it returns chr17:7,659,779-7,692,550, orientation -1, identical at every base, and the
+  review request then puts R175H at chr17:7,675,088 C>T, the position dbSNP and ClinVar give (rs28934578; NG_017013.2:g.17463G>A).
 - A ranking, whether imported or run through the helper, lives in the open page only; run it again to reproduce it (the request is deterministic and the model's predictions repeat exactly).
 - Model output is uncalibrated and does not predict cutting, HDR, clone fitness or protein function.
 
@@ -145,7 +149,8 @@ APOE and TP53 candidate.
 
 `npm test` (candidate set, ranking service, reference-position lookup, helper client, picker render tests, parity with the saved APOE run) and, with the
 AlphaGenome SDK installed, `cd tools/alphagenome && PYTHONPATH=. python3 -m unittest test_rank test_helper test_review test_context_catalog`.
-`test/fixtures/alphagenome-helper/wire.json` is what the Python helper sent in its own tests; the page's tests replay it, and
+`test/picker-interaction.test.js` and `test/review-panel-interaction.test.js` run the two panels as components (react-test-renderer, a
+dev-only dependency) with Ensembl and the helper replaced by fakes. `test/fixtures/alphagenome-helper/wire.json` is what the Python helper sent in its own tests; the page's tests replay it, and
 `test_helper.py` fails when it goes stale (`UPDATE_WIRE_FIXTURE=1` regenerates it). Neither suite runs a real browser, a real
 listening socket across processes, or the hosted model; first use on your machine is the integration test.
 The parity fixtures (`test/fixtures/alphagenome-ranking/`) are real predictions from the earlier APOE R176C run; the fake

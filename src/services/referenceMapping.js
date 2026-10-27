@@ -8,6 +8,9 @@
  *   3. that fixes the position of the reference's first base, and the whole reference is then compared with the genome there.
  * Only the gene symbol and coordinates leave the browser; the reference sequence is compared locally.
  *
+ * A reference written along a reverse-strand gene (RefSeqGene records are) is the reverse complement of the chromosome; it is placed the same way
+ * after reverse-complementing it, and the result says so (orientation -1, start = the lowest chromosome coordinate it covers).
+ *
  * The result is a proposal. A mapping that is off by even one base would put the edit on a different base, so the caller still shows the
  * numbers and the comparison, and the user confirms. A reference that differs from GRCh38 at more than 1% of its bases is refused.
  */
@@ -36,6 +39,8 @@ async function get(url, { fetchImpl, sleep }, asText = false) {
 
 const fail = (reason, message, extra = {}) => ({ ok: false, reason, message, ...extra });
 const fmt = (n) => Number(n).toLocaleString("en-US");
+const COMPLEMENT = { A: "T", C: "G", G: "C", T: "A", N: "N" };
+const reverseComplement = (seq) => [...seq].reverse().map((b) => COMPLEMENT[b]).join("");
 
 /** First anchors tried: the stretch just before the edit and just after it, then the same further out. */
 export function anchorStarts(length, editIndex, k = ANCHOR_LENGTH) {
@@ -51,10 +56,12 @@ function occurrences(haystack, needle, limit = 2) {
 }
 
 /**
- * @param {{ gene: string, sequence: string, editIndex: number, fetchImpl?: Function, sleep?: Function }} input  editIndex is 0-based in `sequence`.
- * @returns {Promise<object>} { ok: true, chromosome, referenceStart, assembly, gene, comparison, anchor } or { ok: false, reason, message }
+ * @param {{ gene: string, sequence: string, editIndex: number, orientations?: number[], fetchImpl?: Function, sleep?: Function }} input
+ *   editIndex is 0-based in `sequence`. orientations lists the placements the caller can use: [1] (default) only a reference that reads along the chromosome's
+ *   plus strand; [1, -1] also one written on the opposite strand.
+ * @returns {Promise<object>} { ok: true, chromosome, referenceStart, referenceEnd, orientation, assembly, gene, comparison, anchor } or { ok: false, reason, message }
  */
-export async function resolveReferenceMapping({ gene, sequence, editIndex, fetchImpl = (...a) => globalThis.fetch(...a), sleep = defaultSleep } = {}) {
+export async function resolveReferenceMapping({ gene, sequence, editIndex, orientations = [1], fetchImpl = (...a) => globalThis.fetch(...a), sleep = defaultSleep } = {}) {
   const ctx = { fetchImpl, sleep };
   const symbol = String(gene || "").trim();
   if (!/^[A-Za-z0-9@._-]{1,30}$/.test(symbol)) return fail("no-gene", "The design does not name a gene, so there is nothing to look up.");
@@ -70,7 +77,8 @@ export async function resolveReferenceMapping({ gene, sequence, editIndex, fetch
     const chromosome = String(g?.seq_region_name ?? "").replace(/^chr/i, "").toUpperCase();
     if (g?.object_type !== "Gene" || !HUMAN_CHROMOSOME.test(chromosome)) return fail("not-found", `${symbol} is not a gene on a primary human chromosome in Ensembl.`);
     if (g.assembly_name !== "GRCh38") return fail("assembly", `Ensembl reports ${symbol} on ${g.assembly_name || "an unknown assembly"}; this tool uses GRCh38.`);
-    if (Number(g.strand) !== 1) return fail("minus-strand", `${symbol} is on the reverse strand. Regulatory comparison supports plus-strand genes only, so no mapping was looked up.`);
+    const reverseGene = Number(g.strand) === -1;
+    if (Number(g.strand) !== 1 && !(reverseGene && orientations.includes(-1))) return fail("minus-strand", `${symbol} is on the reverse strand. This tool supports plus-strand genes only, so no mapping was looked up.`);
     const geneStart = Number(g.start), geneEnd = Number(g.end), span = geneEnd - geneStart + 1;
     if (!Number.isSafeInteger(geneStart) || !Number.isSafeInteger(geneEnd) || span < 1) return fail("not-found", `Ensembl returned no usable position for ${symbol}.`);
     if (span > MAX_GENE_SPAN) return fail("too-large", `${symbol} spans ${fmt(span)} bases; the automatic lookup stops at ${fmt(MAX_GENE_SPAN)}. Enter the position by hand.`);
@@ -81,36 +89,43 @@ export async function resolveReferenceMapping({ gene, sequence, editIndex, fetch
     const geneSequence = geneSequenceResponse.body.toUpperCase();
     if (geneSequence.length !== span || !/^[ACGTN]+$/.test(geneSequence)) return fail("network", `Ensembl returned an unexpected sequence for ${symbol}.`);
 
-    let anchor = null, tried = 0;
-    for (const start of anchorStarts(reference.length, editIndex)) {
-      const probe = reference.slice(start, start + ANCHOR_LENGTH);
-      if (probe.includes("N") || new Set(probe).size < 3) continue;
-      tried += 1;
-      const hits = occurrences(geneSequence, probe);
-      if (hits.length === 1) { anchor = { index: start, geneOffset: hits[0] }; break; }
+    // Try the orientation the gene's strand predicts first, then the other, as far as the caller can use it.
+    const order = (reverseGene ? [-1, 1] : [1, -1]).filter((o) => orientations.includes(o));
+    let anchor = null, tried = 0, orientation = 1, forward = reference, forwardEdit = editIndex;
+    for (const o of order) {
+      const candidate = o === 1 ? reference : reverseComplement(reference);
+      const candidateEdit = o === 1 ? editIndex : reference.length - 1 - editIndex;
+      for (const start of anchorStarts(candidate.length, candidateEdit)) {
+        const probe = candidate.slice(start, start + ANCHOR_LENGTH);
+        if (probe.includes("N") || new Set(probe).size < 3) continue;
+        tried += 1;
+        const hits = occurrences(geneSequence, probe);
+        if (hits.length === 1) { anchor = { index: start, geneOffset: hits[0] }; orientation = o; forward = candidate; forwardEdit = candidateEdit; break; }
+      }
+      if (anchor) break;
     }
     if (!anchor) return fail(tried ? "not-found-in-gene" : "no-anchor", tried
-      ? `The ${ANCHOR_LENGTH}-base stretches of the reference around the edit were not found exactly once inside ${symbol} (GRCh38). The reference may be a different gene or assembly, carry differences near the edit, or be repetitive there.`
+      ? `The ${ANCHOR_LENGTH}-base stretches of the reference around the edit were not found exactly once inside ${symbol} (GRCh38${order.length > 1 ? ", in either orientation" : ""}). The reference may be a different gene or assembly, carry differences near the edit, or be repetitive there.`
       : "The reference around the edit has no usable stretch to search for.");
 
     const referenceStart = geneStart + anchor.geneOffset - anchor.index;
-    const referenceEnd = referenceStart + reference.length - 1;
+    const referenceEnd = referenceStart + forward.length - 1;
     if (referenceStart < 1) return fail("outside", "The reference would start before the beginning of the chromosome, so this placement is not valid.");
     let genome;
-    if (referenceStart >= geneStart && referenceEnd <= geneEnd) genome = geneSequence.slice(referenceStart - geneStart, referenceStart - geneStart + reference.length);
+    if (referenceStart >= geneStart && referenceEnd <= geneEnd) genome = geneSequence.slice(referenceStart - geneStart, referenceStart - geneStart + forward.length);
     else {
       const flank = await get(region(referenceStart, referenceEnd), ctx, true);
       if (!flank.ok) return fail("outside", `Ensembl could not return GRCh38 chr${chromosome}:${fmt(referenceStart)}-${fmt(referenceEnd)} to check the reference against (status ${flank.status}).`);
       genome = flank.body.toUpperCase();
     }
-    if (genome.length !== reference.length) return fail("network", "Ensembl returned a region of unexpected length.");
+    if (genome.length !== forward.length) return fail("network", "Ensembl returned a region of unexpected length.");
     let compared = 0, mismatches = 0;
-    for (let i = 0; i < reference.length; i += 1) {
-      if (reference[i] === "N" || genome[i] === "N") continue;
-      compared += 1; if (reference[i] !== genome[i]) mismatches += 1;
+    for (let i = 0; i < forward.length; i += 1) {
+      if (forward[i] === "N" || genome[i] === "N") continue;
+      compared += 1; if (forward[i] !== genome[i]) mismatches += 1;
     }
     if (!compared || mismatches / compared > MAX_MISMATCH_FRACTION) return fail("mismatch", `Placed at chr${chromosome}:${fmt(referenceStart)}, the reference differs from GRCh38 at ${fmt(mismatches)} of ${fmt(compared)} bases, too many to trust the placement. Enter the position by hand.`, { comparison: { compared, mismatches } });
-    return { ok: true, chromosome, referenceStart, referenceEnd, assembly: "GRCh38", gene: { symbol: g.display_name || symbol, id: g.id, start: geneStart, end: geneEnd }, comparison: { length: reference.length, compared, mismatches, identity: 1 - mismatches / compared }, anchor: { index: anchor.index, length: ANCHOR_LENGTH } };
+    return { ok: true, chromosome, referenceStart, referenceEnd, orientation, assembly: "GRCh38", gene: { symbol: g.display_name || symbol, id: g.id, start: geneStart, end: geneEnd }, comparison: { length: forward.length, compared, mismatches, identity: 1 - mismatches / compared }, anchor: { index: anchor.index, length: ANCHOR_LENGTH, editIndexInForward: forwardEdit } };
   } catch (error) {
     if (error instanceof Unreachable) return fail("network", "Ensembl could not be reached. Check the connection, or enter the position by hand.");
     throw error;
@@ -120,7 +135,10 @@ export async function resolveReferenceMapping({ gene, sequence, editIndex, fetch
 /** One sentence for the page. */
 export function describeMapping(result) {
   if (!result?.ok) return result?.message || "";
-  const { comparison: c, gene, chromosome, referenceStart } = result;
+  const { comparison: c, gene, chromosome, referenceStart, orientation } = result;
   const same = c.mismatches === 0 ? `matches GRCh38 at all ${fmt(c.compared)} bases` : `matches GRCh38 at ${fmt(c.compared - c.mismatches)} of ${fmt(c.compared)} bases (${fmt(c.mismatches)} differ)`;
-  return `Filled from Ensembl: ${gene.symbol} is on chromosome ${chromosome} (GRCh38) and the uploaded sequence starts at ${fmt(referenceStart)}; it ${same}. Check the numbers, then tick the box.`;
+  const where = orientation === -1
+    ? `the uploaded sequence is written on the opposite strand (reverse complement of the chromosome) and covers chromosome positions from ${fmt(referenceStart)}`
+    : `the uploaded sequence starts at ${fmt(referenceStart)}`;
+  return `Filled from Ensembl: ${gene.symbol} is on chromosome ${chromosome} (GRCh38) and ${where}; it ${same}. Check the numbers, then tick the box.`;
 }
