@@ -1,5 +1,5 @@
 // The take-home message of a design: what was designed, what to expect, what to watch, what to do next. One short structure, built from the
-// design result and the Co-Scientist report, shown at the top of the Design screen and at the top of the report. Everything here is already computed
+// design result and the design-checks report, shown at the top of the Design screen and at the top of the report. Everything here is already computed
 // elsewhere; this only selects and phrases it, in plain words, and says what is not checked.
 import { exonLabel } from "./exonLabels.js";
 

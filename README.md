@@ -20,7 +20,7 @@ Project Setup (Header) ──► 1. Design ──► 2. Order ──► 3. Trace
    - Point mutation / SNP corrections with silent PAM/protospacer blocking mutations (CFD penalty-minimizing).
    - Epitope and fluorescent tag knock-ins (FLAG, HA, Myc, V5, HiBiT, mEGFP, SD40-V5).
    - In-frame donor design (ssODN) and publication-ready SVG locus schematics.
-   - After **Generate design** the screen shows one take-home card and nothing else open but the guide picker: what was designed, the bottom line (use this pair, or do not, and the main risk), four numbers (guides, predicted protein loss, transcripts hit, clones to screen), up to four things to watch, three next steps, and the buttons for ordering, the report and the Cas-OFFinder input (`src/services/takeHome.js`). For a knockout the picker lists the eight best guides with their predicted loss of function; the rest, the repair-outcome columns, the full report and the Co-Scientist evidence are one click away. The report opens with the same take-home, then the gRNA and primer tables; gene information, release status, design rationale, readiness and review items are closed folds (a blocked design opens its release status). Downloaded reports open every fold when printed.
+   - After **Generate design** the screen shows one take-home card and nothing else open but the guide picker: what was designed, the bottom line (use this pair, or do not, and the main risk), four numbers (guides, predicted protein loss, transcripts hit, clones to screen), up to four things to watch, three next steps, and the buttons for ordering, the report and the Cas-OFFinder input (`src/services/takeHome.js`). For a knockout the picker lists the eight best guides with their predicted loss of function; the rest, the repair-outcome columns, the full report and design-check evidence are one click away. The report opens with the same take-home, then the gRNA and primer tables; gene information, release status, design rationale, readiness and review items are closed folds (a blocked design opens its release status). Downloaded reports open every fold when printed.
    - Optional collapsible diagnostics: Guide Alternatives and In-Silico PCR Agarose Gel Simulator.
 
 2. **Step 2: Vendor Reagent Procurement**
@@ -44,7 +44,7 @@ Project Setup (Header) ──► 1. Design ──► 2. Order ──► 3. Trace
 
 ## What the checks do, and what they do not
 
-The Co-Scientist panel in Step 1 is a rule-based workflow: fixed rules read the request and run a fixed sequence of tools. It does not use a language model, and it states what it could not read (no gene, no edit type, no residue) instead of choosing a default.
+After **Generate design**, ASSURED runs rule-based evidence checks (isoforms, constraint, variants, screening estimate, and related tools). There is one design path — the Design form — not a separate agent entry. Checks do not use a language model, and they state what they could not read instead of guessing.
 
 | Output | Source | Limits |
 | --- | --- | --- |
@@ -68,7 +68,7 @@ Known open items are listed in `docs/AUDIT_2026-10.md`.
 
 ## Getting Started
 
-### Optional local Co-Scientist / AlphaGenome development
+### Optional local design-check / AlphaGenome development
 
 Evidence-source labels and the local integration checks are described in
 [local development progress](docs/local-coscientist-progress.md). The optional

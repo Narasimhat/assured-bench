@@ -92,7 +92,7 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   }
   if (upg) {
     lines.push(
-      `<p style="margin:4px 0;color:#0369a1"><strong>Biomni Pan-Isoform Upgrade Applied:</strong> Single-transcript default selected ${escapeHtml(upg.exon)} (${escapeHtml((upg.guides || []).join(" + "))}); automatically upgraded to pan-isoform NMD-safe ${escapeHtml(designResult?.exon || "")}.</p>`
+      `<p style="margin:4px 0;color:#0369a1"><strong>Pan-isoform upgrade applied:</strong> Single-transcript default selected ${escapeHtml(upg.exon)} (${escapeHtml((upg.guides || []).join(" + "))}); automatically upgraded to pan-isoform NMD-safe ${escapeHtml(designResult?.exon || "")}.</p>`
     );
   }
   if (brunello.length > 0) {
@@ -145,7 +145,7 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   }
   if (biomniReport?.evidence?.length) lines.push(`<details><summary>Evidence sources and limitations</summary><ul>${biomniReport.evidence.map(e => `<li>${escapeHtml(e.topic)}: ${escapeHtml(e.type)} — ${escapeHtml(e.source)}</li>`).join("")}</ul></details>`);
   if (!lines.length) return html.replace("<!--EVIDENCE-->", "");
-  const section = `<details class="fold"><summary>Co-Scientist checks: isoforms, gene constraint, variants, library, screening</summary><div class="body" style="font-size:13px">${lines.join("")}</div></details>`;
+  const section = `<details class="fold"><summary>Design checks: isoforms, gene constraint, variants, library, screening</summary><div class="body" style="font-size:13px">${lines.join("")}</div></details>`;
   return html.includes("<!--EVIDENCE-->") ? html.replace("<!--EVIDENCE-->", () => section) : html.replace(/<body[^>]*>/i, body => body + section);
 }
 export function appendWorkflowRecommendation(html, audit) {

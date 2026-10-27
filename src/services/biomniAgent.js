@@ -1,9 +1,11 @@
 /**
- * ASSURED-Biomni Co-Scientist Agent (Browser / Node ES Module)
- * Inspired by Stanford Biomni (https://biomni.stanford.edu) — A1 Generalist Biomedical Agent
- * operating over the ASSURED-E1 action space (Ensembl, UniProtKB, ClinVar, 7-Enzyme ASSURED
- * CRISPR Design, JavaScript Lindel KO Repair Modeling, Multi-Nuclease Comparison, and
- * Clonal Screening Power Calculation).
+ * ASSURED design evidence checks (browser / Node ES module).
+ *
+ * Rule-based enrichment that runs after Generate design: gene reference, UniProt,
+ * ClinVar, isoform coverage, viability, local CRISPR design, Lindel KO ranking,
+ * optional enzyme comparison, dbSNP screen, and screening-power estimates.
+ * No language model. Internal module name remains biomniAgent for saved-project
+ * compatibility (biomniReport field); user-facing copy says "design checks".
  */
 
 import { ENZYMES } from "../engine/design/enzymeConfig.js";
@@ -188,7 +190,7 @@ export function computeWetLabGenotypingAssay({ editType, designResult, genbankRa
 }
 
 /**
- * Multi-provider gene reference resolver for the Biomni Co-Scientist:
+ * Multi-provider gene reference resolver for design evidence checks:
  * 1. Bundled verified GenBank references (instantaneous, offline-ready)
  * 2. NCBI Datasets + E-utilities (`fetchGeneReference` with `source: "ncbi"`, immune to Ensembl outages)
  * 3. Ensembl REST fallback (`fetchGeneGenbank`)
@@ -393,7 +395,7 @@ export function parseBiomniPrompt(prompt, currentProject = {}) {
 }
 
 /**
- * Decompose structured intent into an ordered ASSURED-E1 execution plan.
+ * Decompose structured intent into an ordered design-check execution plan.
  */
 export function buildBiomniPlan(intent) {
   const plan = [
@@ -820,7 +822,7 @@ export function computeQcPredictionCalibration(project = {}, qcResults = []) {
 }
 
 /**
- * Build a descriptive Biomni Co-Scientist mission prompt from Manual Design inputs.
+ * Build a descriptive design-check mission prompt from Manual Design inputs.
  */
 export function buildManualBiomniPrompt({ gene, editType = "ko", mutation = "", tag = "FLAG", enzyme = "spcas9" } = {}) {
   const g = String(gene || "").trim().toUpperCase();
@@ -842,7 +844,7 @@ export function buildManualBiomniPrompt({ gene, editType = "ko", mutation = "", 
 }
 
 /**
- * Execute the autonomous Biomni Co-Scientist workflow in the browser or Node.
+ * Execute the rule-based design evidence workflow in the browser or Node.
  */
 export async function runBiomniCoScientist(
   prompt,

@@ -109,7 +109,7 @@ export function KoGuidePicker({ result, genbankRaw, geneSymbol, onUsePair, onUse
       {showDetails && (
         <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0.4rem 0 0" }}>
           <strong>Other isoforms left intact:</strong> {OTHER_ISOFORMS_NOTE}
-          {!otherIsoforms && " Here only one coding sequence is annotated, so the column is not computed (shown as a dash); the transcript column and the Co-Scientist panel check the cut against RefSeq and Ensembl transcripts instead."}
+          {!otherIsoforms && " Here only one coding sequence is annotated, so the column is not computed (shown as a dash); the transcript column and design checks place the cut against RefSeq and Ensembl transcripts instead."}
         </p>
       )}
       <details style={{ marginTop: "0.4rem", fontSize: "0.8rem", color: "var(--text-muted)" }}>

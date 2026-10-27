@@ -63,7 +63,7 @@ function ReagentGroup({ title, count, rows, empty }) {
 
 /**
  * Product-first surface after a design succeeds: identity, take-home, orderable reagents, one continue path.
- * Process tools (full report, Co-Scientist, guide picker) stay in children, demoted below.
+ * Process tools (full report, enzyme compare, guide picker) stay in children, demoted below.
  */
 export function DesignResult({
   currentProject,
