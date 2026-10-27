@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Download, Upload, Play } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCw, Download, Upload, Play, Search } from "lucide-react";
 import { parseGB } from "../../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../../engine/design/transcriptModel.js";
 import { buildPmCandidateSet } from "../../engine/design/pmCandidates.js";
 import { alphaGenomeMapping } from "../../services/alphaGenomeReview.js";
 import { REGULATORY_CONTEXT_CATALOG } from "../../services/regulatoryContexts.js";
 import { HUMAN_CHROMOSOMES, buildCandidateRankingRequest, normalizeChromosome, rankCandidates, validateRankingReport } from "../../services/candidateRanking.js";
+import { describeMapping, resolveReferenceMapping } from "../../services/referenceMapping.js";
 import { HELPER_START_COMMAND, checkHelper, loadHelperSettings, runHelperComparison, saveHelperSettings } from "../../services/alphaGenomeHelper.js";
 
 const fmtCfd = (v) => (Number.isFinite(v) ? v.toFixed(v === 0 ? 0 : 4) : "\u2014");
@@ -29,6 +30,15 @@ function helperStatusText(state) {
   }
 }
 
+function noteText({ missing, detected, lookup, geneSymbol, ready, fromLookup }) {
+  if (lookup.status === "running") return `Looking up where ${geneSymbol} sits in GRCh38 (Ensembl) and placing your sequence there\u2026`;
+  // The sentence about Ensembl is shown only while the fields still hold what Ensembl returned; edited values are the user's own.
+  const found = fromLookup ? describeMapping(lookup.result) : "";
+  const unread = detected || fromLookup ? "" : lookup.status === "failed" ? `Bench could not place this reference automatically: ${lookup.message} ` : "Bench could not read where this reference sits in GRCh38. ";
+  if (ready) return `${found ? `${found.replace(" Check the numbers, then tick the box.", "")} ` : ""}Mapping ready: the helper checks it against GRCh38 before predicting and refuses a mismatch.`;
+  return `${found ? `${found} ` : ""}${unread}${missing.length ? `Before running: ${missing.join("; ")}.` : ""}`.trim();
+}
+
 function download(name, value) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value)], { type: "application/json" }));
   const link = document.createElement("a"); link.href = url; link.download = name; link.click();
@@ -40,7 +50,7 @@ function download(name, value) {
  * and, when an AlphaGenome ranking report has been imported, which pairs are equally supported. Applying a pair reruns the design for that
  * guide and that donor version. Genome-wide specificity is never assessed here and is stated on screen.
  */
-export function PmCandidatePicker({ project, result, busy = false, onUseCandidate, initialRanking = null, defaultShowAlternatives = false, defaultShowExcluded = false, helperFetch, initialHelper = null }) {
+export function PmCandidatePicker({ project, result, busy = false, onUseCandidate, initialRanking = null, defaultShowAlternatives = false, defaultShowExcluded = false, helperFetch, initialHelper = null, lookupFetch, initialLookup = null }) {
   const [showAlternatives, setShowAlternatives] = useState(defaultShowAlternatives);
   const [showExcluded, setShowExcluded] = useState(defaultShowExcluded);
   const [ranking, setRanking] = useState(initialRanking);
@@ -59,9 +69,12 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
     return m ? { chromosome: m[1].toUpperCase(), referenceStart: Number(m[2]) } : null;
   }, [project?.genbankRaw]);
   const fromReference = (d) => ({ chromosome: HUMAN_CHROMOSOMES.includes(normalizeChromosome(d?.chromosome)) ? normalizeChromosome(d.chromosome) : "", referenceStart: d?.referenceStart || "", confirmed: false });
-  const [mapping, setMapping] = useState(() => fromReference(detected));
+  const [mapping, setMapping] = useState(() => (initialLookup?.status === "ok" ? { chromosome: initialLookup.result.chromosome, referenceStart: initialLookup.result.referenceStart, confirmed: false } : fromReference(detected)));
   // A different reference (another gene, a re-upload) must not keep the previous one's mapping, nor its confirmation.
-  useEffect(() => { setMapping(fromReference(detected)); }, [project?.genbankRaw]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setMapping(fromReference(detected)); setLookup({ status: "idle" }); }, [project?.genbankRaw]); // eslint-disable-line react-hooks/exhaustive-deps
+  // When the reference does not state where it sits in GRCh38, work it out from the design (gene and edit site) and Ensembl; see services/referenceMapping.js.
+  const [lookup, setLookup] = useState(initialLookup || { status: "idle" }); // idle | running | ok | failed
+  const lookupRun = useRef(0);
   const [primary, setPrimary] = useState("wtc11");
   const [second, setSecond] = useState("");
 
@@ -72,6 +85,20 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
       return buildPmCandidateSet(model, { wtAA: result.wA, aaNumber: result.an, mutAA: result.mA }, { maxBlockingChanges: Number(options.maxBlockingChanges) || 3, allowNonCodingBlockers: true });
     } catch (e) { return { err: String(e?.message || e) }; }
   }, [project?.genbankRaw, result, options]);
+  const geneSymbol = result?.gene || project?.gene || options.expectedGene;
+  const runLookup = async ({ overwrite }) => {
+    const run = ++lookupRun.current;
+    const sequence = (result?.gb || project?.designResult?.gb)?.genomicSequence;
+    setLookup({ status: "running" });
+    let out;
+    try { out = await resolveReferenceMapping({ gene: geneSymbol, sequence, editIndex: built?.edit?.positions?.[0], fetchImpl: lookupFetch || (typeof fetch === "function" ? fetch.bind(globalThis) : undefined) }); }
+    catch (e) { out = { ok: false, message: "The lookup failed unexpectedly; enter the position by hand." }; }
+    if (run !== lookupRun.current) return; // another reference or another click took over
+    setLookup(out.ok ? { status: "ok", result: out } : { status: "failed", message: out.message });
+    if (out.ok) setMapping((m) => (overwrite || (!m.chromosome && !m.referenceStart) ? { chromosome: out.chromosome, referenceStart: out.referenceStart, confirmed: false } : m));
+  };
+  const lookupWanted = !detected && Boolean(built && !built.err && geneSymbol);
+  useEffect(() => { if (lookupWanted) runLookup({ overwrite: false }); return () => { lookupRun.current += 1; }; }, [project?.genbankRaw, lookupWanted]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!built || built.err) return <section aria-label="Matched guide and donor pairs"><p className="muted">Matched pairs are not available for this design{built?.err ? ` (${built.err})` : ""}.</p></section>;
 
   const current = result?.gs?.length === 1 ? result.gs[0].sp : null;
@@ -165,8 +192,9 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
         <label>Chromosome (GRCh38)<br /><select aria-label="Chromosome" value={mapping.chromosome} onChange={(e) => setMapping({ ...mapping, chromosome: e.target.value, confirmed: false })}><option value="">Select…</option>{HUMAN_CHROMOSOMES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
         <label>Reference start (1-based, GRCh38)<br /><input value={mapping.referenceStart} onChange={(e) => setMapping({ ...mapping, referenceStart: e.target.value, confirmed: false })} style={{ width: "9rem" }} /></label>
         <label><input type="checkbox" checked={mapping.confirmed} onChange={(e) => setMapping({ ...mapping, confirmed: e.target.checked })} /> I checked this mapping</label>
+        <button type="button" className="btn btn-secondary" disabled={lookup.status === "running" || !geneSymbol} onClick={() => runLookup({ overwrite: true })} title="Looks up the gene's position in Ensembl (GRCh38), finds your sequence inside it and compares them. Only the gene symbol and coordinates are sent."><Search size={14} /> Fill from design</button>
       </div>
-      <p role="note" style={{ fontSize: "0.82rem", margin: "0.4rem 0 0", color: mapping.confirmed && !missing.length ? "var(--text-muted)" : "var(--warning, #8a5a00)" }}>{missing.length ? `${detected ? "" : "Bench could not read where this reference sits in GRCh38. "}Before running: ${missing.join("; ")}.` : "Mapping ready: the helper checks it against GRCh38 before predicting and refuses a mismatch."}</p>
+      <p role="note" style={{ fontSize: "0.82rem", margin: "0.4rem 0 0", color: mapping.confirmed && !missing.length ? "var(--text-muted)" : "var(--warning, #8a5a00)" }}>{noteText({ missing, detected, lookup, geneSymbol, ready: mapping.confirmed && !missing.length, fromLookup: lookup.status === "ok" && String(lookup.result.referenceStart) === String(mapping.referenceStart) && lookup.result.chromosome === normalizeChromosome(mapping.chromosome) })}</p>
       <div style={{ margin: "0.75rem 0 0.25rem", padding: "0.6rem 0.75rem", border: "1px solid var(--border, #ccc)", borderRadius: 6, fontSize: "0.85rem" }}>
         <p style={{ margin: "0 0 0.4rem", fontWeight: 600 }}>Run the comparison here</p>
         <p style={{ margin: "0 0 0.4rem" }}>Start the helper once on your computer, from the assured-bench folder: <code>{HELPER_START_COMMAND}</code>. It prints a session code, runs the predictions with your key, and sends back the report this page ranks. The key stays on your computer; the sequence windows go from your computer to Google.</p>

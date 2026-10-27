@@ -127,14 +127,23 @@ APOE and TP53 candidate.
 ## 4. Limits
 
 - SpCas9 point mutations only. Plus-strand genes in a chromosome-forward GRCh38 reference only (minus-strand is refused).
-- The mapping (chromosome, reference start) is confirmed by the user; an Ensembl-style `GRCh38 ... Location: chrN start-end`
-  line prefills it.
+- The mapping (chromosome, reference start) is always confirmed by the user. It is filled, in this order, from the record's
+  `Location: chromosome:GRCh38:<chr>:<start>:<end>:<strand>` line, from an Ensembl-style `GRCh38 ... Location: chrN start-end`
+  line, or, when the record states neither, by a lookup from the design (`src/services/referenceMapping.js`): Ensembl gives the
+  gene's chromosome and span (GRCh38, human), a 40-base stretch of the reference next to the edit is searched for in that
+  sequence (it must occur exactly once, else further stretches are tried), which fixes the position of the reference's first
+  base, and the whole reference is compared with the genome there. A reference that differs from GRCh38 at more than 1% of its
+  bases, a gene on the reverse strand, another assembly, or a span over 2 Mb is not filled and the page says why. Only the gene
+  symbol and coordinates are sent to Ensembl; the reference sequence stays in the browser. The lookup starts by itself only when
+  the record does not state its location, never overwrites values you typed, never ticks the confirmation, and can be run again
+  with "Fill from design". Cross-check: for the bundled APOE record it returns chr19:44905754, the position the record states,
+  with 3,640 of 3,640 bases identical (checked against live Ensembl and, in the test suite, against a stand-in for it).
 - A ranking, whether imported or run through the helper, lives in the open page only; run it again to reproduce it (the request is deterministic and the model's predictions repeat exactly).
 - Model output is uncalibrated and does not predict cutting, HDR, clone fitness or protein function.
 
 ## 5. Tests
 
-`npm test` (candidate set, ranking service, helper client, picker render tests, parity with the saved APOE run) and, with the
+`npm test` (candidate set, ranking service, reference-position lookup, helper client, picker render tests, parity with the saved APOE run) and, with the
 AlphaGenome SDK installed, `cd tools/alphagenome && PYTHONPATH=. python3 -m unittest test_rank test_helper test_review test_context_catalog`.
 `test/fixtures/alphagenome-helper/wire.json` is what the Python helper sent in its own tests; the page's tests replay it, and
 `test_helper.py` fails when it goes stale (`UPDATE_WIRE_FIXTURE=1` regenerates it). Neither suite runs a real browser, a real

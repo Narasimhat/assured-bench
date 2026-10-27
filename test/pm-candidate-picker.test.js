@@ -145,3 +145,37 @@ test("the mapping fields say what is missing: a reference that names its locatio
     assert.doesNotMatch(bare, /<option value="(?:23|24|M|MT)"/);
   });
 });
+
+test("autofill from the design: the lookup is offered, runs only for a reference that does not state its location, and its states are explained", async () => {
+  await withModules(async (m) => {
+    const design = m.cand.designWithCandidates(APOE, "R176C", OPTIONS);
+    const unlocated = { ...project(design), genbankRaw: APOE.replace(/GRCh38[\s\S]{0,120}?Location:\s*chr\d+\s+\d+-\d+/i, "location not stated") };
+    const calls = [];
+    const lookupFetch = async (...a) => { calls.push(a); throw new Error("not on render"); };
+    const render = (props, proj = unlocated) => renderToStaticMarkup(React.createElement(m.picker.PmCandidatePicker, { project: proj, result: design, onUseCandidate() {}, lookupFetch, ...props }));
+    const base = render({});
+    assert.equal(calls.length, 0, "rendering contacts nothing (the lookup starts after mount)");
+    assert.match(base, /Fill from design/); assert.match(base, /Only the gene symbol and coordinates are sent/);
+
+    const result = { ok: true, chromosome: "19", referenceStart: 44905754, referenceEnd: 44909393, assembly: "GRCh38", gene: { symbol: "APOE", id: "ENSG00000130203", start: 44903787, end: 44909396 }, comparison: { length: 3640, compared: 3640, mismatches: 0, identity: 1 } };
+    const filled = render({ initialLookup: { status: "ok", result } });
+    assert.match(filled, /<option value="19" selected="">19<\/option>/); assert.match(filled, /value="44905754"/);
+    assert.match(filled, /Filled from Ensembl: APOE is on chromosome 19 \(GRCh38\) and the uploaded sequence starts at 44,905,754; it matches GRCh38 at all 3,640 bases\. Check the numbers, then tick the box\. Before running: tick \u201cI checked this mapping\u201d\./);
+    assert.doesNotMatch(filled, /could not read where this reference sits/, "no complaint once the mapping is filled");
+
+    assert.match(render({ initialLookup: { status: "running" } }), /Looking up where APOE sits in GRCh38 \(Ensembl\) and placing your sequence there\u2026/);
+    const failed = render({ initialLookup: { status: "failed", message: "APOE is on the reverse strand." } });
+    assert.match(failed, /Bench could not place this reference automatically: APOE is on the reverse strand\. Before running: select the chromosome; enter the GRCh38 position/);
+    // a reference that states its own location is read, not looked up
+    const stated = render({}, project(design));
+    assert.match(stated, /<option value="19" selected="">19<\/option>/); assert.doesNotMatch(stated, /could not read|Filled from Ensembl/);
+  });
+});
+
+test("the picker starts the lookup after mount only when the location is unreadable and a gene is known, and cancels it when the reference changes", () => {
+  const source = read("../src/components/design/PmCandidatePicker.jsx");
+  assert.match(source, /const lookupWanted = !detected && Boolean\(built && !built\.err && geneSymbol\);/);
+  assert.match(source, /useEffect\(\(\) => \{ if \(lookupWanted\) runLookup\(\{ overwrite: false \}\); return \(\) => \{ lookupRun\.current \+= 1; \}; \}, \[project\?\.genbankRaw, lookupWanted\]\);/);
+  assert.match(source, /if \(run !== lookupRun\.current\) return;/);
+  assert.match(source, /\(overwrite \|\| \(!m\.chromosome && !m\.referenceStart\) \? \{ chromosome: out\.chromosome, referenceStart: out\.referenceStart, confirmed: false \} : m\)/, "an automatic result never overwrites what the user typed; the confirmation is never pre-ticked");
+});
