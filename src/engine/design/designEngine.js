@@ -704,7 +704,7 @@ export function findBlockingSet(model, guide, blockedPositions = new Set(), opti
  * of an annotated exon, and keep the retry only if it grades better. A guide whose PAM or seed lies in the intron next to the edited exon can then be blocked
  * without touching splicing. `allowNonCodingBlockers: false` restores the coding-only behaviour.
  */
-function findPointMutationBlockingSet(model, guide, blockedPositions, options = {}) {
+export function findPointMutationBlockingSet(model, guide, blockedPositions, options = {}) {
   const maxChanges = options.maxChanges;
   const coding = findBlockingSet(model, guide, blockedPositions, { maxChanges });
   if (options.allowNonCodingBlockers === false) return coding;
