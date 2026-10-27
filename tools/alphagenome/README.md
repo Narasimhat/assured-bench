@@ -163,3 +163,16 @@ The next implementation stage requires exact edited-allele construction,
 verified genomic mapping, indel-aware prediction/scoring, and persistence of
 matched result evidence. A configured context panel alone is not a completed
 regulatory review.
+
+
+## Candidate pairs (`rank.py`)
+
+Compares several donor alleles for one substitution, in one to four cell contexts, against the intended edit alone and
+against random synonymous changes of the same size. See `docs/PM_CANDIDATES.md` for the rule and its limits.
+
+```bash
+python3 tools/alphagenome/rank.py request.json --validate-only
+python3 tools/alphagenome/rank.py request.json --run --output report.json --null null-cache.json
+```
+
+The request comes from Bench (Alternative guides > Regulatory comparison). The key is read as in `review.py`; plus-strand genes only.
