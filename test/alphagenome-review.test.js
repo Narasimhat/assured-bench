@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildAlphaGenomeRequest, reviewRequestId, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
+import { buildAlphaGenomeRequest, compareDonorBlockerLayouts, listDonorAlleleVariants, reviewRequestId, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
 import { appendAlphaGenomeReview, generateReportHtml } from "../src/services/designExport.js";
 import { runDesign } from "../src/engine/design/designEngine.js";
 import { buildQcDesignSpec } from "../src/engine/design/qcExport.js";
@@ -175,4 +175,40 @@ test("step 2: imported AlphaGenome review folds into the design HTML report and 
   const cleared = updateProject(base, { mutation: "R248Q" });
   assert.equal(cleared.alphaGenomeReview, null);
   assert.equal(cleared.designResult, null);
+});
+
+test("step 3: donor A vs B compares blocker layouts that share the same intended edit", async () => {
+  const raw = readFileSync(new URL("../public/references/tp53-NG_017013.2.gb", import.meta.url), "utf8");
+  const design = runDesign("pm", raw, "R175H", "", "", { enzyme: "spcas9", expectedGene: "TP53" });
+  assert.ok(!design.err, design.err);
+  assert.ok((design.os || []).length >= 2, "fixture needs two matched donors");
+  const projectWithDesign = { gene: "TP53", designResult: design, genbankRaw: raw };
+
+  const a = listDonorAlleleVariants(projectWithDesign, { donorIndex: 0 });
+  const b = listDonorAlleleVariants(projectWithDesign, { donorIndex: 1 });
+  assert.ok(a.variants.some(v => v.role === "intended"));
+  assert.ok(b.variants.some(v => v.role === "blocking"));
+
+  const compared = compareDonorBlockerLayouts(projectWithDesign, { donorIndexA: 0, donorIndexB: 1 });
+  assert.equal(compared.summary.intendedShared, 1);
+  assert.ok(compared.summary.blockingOnlyA >= 1);
+  assert.ok(compared.summary.blockingOnlyB >= 1);
+  assert.ok(compared.rows.every(r => r.label));
+  assert.equal(compared.mapped, false);
+
+  const mapped = compareDonorBlockerLayouts(projectWithDesign, {
+    donorIndexA: 0, donorIndexB: 1, referenceStart: 100000, orientation: 1,
+  });
+  assert.equal(mapped.mapped, true);
+  assert.ok(mapped.sharedIntended[0].position > 100000);
+
+  assert.throws(() => compareDonorBlockerLayouts(projectWithDesign, { donorIndexA: 0, donorIndexB: 0 }), /two different/);
+
+  const requestA = await buildAlphaGenomeRequest(projectWithDesign, { ...mapping, donorIndex: 0 });
+  const requestB = await buildAlphaGenomeRequest(projectWithDesign, { ...mapping, donorIndex: 1 });
+  assert.notEqual(requestA.requestId, requestB.requestId);
+  assert.deepEqual(
+    requestA.variants.filter(v => v.role === "intended"),
+    requestB.variants.filter(v => v.role === "intended"),
+  );
 });

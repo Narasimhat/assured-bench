@@ -20,7 +20,7 @@ Hosted AlphaGenome access is offered by DeepMind for **non-commercial research**
 1. **Lower friction (done on this branch)** — auto-fill GRCh38 mapping from annotated GenBank when available (Assured Location lines, Ensembl `chrN start-end`, NC region DEFINITION). User still confirms before export; NG_ RefSeqGene records without coordinates are not invented.
 2. **Tissue-matched reviews (done)** — presets for common research lines (iPSC, hepatocyte, cardiomyocyte, T cell, etc.).
 3. **Report attachment (done on this branch)** — imported review persists on the experiment and appears as an optional fold in the design HTML export (still not a gate).
-4. **Donor A vs B** — compare blocker layouts for the same intended edit.
+4. **Donor A vs B (done on this branch)** — side-by-side blocker layout compare for two matched donors that share the same intended edit; AlphaGenome export still runs one donor at a time.
 5. **Later** — tag/knock-in junction windows; blocker-safety watch lines in take-home.
 
 ## How researchers use it today

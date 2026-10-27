@@ -122,6 +122,108 @@ export function alphaGenomeMapping(project) {
   };
 }
 
+const variantKey = (v) => `${v.position}:${v.ref}>${v.alt}:${v.role}`;
+
+/**
+ * Extract chromosome-plus alleles for one matched substitution donor.
+ * When referenceStart/orientation are omitted, positions stay 0-based on the uploaded reference.
+ */
+export function listDonorAlleleVariants(project, { donorIndex = 0, referenceStart = null, orientation = 1 } = {}) {
+  const result = project?.designResult;
+  if (!result || result.err || !["pm", "genomic-snv"].includes(result.type)) {
+    throw new Error("AlphaGenome donor review currently supports substitution designs only; select a point-mutation or genomic SNP design.");
+  }
+  const genome = result.gb?.genomicSequence?.toUpperCase();
+  if (!genome || genome.length > 1000000 || !/^[ACGTN]+$/.test(genome)) throw new Error("A valid uploaded genomic reference of at most 1 Mb is required.");
+  const mapped = Number.isSafeInteger(referenceStart) && referenceStart >= 1 && [1, -1].includes(orientation);
+  if (referenceStart != null && !mapped) {
+    throw new Error("Provide the 1-based chromosome start and reference orientation (+1 or -1).");
+  }
+  const spec = buildQcDesignSpec(result);
+  if (spec.err) throw new Error(spec.err);
+  const donor = spec.donors?.[donorIndex];
+  if (!Number.isInteger(donorIndex) || !donor || donor.insertBp) throw new Error("Select a matched substitution donor.");
+  const from = donor.refStart + spec.reference.offset;
+  const to = donor.refEnd + spec.reference.offset;
+  if (donor.sequence.length !== to - from || !/^[ACGT]+$/.test(donor.sequence)) throw new Error("Donor must contain unambiguous bases and preserve reference length.");
+  const intended = new Set((spec.markers || []).filter(m => m.role === "intended").map(m => m.pos + spec.reference.offset));
+  const variants = [];
+  for (let i = 0; i < donor.sequence.length; i += 1) {
+    const index = from + i;
+    const ref = genome[index], alt = donor.sequence[i];
+    if (ref === alt) continue;
+    if (!/^[ACGT]$/.test(ref || "")) throw new Error("An edited reference base is ambiguous or outside the uploaded reference.");
+    const position = mapped
+      ? (orientation === -1 ? referenceStart + genome.length - 1 - index : referenceStart + index)
+      : index;
+    variants.push({
+      position,
+      ref: mapped && orientation === -1 ? rc(ref) : ref,
+      alt: mapped && orientation === -1 ? rc(alt) : alt,
+      role: intended.has(index) ? "intended" : "blocking",
+      referenceIndex: index,
+    });
+  }
+  variants.sort((a, b) => a.position - b.position);
+  if (!variants.some(v => v.role === "intended")) throw new Error("No validated intended substitution was found in this donor.");
+  return {
+    donorIndex,
+    donorName: donor.name || `Donor ${donorIndex + 1}`,
+    genomeLength: genome.length,
+    mapped,
+    variants,
+  };
+}
+
+/**
+ * Side-by-side blocker layouts for two donors that should share the same intended edit.
+ * Positions use chromosome-plus coordinates when mapping is provided; otherwise uploaded-reference indices.
+ */
+export function compareDonorBlockerLayouts(project, {
+  donorIndexA = 0, donorIndexB = 1, referenceStart = null, orientation = 1,
+} = {}) {
+  if (donorIndexA === donorIndexB) throw new Error("Choose two different matched donors to compare.");
+  const a = listDonorAlleleVariants(project, { donorIndex: donorIndexA, referenceStart, orientation });
+  const b = listDonorAlleleVariants(project, { donorIndex: donorIndexB, referenceStart, orientation });
+  const intendedA = a.variants.filter(v => v.role === "intended");
+  const intendedB = b.variants.filter(v => v.role === "intended");
+  const intendedKeysA = new Set(intendedA.map(variantKey));
+  const intendedKeysB = new Set(intendedB.map(variantKey));
+  const sharedIntended = intendedA.filter(v => intendedKeysB.has(variantKey(v)));
+  if (!sharedIntended.length || intendedKeysA.size !== intendedKeysB.size || sharedIntended.length !== intendedKeysA.size) {
+    throw new Error("These donors do not share the same intended substitution set; AlphaGenome A vs B compare is for alternate blocker layouts of one edit.");
+  }
+  const blockA = a.variants.filter(v => v.role === "blocking");
+  const blockB = b.variants.filter(v => v.role === "blocking");
+  const blockKeysA = new Set(blockA.map(variantKey));
+  const blockKeysB = new Set(blockB.map(variantKey));
+  const sharedBlocking = blockA.filter(v => blockKeysB.has(variantKey(v)));
+  const onlyA = blockA.filter(v => !blockKeysB.has(variantKey(v)));
+  const onlyB = blockB.filter(v => !blockKeysA.has(variantKey(v)));
+  const rows = [
+    ...sharedIntended.map(v => ({ ...v, membership: "shared", label: "Intended (both)" })),
+    ...sharedBlocking.map(v => ({ ...v, membership: "shared", label: "Blocking (both)" })),
+    ...onlyA.map(v => ({ ...v, membership: "a", label: `Blocking · ${a.donorName}` })),
+    ...onlyB.map(v => ({ ...v, membership: "b", label: `Blocking · ${b.donorName}` })),
+  ].sort((x, y) => x.position - y.position || x.role.localeCompare(y.role));
+  return {
+    donorA: { index: a.donorIndex, name: a.donorName, blockingCount: blockA.length },
+    donorB: { index: b.donorIndex, name: b.donorName, blockingCount: blockB.length },
+    mapped: a.mapped,
+    sharedIntended,
+    sharedBlocking,
+    onlyA,
+    onlyB,
+    rows,
+    summary: {
+      intendedShared: sharedIntended.length,
+      blockingShared: sharedBlocking.length,
+      blockingOnlyA: onlyA.length,
+      blockingOnlyB: onlyB.length,
+    },
+  };
+}
+
 /** A single matched donor, not the union of blocking edits from different donor alternatives. */
 export async function buildAlphaGenomeRequest(project, {
   assembly, chromosome, referenceStart, orientation, ontologyTerm, donorIndex = 0,
@@ -142,39 +244,17 @@ export async function buildAlphaGenomeRequest(project, {
     throw new Error("Provide a tissue/cell ontology identifier from AlphaGenome output metadata (UBERON, CL or EFO).");
   }
   if (![16384, 131072].includes(sequenceLength)) throw new Error("Choose a 16,384 or 131,072 bp prediction context.");
-  const genome = result.gb?.genomicSequence?.toUpperCase();
-  if (!genome || genome.length > 1000000 || !/^[ACGTN]+$/.test(genome)) throw new Error("A valid uploaded genomic reference of at most 1 Mb is required.");
   const declared = alphaGenomeMapping(project);
   if (declared && (declared.assembly !== assembly || String(declared.chromosome).replace(/^chr/i, "").toUpperCase() !== chrom || declared.referenceStart !== referenceStart || declared.orientation !== orientation)) {
     throw new Error("The mapping conflicts with the GenBank chromosome annotation.");
   }
-  const spec = buildQcDesignSpec(result);
-  if (spec.err) throw new Error(spec.err);
-  const donor = spec.donors?.[donorIndex];
-  if (!Number.isInteger(donorIndex) || !donor || donor.insertBp) throw new Error("Select a matched substitution donor.");
-  const from = donor.refStart + spec.reference.offset;
-  const to = donor.refEnd + spec.reference.offset;
-  if (donor.sequence.length !== to - from || !/^[ACGT]+$/.test(donor.sequence)) throw new Error("Donor must contain unambiguous bases and preserve reference length.");
-  const intended = new Set((spec.markers || []).filter(m => m.role === "intended").map(m => m.pos + spec.reference.offset));
-  const variants = [];
-  for (let i = 0; i < donor.sequence.length; i += 1) {
-    const index = from + i;
-    const ref = genome[index], alt = donor.sequence[i];
-    if (ref === alt) continue;
-    if (!/^[ACGT]$/.test(ref || "")) throw new Error("An edited reference base is ambiguous or outside the uploaded reference.");
-    variants.push({
-      position: orientation === -1 ? referenceStart + genome.length - 1 - index : referenceStart + index,
-      ref: orientation === -1 ? rc(ref) : ref,
-      alt: orientation === -1 ? rc(alt) : alt,
-      role: intended.has(index) ? "intended" : "blocking",
-    });
-  }
-  variants.sort((a, b) => a.position - b.position);
-  if (!variants.some(v => v.role === "intended")) throw new Error("No validated intended substitution was found in this donor.");
+  const allele = listDonorAlleleVariants(project, { donorIndex, referenceStart, orientation });
+  const variants = allele.variants.map(({ position, ref, alt, role }) => ({ position, ref, alt, role }));
   if (variants.at(-1).position - variants[0].position >= sequenceLength / 2) throw new Error("Edits are too far apart for the selected context.");
+  const genome = result.gb.genomicSequence.toUpperCase();
   const payload = {
     schema: ALPHAGENOME_REQUEST_SCHEMA, gene: String(result.gene || project.gene || "Locus"),
-    assembly, chromosome: `chr${chrom}`, donor: donor.name,
+    assembly, chromosome: `chr${chrom}`, donor: allele.donorName,
     reference: { start: referenceStart, sequence: orientation === -1 ? rc(genome) : genome },
     variants, ontologyTerms: [ontologyTerm], sequenceLength,
     requestedOutputs: ["RNA_SEQ", "SPLICE_SITES", "SPLICE_SITE_USAGE"],
