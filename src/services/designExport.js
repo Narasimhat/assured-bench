@@ -13,7 +13,8 @@ import { describeViability } from "./geneViability.js";
 import { describeCutCoverage } from "./isoformCoverage.js";
 import { buildCasOffinderInput } from "./offTargetExport.js";
 import { exonLabel, exonListLabel, exonOffset } from "./exonLabels.js";
-import { buildTakeHome } from "./takeHome.js";
+import { normalizeGenomicDesign } from "./genomicDesignResult.js";
+import { buildPublicationReport } from "./publicationReport.js";
 
 /**
  * Generate full standalone HTML report string
@@ -21,7 +22,7 @@ import { buildTakeHome } from "./takeHome.js";
 export function generateReportHtml(project, designResult) {
   if (!designResult) return "";
   if (designResult.type === "genomic-snv" && Array.isArray(designResult.candidates)) {
-    return appendWorkflowRecommendation(buildGenomicSnpReport(designResult), designResult.workflowRecommendation);
+    return buildPublicationReport(project, normalizeGenomicDesign(designResult), appendWorkflowRecommendation(buildGenomicSnpReport(designResult, { includeScheme: false }), designResult.workflowRecommendation));
   }
 
   const projectType = project.editType || designResult.type || "ko";
@@ -47,12 +48,12 @@ export function generateReportHtml(project, designResult) {
     fileName,
     historicalContext,
     reviewItems,
-    null
+    null,
+    { includeScheme: false }
   );
-  const takeHome = buildTakeHome({ designResult, biomniReport: project?.biomniReport || null });
-  const withTakeHome = html.replace("<!--TAKEHOME-->", takeHome ? renderTakeHomeHtml(takeHome) : "");
+  const withTakeHome = html.replace("<!--TAKEHOME-->", "");
   const withBiomni = appendBiomniSummary(withTakeHome, project?.biomniReport, designResult);
-  return appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation);
+  return buildPublicationReport(project, designResult, appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation));
 }
 
 /** The take-home as the first block of the report: status, what was designed, the bottom line, four numbers, what to watch, what to do next. */
@@ -230,4 +231,26 @@ function downloadBlob(content, filename, mimeType) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+
+/** Reference-orientation donor alleles are supplementary records, not synthesis instructions. */
+export function buildSupplementaryFasta(result) {
+  const records = [];
+  const add = (name, sequence) => {
+    const dna = String(sequence || "").replace(/\s/g, "").toUpperCase();
+    if (!dna || !/^[ACGTN]+$/.test(dna)) return;
+    const id = String(name).replace(/[^A-Za-z0-9_.-]+/g, "_");
+    records.push(`>${id} supplementary_record_not_order_authorization\n${dna.match(/.{1,80}/g).join("\n")}`);
+  };
+  add(`${result.gene || "target"}_supplied_reference`, result.gb?.genomicSequence);
+  for (const g of result.gs || []) add(`${g.n || "guide"}_spacer_5to3`, g.sp);
+  for (const p of result.ps || []) add(`${p.n || "primer"}_5to3`, p.s);
+  for (const [i, d] of (result.os || []).entries()) add(`donor_${i + 1}_allele_reference_orientation`, d.genomicDonor);
+  add("recorded_HDR_donor", result.donor);
+  return records.join("\n\n") + "\n";
+}
+
+export function downloadSupplementaryFasta(project, result) {
+  downloadBlob(buildSupplementaryFasta(result), `${(result.gene || project.gene || "design").toLowerCase()}_supplementary_sequences.fasta`, "text/plain;charset=utf-8;");
 }

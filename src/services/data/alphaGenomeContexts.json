@@ -1,0 +1,2075 @@
+{
+  "schema": "assured-alphagenome-context-catalog/1",
+  "organism": "HOMO_SAPIENS",
+  "modelVersion": "ALL_FOLDS",
+  "sdkVersion": "0.10.0",
+  "retrievedAt": "2026-10-27T09:07:56.626810+00:00",
+  "source": "AlphaGenome output_metadata API",
+  "contexts": [
+    {
+      "id": "wtc11",
+      "label": "WTC11 iPSC reference",
+      "lineage": "Pluripotent",
+      "ontology": "EFO:0009747",
+      "match": "reference",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 3,
+        "DNASE": 1,
+        "ATAC": 1,
+        "CHIP_TF": 34,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1,
+        "CONTACT_MAPS": 2
+      },
+      "biosampleNames": [
+        "GM25256",
+        "WTC11"
+      ],
+      "sources": [
+        "4dnucleome",
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "WTC11"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "WTC11"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "ATAC": {
+          "biosampleNames": [
+            "WTC11"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "WTC11"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "adult",
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "WTC11"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "WTC11"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CONTACT_MAPS": {
+          "biosampleNames": [
+            "GM25256"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "4dnucleome"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 33,
+        "unmodified": 6,
+        "unknown": 5
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "h1",
+      "label": "H1 embryonic stem-cell reference",
+      "lineage": "Pluripotent",
+      "ontology": "EFO:0003042",
+      "match": "reference",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 5,
+        "DNASE": 1,
+        "CHIP_HISTONE": 14,
+        "CHIP_TF": 39,
+        "SPLICE_SITE_USAGE": 4,
+        "SPLICE_JUNCTIONS": 2,
+        "CONTACT_MAPS": 6
+      },
+      "biosampleNames": [
+        "H1",
+        "H1-hESC"
+      ],
+      "sources": [
+        "4dnucleome",
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "H1"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "H1"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "H1"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "H1"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "H1"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "H1"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CONTACT_MAPS": {
+          "biosampleNames": [
+            "H1-hESC"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "4dnucleome"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 59,
+        "unknown": 12
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "h9",
+      "label": "H9 embryonic stem-cell reference",
+      "lineage": "Pluripotent",
+      "ontology": "EFO:0003045",
+      "match": "reference",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "DNASE": 1,
+        "CHIP_HISTONE": 6,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1,
+        "CONTACT_MAPS": 6
+      },
+      "biosampleNames": [
+        "H9"
+      ],
+      "sources": [
+        "4dnucleome",
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CONTACT_MAPS": {
+          "biosampleNames": [
+            "H9"
+          ],
+          "biosampleTypes": [
+            "cell_line"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "4dnucleome"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 10,
+        "unknown": 9
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "cardiac",
+      "label": "Cardiac muscle cell",
+      "lineage": "Cardiac",
+      "ontology": "CL:0000746",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 3,
+        "CAGE": 2,
+        "DNASE": 1,
+        "CHIP_HISTONE": 5,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 4,
+        "SPLICE_JUNCTIONS": 2
+      },
+      "biosampleNames": [
+        "cardiac muscle cell"
+      ],
+      "sources": [
+        "encode",
+        "fantom"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CAGE": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "fantom"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells",
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic",
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "cardiac muscle cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 10,
+        "unknown": 8
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "adult-cardiac",
+      "label": "Regular cardiac myocyte (adult reference)",
+      "lineage": "Cardiac",
+      "ontology": "CL:0002098",
+      "match": "lineage-proxy",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "regular cardiac myocyte"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "regular cardiac myocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "regular cardiac myocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "regular cardiac myocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 2,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "neural-progenitor",
+      "label": "Neural progenitor cell",
+      "lineage": "Neural",
+      "ontology": "CL:0011020",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "DNASE": 1,
+        "CHIP_HISTONE": 9,
+        "CHIP_TF": 3,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "neural progenitor cell"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "neural progenitor cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "neural progenitor cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "neural progenitor cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "neural progenitor cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "neural progenitor cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "neural progenitor cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 15,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "motor-neuron",
+      "label": "Motor neuron",
+      "lineage": "Neural",
+      "ontology": "CL:0000100",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 1,
+        "ATAC": 1,
+        "CHIP_HISTONE": 3,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "motor neuron"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "motor neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "ATAC": {
+          "biosampleNames": [
+            "motor neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "motor neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "motor neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "motor neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 5,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "glutamatergic-neuron",
+      "label": "Glutamatergic neuron",
+      "lineage": "Neural",
+      "ontology": "CL:0000679",
+      "match": "lineage-proxy",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "DNASE": 1,
+        "CHIP_TF": 5,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "glutamatergic neuron"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "glutamatergic neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "glutamatergic neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "glutamatergic neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult",
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "glutamatergic neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "glutamatergic neuron"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 4,
+        "unmodified": 4,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "hepatic",
+      "label": "Hepatocyte",
+      "lineage": "Hepatic",
+      "ontology": "CL:0000182",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 3,
+        "CAGE": 2,
+        "DNASE": 1,
+        "CHIP_HISTONE": 7,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 4,
+        "SPLICE_JUNCTIONS": 2
+      },
+      "biosampleNames": [
+        "hepatocyte"
+      ],
+      "sources": [
+        "encode",
+        "fantom"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CAGE": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "fantom"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "hepatocyte"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 12,
+        "unknown": 8
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "pancreatic",
+      "label": "Pancreatic beta cell",
+      "lineage": "Pancreatic",
+      "ontology": "CL:0000169",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "type B pancreatic cell"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "type B pancreatic cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "type B pancreatic cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "type B pancreatic cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "type B pancreatic cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 3,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "pancreatic-progenitor",
+      "label": "Endocrine pancreatic progenitor",
+      "lineage": "Pancreatic",
+      "ontology": "CL:0002351",
+      "match": "lineage-proxy",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "DNASE": 1,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "progenitor cell of endocrine pancreas"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "progenitor cell of endocrine pancreas"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "progenitor cell of endocrine pancreas"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "progenitor cell of endocrine pancreas"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "progenitor cell of endocrine pancreas"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "progenitor cell of endocrine pancreas"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 4,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "vascular",
+      "label": "Endothelial cell",
+      "lineage": "Vascular",
+      "ontology": "CL:0000115",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "DNASE": 1,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "endothelial cell"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "endothelial cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "endothelial cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "endothelial cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "endothelial cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "endothelial cell"
+          ],
+          "biosampleTypes": [
+            "in_vitro_differentiated_cells"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 4,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "renal",
+      "label": "Proximal-tubule epithelial cell",
+      "lineage": "Renal",
+      "ontology": "CL:0002306",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "CAGE": 2,
+        "DNASE": 1,
+        "CHIP_HISTONE": 1,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "epithelial cell of proximal tubule"
+      ],
+      "sources": [
+        "encode",
+        "fantom"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CAGE": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "fantom"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "epithelial cell of proximal tubule"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 5,
+        "unknown": 5
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "muscle-progenitor",
+      "label": "Skeletal muscle myoblast",
+      "lineage": "Muscle",
+      "ontology": "CL:0000515",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 5,
+        "CAGE": 2,
+        "DNASE": 1,
+        "CHIP_HISTONE": 7,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 4,
+        "SPLICE_JUNCTIONS": 2
+      },
+      "biosampleNames": [
+        "skeletal muscle myoblast"
+      ],
+      "sources": [
+        "encode",
+        "fantom"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CAGE": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "fantom"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "skeletal muscle myoblast"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 14,
+        "unknown": 8
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "muscle-tissue",
+      "label": "Skeletal muscle tissue",
+      "lineage": "Muscle",
+      "ontology": "UBERON:0001134",
+      "match": "tissue-proxy",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 2,
+        "CAGE": 2,
+        "CHIP_HISTONE": 6,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "skeletal muscle tissue"
+      ],
+      "sources": [
+        "encode",
+        "fantom"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "skeletal muscle tissue"
+          ],
+          "biosampleTypes": [
+            "tissue"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CAGE": {
+          "biosampleNames": [
+            "skeletal muscle tissue"
+          ],
+          "biosampleTypes": [
+            "tissue"
+          ],
+          "sourceLifeStageLabels": [],
+          "dataSources": [
+            "fantom"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "skeletal muscle tissue"
+          ],
+          "biosampleTypes": [
+            "tissue"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "skeletal muscle tissue"
+          ],
+          "biosampleTypes": [
+            "tissue"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "skeletal muscle tissue"
+          ],
+          "biosampleTypes": [
+            "tissue"
+          ],
+          "sourceLifeStageLabels": [
+            "embryonic"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 8,
+        "unknown": 5
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "myeloid",
+      "label": "CD14-positive monocyte",
+      "lineage": "Immune",
+      "ontology": "CL:0001054",
+      "match": "lineage-proxy",
+      "default": true,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 3,
+        "DNASE": 1,
+        "CHIP_HISTONE": 11,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 2,
+        "SPLICE_JUNCTIONS": 1
+      },
+      "biosampleNames": [
+        "CD14-positive monocyte"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "CD14-positive monocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult",
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "CD14-positive monocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "CD14-positive monocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult",
+            "unknown"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "CD14-positive monocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "CD14-positive monocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "CD14-positive monocyte"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 16,
+        "unknown": 3
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "t-cell",
+      "label": "CD8-positive alpha-beta T cell",
+      "lineage": "Immune",
+      "ontology": "CL:0000625",
+      "match": "lineage-proxy",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 3,
+        "DNASE": 1,
+        "ATAC": 1,
+        "CHIP_HISTONE": 7,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 4,
+        "SPLICE_JUNCTIONS": 2
+      },
+      "biosampleNames": [
+        "CD8-positive, alpha-beta T cell"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "ATAC": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "CD8-positive, alpha-beta T cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 13,
+        "unknown": 6
+      },
+      "experimentalMatchVerified": false
+    },
+    {
+      "id": "b-cell",
+      "label": "B cell",
+      "lineage": "Immune",
+      "ontology": "CL:0000236",
+      "match": "lineage-proxy",
+      "default": false,
+      "available": true,
+      "outputTracks": {
+        "RNA_SEQ": 4,
+        "DNASE": 1,
+        "ATAC": 1,
+        "CHIP_HISTONE": 10,
+        "CHIP_TF": 1,
+        "SPLICE_SITE_USAGE": 4,
+        "SPLICE_JUNCTIONS": 2
+      },
+      "biosampleNames": [
+        "B cell"
+      ],
+      "sources": [
+        "encode"
+      ],
+      "assaySources": {
+        "RNA_SEQ": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "DNASE": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "ATAC": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_HISTONE": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "CHIP_TF": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_SITE_USAGE": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        },
+        "SPLICE_JUNCTIONS": {
+          "biosampleNames": [
+            "B cell"
+          ],
+          "biosampleTypes": [
+            "primary_cell"
+          ],
+          "sourceLifeStageLabels": [
+            "adult"
+          ],
+          "dataSources": [
+            "encode"
+          ]
+        }
+      },
+      "geneticModificationMetadata": {
+        "modified": 0,
+        "unmodified": 17,
+        "unknown": 6
+      },
+      "experimentalMatchVerified": false
+    }
+  ],
+  "sharedOutputs": {
+    "SPLICE_SITES": 4
+  },
+  "limitations": [
+    "Model tracks are not independent biological replicates.",
+    "A shared ontology does not establish that all assays represent the same source sample or cell state.",
+    "Shared splice-site tracks are not cell-specific splicing evidence.",
+    "A lineage/tissue proxy is not a verified match to a PSC-derived population or maturation stage.",
+    "Donor life-stage metadata does not establish differentiation state."
+  ]
+}

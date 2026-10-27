@@ -1,4 +1,3 @@
-import { AlphaGenomeReview } from "./AlphaGenomeReview.jsx";
 import React, { useState } from "react";
 import {
   runDesign,
@@ -22,23 +21,11 @@ import { DONOR_FORMATS } from "../../engine/design/donorFormat.js";
 import GenomicSnpTool from "../../engine/design/GenomicSnpTool.jsx";
 import { normalizeGenomicDesign } from "../../services/genomicDesignResult.js";
 import { fetchGeneGenbank } from "../../services/ensembl.js";
-import {
-  generateReportHtml,
-  downloadReportHtml,
-  downloadDesignJson,
-  downloadCasOffinderInput,
-  downloadSchemeSvg
-} from "../../services/designExport.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
-import { exonLabel } from "../../services/exonLabels.js";
-import { buildTakeHome } from "../../services/takeHome.js";
 import { projectDesignReagents } from "../../services/projectReagents.js";
-import { DesignResult } from "./DesignResult.jsx";
+import { DesignResultView } from "./DesignResultView.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
-import { WorkflowAgent } from "./WorkflowAgent.jsx";
-import { GuideAlternatives } from "./GuideAlternatives.jsx";
-import { KoGuidePicker } from "./KoGuidePicker.jsx";
 import {
   Search,
   Play,
@@ -271,7 +258,6 @@ export function DesignView({
 
   // Active design result
   const designResult = currentProject?.designResult || null;
-  const takeHome = designResult ? buildTakeHome({ designResult, biomniReport: currentProject?.biomniReport || null }) : null;
   const reagents = designResult
     ? projectDesignReagents(designResult, geneMeta?.geneSymbol || geneInput.trim() || designResult.gene || "")
     : null;
@@ -1049,90 +1035,21 @@ export function DesignView({
 
       {/* One design path only: the form → Generate (evidence checks run there). Enzyme compare is optional after a result. */}
 
+      {showResult && isDesigning && <p role="status" aria-live="polite">{designProgress}</p>}
+      {showResult && error && <p role="alert">{error}</p>}
       {showResult && (
-        <DesignResult
-          currentProject={currentProject}
-          designResult={designResult}
-          takeHome={takeHome}
+        <DesignResultView
+          key={`${currentProject.id}-${designResult.gs?.map(g => g.sp).join("-")}-${designResult.type}`}
+          project={currentProject}
           reagents={reagents}
+          busy={isDesigning}
           onProceedToOrder={onProceedToOrder}
-          onEditDesign={() => setEditingDesign(true)}
-          onDownloadReport={() => downloadReportHtml(currentProject, designResult)}
-          onDownloadOffTarget={() => { const built = downloadCasOffinderInput(currentProject, designResult); if (!built.ok) setError(`Cas-OFFinder input: ${built.error}`); }}
-          onChoosePair={designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 ? () => document.getElementById("bench-ko-picker")?.scrollIntoView({ behavior: "smooth", block: "start" }) : null}
-        >
-          {designResult.type === "ko" && designResult.koPicker?.rows?.length > 0 && (
-            <details id="bench-ko-picker" className="card" style={{ marginTop: "1rem", borderColor: designResult.koPairChoice?.source === "user" ? "var(--primary)" : undefined }} open>
-              <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-                Choose the guide pair
-              </summary>
-              <div style={{ marginTop: "1rem" }}>
-                <KoGuidePicker
-                  result={designResult}
-                  genbankRaw={currentProject.genbankRaw || genbankRaw}
-                  geneSymbol={geneMeta?.geneSymbol || geneInput.trim()}
-                  busy={isDesigning}
-                  onUsePair={handleUsePair}
-                  onUseRecommended={handleRunDesign}
-                />
-              </div>
-            </details>
-          )}
-
-          {designResult.type === "ko" && !(designResult.koPicker?.rows?.length > 0) && (
-            <div id="bench-ko-picker" className="card" role="note" style={{ marginTop: "1rem", fontSize: "0.85rem", color: "var(--text-muted)" }}>
-              <strong style={{ color: "var(--text-main)" }}>Guide list not available for this design.</strong>{" "}
-              {designResult.koPickerError
-                ? `It could not be built (${designResult.koPickerError}).`
-                : "It was made before the guide list existed, or from a saved project; click Generate design to list and choose guides."}
-            </div>
-          )}
-
-          <details id="bench-design-report" className="card" style={{ marginTop: "1rem", padding: 0, overflow: "hidden" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none", padding: "0.85rem 1.25rem" }}>
-              Full design report: guides, primers, sequences and every check
-            </summary>
-            <div style={{ padding: "0.5rem 1.25rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", borderTop: "1px solid var(--border-color)" }}>
-              <button className="btn btn-secondary" onClick={() => downloadReportHtml(currentProject, designResult)} title="Download standalone HTML report"><FileText size={16} /><span>Download HTML report</span></button>
-              {currentProject?.svgScheme && (
-                <button className="btn btn-secondary" onClick={() => downloadSchemeSvg(currentProject, currentProject.svgScheme)} title="Download standalone SVG vector schematic"><Download size={16} /><span>Download SVG</span></button>
-              )}
-              <button className="btn btn-secondary" onClick={() => downloadDesignJson(currentProject, designResult)} title="Download machine-readable design specification JSON"><Download size={16} /><span>Design JSON</span></button>
-            </div>
-            <div style={{ padding: "0.4rem" }}>
-              <iframe
-                title="ASSURED design report"
-                srcDoc={generateReportHtml(currentProject, designResult)}
-                sandbox="allow-same-origin"
-                style={{ width: "100%", height: "82vh", minHeight: "740px", border: "none", borderRadius: "8px", background: "#ffffff" }}
-              />
-            </div>
-          </details>
-
-          {designResult.guideAlternatives?.candidates?.length > 0 && (
-            <details className="card" style={{ marginTop: "1rem" }}>
-              <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-                Switch Guide RNA ({designResult.guideAlternatives.candidates.length} nearby candidates)
-              </summary>
-              <div style={{ marginTop: "1rem" }}>
-                <GuideAlternatives
-                  result={designResult}
-                  onSelectAlternative={handleSelectAlternativeGuide}
-                />
-              </div>
-            </details>
-          )}
-
-          <details className="card" style={{ marginTop: "1rem" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-              Advanced: compare enzymes
-            </summary>
-            <div style={{ marginTop: "0.75rem" }}>
-              <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />
-              <AlphaGenomeReview key={currentProject.id} project={currentProject} />
-            </div>
-          </details>
-        </DesignResult>
+          onUpdateProject={onUpdateProject}
+          onUsePair={handleUsePair}
+          onUseRecommended={handleRunDesign}
+          onSelectAlternative={handleSelectAlternativeGuide}
+          onEditSettings={() => setEditingDesign(true)}
+        />
       )}
     </div>
   );

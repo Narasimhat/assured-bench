@@ -26,11 +26,11 @@ const report = {
 test("take-home for a good knockout: what, so what, four numbers, what to watch, what to do", () => {
   const t = buildTakeHome({ designResult: ko(dipk2a, "DIPK2A"), biomniReport: report });
   assert.match(t.headline, /^Two guides cut 47 bp apart in exon 2 of DIPK2A; the segment between them is deleted and the reading frame shifts\.$/);
-  assert.match(t.bottomLine, /^Use this pair\. Frameshifts are predicted to trigger nonsense-mediated decay; the weaker guide gives at least 86\.9% loss-of-function alleles\./);
+  assert.match(t.bottomLine, /^Use this pair\. Frameshifts are predicted to trigger nonsense-mediated decay; the weaker guide has 86\.9% predicted loss-of-function alleles\./);
   assert.match(t.bottomLine, /Main risk: NM_001134470\.2, NM_001363944\.1 may still make protein\.$/);
   assert.equal(t.status.label, "Review before ordering");
-  assert.deepEqual(t.facts.map(f => f.label), ["Guides", "Predicted protein loss", "Transcripts hit", "Clones to screen"]);
-  assert.equal(t.facts[1].value, "\u2265 86.9%");
+  assert.deepEqual(t.facts.map(f => f.label), ["Guides", "Predicted LoF alleles", "Transcripts hit", "Clones to screen"]);
+  assert.equal(t.facts[1].value, "86.9%");
   assert.equal(t.facts[2].value, "3/3 RefSeq \u00b7 5/6 Ensembl");
   assert.equal(t.facts[3].value, "6"); assert.match(t.facts[3].note, /PCR 477 \u2192 430 bp/);
   assert.equal(t.nextSteps.length, 3); assert.match(t.nextSteps[2], /6 clones.*477 bp.*430 bp.*Western/);
@@ -84,28 +84,19 @@ test("other edit types get a short generic take-home from their own status and w
   assert.equal(buildTakeHome({ designResult: { err: "x" } }), null); assert.equal(buildTakeHome({}), null);
 });
 
-test("the report opens with the take-home, keeps the guide table the QC importer reads, and shows far less by default", () => {
+test("the complete report is a continuous scientific manuscript and retains QC-importable sequence tables", () => {
   const result = ko(dipk2a, "DIPK2A");
   const html = generateReportHtml({ gene: "DIPK2A", editType: "ko", options: {}, biomniReport: report, genbankRaw: dipk2a }, result);
-  const home = html.indexOf('<section class="th"'), guides = html.indexOf("<h2>gRNA Sequences</h2>");
-  assert.ok(home > 0 && home < guides, "take-home first");
-  assert.match(html.slice(home, guides), /Use this pair\./);
-  assert.doesNotMatch(html, /<!--TAKEHOME-->|<!--EVIDENCE-->/, "placeholders are always replaced");
-  // detail sections are closed folds; only a blocked design opens its review items
-  for (const title of ["Release status and summary", "Knockout Design", "Design Readiness", "Review Checkpoints"]) assert.match(html, new RegExp(`<details class="fold"><summary>${title}`), title);
-  assert.doesNotMatch(html, /<script>/, "no script in the in-app preview");
+  assert.ok(html.indexOf('id="abstract"') < html.indexOf("<h2>gRNA Sequences</h2>"));
+  for (const section of ["Abstract", "1. Design rationale", "2. Computational results", "3. Proposed experimental plan", "4. Discussion and limitations", "5. Methods and reproducibility", "6. References", "Supplementary data"]) assert.ok(html.includes(section), section);
+  assert.doesNotMatch(html, /<!--TAKEHOME-->|<!--EVIDENCE-->|<details|<script>/);
   assert.match(withPrintOpeningFolds(html), /beforeprint/);
-  // the Studio/QC import reads this report back
   const parsed = parseDesignReport(html);
-  assert.equal(parsed.length, 1); assert.deepEqual(parsed[0].guides.map(g => g.sequence), result.gs.map(g => g.sp));
-  // visible without opening a fold
-  let visible = html.replace(/<style[\s\S]*?<\/style>/g, "").replace(/<details[^>]*>\s*<summary>([\s\S]*?)<\/summary>[\s\S]*?<\/details>/g, " $1 ").replace(/<svg[\s\S]*?<\/svg>/g, " ").replace(/<[^>]+>/g, " ");
-  const all = html.replace(/<style[\s\S]*?<\/style>/g, "").replace(/<svg[\s\S]*?<\/svg>/g, " ").replace(/<[^>]+>/g, " ");
-  assert.ok(words(visible) < 520, `visible by default: ${words(visible)} words`);
-  assert.ok(words(all) > 3 * words(visible), "the detail is still in the file, behind the folds");
-  // a blocked design opens its release status
-  const blocked = generateReportHtml({ gene: "DIPK2A", editType: "ko", options: {}, biomniReport: null, genbankRaw: dipk2a }, { ...result, procurement: { ...result.procurement, status: "blocked", blockers: ["x"] } });
-  assert.match(blocked, /<details class="fold" open><summary>Release status and summary/);
+  assert.equal(parsed.length, 1);
+  assert.deepEqual(parsed[0].guides.map(g => g.sequence), result.gs.map(g => g.sp));
+  const blocked = generateReportHtml({ gene: "DIPK2A", editType: "ko" }, { ...result, procurement: { status: "blocked", blockers: ["Specific unresolved blocker"] } });
+  assert.match(blocked, /Design status: blocked/);
+  assert.match(blocked, /Specific unresolved blocker/);
 });
 
 test("take-home text from data is escaped in the report", () => {

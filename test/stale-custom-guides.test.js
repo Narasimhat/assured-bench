@@ -35,8 +35,9 @@ test("the screens that start a design from saved options strip the per-run setti
   const design = read("components/design/DesignView.jsx"), agent = read("components/design/WorkflowAgent.jsx"), service = read("services/biomniAgent.js");
   assert.match(design, /\.\.\.withoutRunOverrides\(currentProject\.options\),\s*\n\s*enzyme,/);
   assert.match(design, /options: \{ \.\.\.withoutRunOverrides\(currentProject\.options\), \.\.\.withoutRunOverrides\(options\) \}/);
-  assert.match(agent, /\.\.\.withoutRunOverrides\(project\?\.options\),\s*\n\s*enzyme: enzymeId/);
-  assert.match(agent, /options: withoutRunOverrides\(opts\)/);
+  assert.match(agent, /request = agentRequest\(project, enzymes, priority\)/);
+  assert.match(agent, /options: \{ \.\.\.request\.options, enzyme: candidate\.enzyme/);
+  assert.match(agent, /customGuides: \[\]/);
   assert.match(service, /\.\.\.withoutRunOverrides\(currentProject\?\.options\),\s*\n\s*enzyme: intent\.enzyme,\s*\n\s*spacerLength/);
-  for (const [name, src] of [["DesignView", design], ["WorkflowAgent", agent]]) assert.match(src, /import \{ withoutRunOverrides \} from "\.\.\/\.\.\/services\/runOptions\.js"/, name);
+  assert.match(design, /import \{ withoutRunOverrides \} from "\.\.\/\.\.\/services\/runOptions\.js"/);
 });

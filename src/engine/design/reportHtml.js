@@ -1419,7 +1419,7 @@ function escapedResult(result) {
   };
 }
 
-export function buildReportHtml(meta, result, fileName, historicalContext, reviewItems, brunelloLibrary = null) {
+export function buildReportHtml(meta, result, fileName, historicalContext, reviewItems, brunelloLibrary = null, { includeScheme = true } = {}) {
   if (!result) return "";
   const unescapedResult = result;
   meta = escapedMeta(meta);
@@ -1439,7 +1439,7 @@ export function buildReportHtml(meta, result, fileName, historicalContext, revie
   const releaseVerdictBlock = buildReleaseVerdictHtml(result);
   const coDeliveryBlock = buildCoDeliveryHtml(result);
   const readinessBlock = buildDesignReadinessHtml(result);
-  const designSchemeBlock = buildDesignSchemeHtml(result);
+  const designSchemeBlock = includeScheme ? buildDesignSchemeHtml(result) : "";
   const locusMapBlock = buildLocusMapHtml(result);
   const snapshotBlock = buildReportSnapshotHtml(result);
   // Per donor, not per design: the guide+donor pair is the orderable unit.

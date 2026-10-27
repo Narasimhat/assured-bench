@@ -76,12 +76,12 @@ export function buildTakeHome({ designResult: d, biomniReport: b = null } = {}) 
     headline = guides.length === 2
       ? `Two guides cut ${spacing ?? "?"} bp apart in ${exon} of ${gene}; the segment between them is deleted${frameshift === true ? " and the reading frame shifts" : frameshift === false ? " and the reading frame is kept" : ""}.`
       : `One guide cuts ${gene} in ${exon}.`;
-    const lofPart = Number.isFinite(minLof) ? `; the weaker guide gives at least ${pct(minLof)} loss-of-function alleles` : "";
+    const lofPart = Number.isFinite(minLof) ? `; the weaker guide has ${pct(minLof)} predicted loss-of-function alleles` : "";
     if (tier === "escape" || tier === "truncation") bottomLine = "Do not order this pair: frameshifts here may escape nonsense-mediated decay and leave a truncated protein.";
     else if (tier === "marginal") bottomLine = `Usable but marginal: some frameshifts may only partly trigger nonsense-mediated decay${lofPart}.`;
     else bottomLine = `Use this pair. Frameshifts are predicted to trigger nonsense-mediated decay${lofPart}.`;
     facts.push({ label: "Guides", value: guides.map((g) => `${g.spacer} (${g.strand})`).join("  +  "), note: spacing != null ? `${spacing} bp apart` : "" });
-    facts.push({ label: "Predicted protein loss", value: Number.isFinite(minLof) ? `\u2265 ${pct(minLof)}` : "not predicted", note: Number.isFinite(minLof) ? `weaker guide, Lindel; ${tier || "tier unknown"}` : "needs the SpCas9 repair model" });
+    facts.push({ label: "Predicted LoF alleles", value: Number.isFinite(minLof) ? pct(minLof) : "not predicted", note: Number.isFinite(minLof) ? `weaker guide, Lindel; ${tier || "tier unknown"}` : "needs the SpCas9 repair model" });
     const cc = b?.cutCoverage;
     if (cc?.ok) {
       const weakest = (key) => (cc.guides || []).map((g) => g[key]).filter(Boolean).sort((x, y) => x.covered / x.total - y.covered / y.total)[0];

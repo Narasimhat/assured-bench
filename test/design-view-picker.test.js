@@ -24,32 +24,23 @@ async function render(designResultFor, biomniReport = null) {
   } finally { await vite.close(); }
 }
 
-test("the take-home comes first, then the open guide picker, then the closed full report", async () => {
+test("result mode shows the selected design and reagents, with report and alternatives in dedicated views", async () => {
   const html = await render(result => result);
-  const resultRoot = html.indexOf('id="bench-design-result"');
-  const home = html.indexOf('id="bench-take-home"');
-  const picker = html.indexOf('id="bench-ko-picker"');
-  const report = html.indexOf('id="bench-design-report"');
-  assert.ok(resultRoot > 0 && home > 0 && picker > 0 && report > 0, "result shell and all three sections render");
-  assert.ok(resultRoot < home && home < picker && picker < report, "result, take-home, picker, report in that order");
-  assert.match(html.slice(picker - 20, picker + 120), /<details[^>]*id="bench-ko-picker"[^>]*open/);
-  assert.doesNotMatch(html.slice(report - 20, report + 120), /<details[^>]*id="bench-design-report"[^>]*open/, "the long report is closed until asked for");
-  assert.match(html, /Choose the guide pair/);
-  assert.ok((html.match(/Use this pair/g) || []).length >= 1);
-  // Result mode: parameter form and its dropdowns stay behind Edit design
-  assert.doesNotMatch(html, /1\. Design your edit/);
-  assert.doesNotMatch(html, /aria-label="Enzyme"/);
+  assert.match(html, /id="bench-design-result"/);
+  assert.match(html, /id="bench-take-home"/);
+  assert.match(html, /Selected reagents/);
+  assert.match(html, /Open scientific report/);
+  assert.match(html, /Alternative guides/);
+  assert.match(html, /Analysis &amp; evidence/);
+  assert.doesNotMatch(html, /<details|<iframe|1\. Design your edit|aria-label="Enzyme"/);
   assert.match(html, /Edit design/);
-  assert.match(html, /Order these reagents/);
-  assert.match(html, /Advanced: compare enzymes/);
+  assert.equal((html.match(/Review &amp; export order/g) || []).length, 1, "one primary continuation action");
 });
 
-test("a knockout design without a guide list says why instead of showing nothing", async () => {
-  const noPicker = await render(result => ({ ...result, koPicker: null }));
-  assert.match(noPicker, /Guide list not available for this design/);
-  assert.match(noPicker, /click Generate design/);
-  const failed = await render(result => ({ ...result, koPicker: null, koPickerError: "boom" }));
-  assert.match(failed, /could not be built \(boom\)/);
+test("saved knockout designs without a guide list still expose the alternative-guide view", async () => {
+  const html = await render(result => ({ ...result, koPicker: null }));
+  assert.match(html, /Alternative guides/);
+  assert.match(html, /Selected reagents/);
 });
 
 test("the take-home states the transcripts hit, the watch-points and the next steps; the Cas-OFFinder input is one click away", async () => {
@@ -61,17 +52,17 @@ test("the take-home states the transcripts hit, the watch-points and the next st
   const fx = JSON.parse(fs.readFileSync(new URL("./fixtures/isoform-evidence.json", import.meta.url), "utf8")).genes.TP53.openTargets.target;
   const viability = { ok: true, source: "Open Targets Platform", ...summariseViability(fx.target, fx.meta) };
   const html = await render(result => result, { ...report, viability, cutCoverage: { ok: true, guides: [guide, guide], basis: "test" } });
-  const home = html.slice(html.indexOf('id="bench-take-home"'), html.indexOf('id="bench-ko-picker"'));
+  const home = html.slice(html.indexOf('id="bench-take-home"'), html.indexOf('class="card design-result-reagents"'));
   assert.match(home, /Review before ordering/);
   assert.match(home, /Two guides cut \d+ bp apart in exon 2 of DIPK2A/);
   assert.match(home, /3\/3 RefSeq/); assert.match(home, /5\/6 Ensembl/);
   assert.match(home, /Constrained gene \(pLI 1/);
   assert.match(home, /DIPK2A-209/);
   assert.match(home, /Off-targets are not checked/);
-  assert.match(home, /Proceed to Order/); assert.match(home, /Cas-OFFinder input/); assert.match(home, /Download report/);
-  // enzyme compare stays available under Advanced; transcript evidence is in the take-home / report
-  assert.match(html, /Advanced: compare enzymes/);
-  assert.match(html, /Transcripts hit/);
+  assert.match(home, /Review &amp; export order/); assert.match(home, /Cas-OFFinder input/); assert.match(home, /Open scientific report/);
+  // The process view is mounted only when requested.
+  assert.match(html, /Analysis &amp; evidence/);
+  assert.doesNotMatch(html, /Advanced: Co-Scientist/);
   const none = await render(result => result, report);
   assert.match(none.slice(none.indexOf('id="bench-take-home"'), none.indexOf('id="bench-ko-picker"')), /Transcripts hit/);
 });

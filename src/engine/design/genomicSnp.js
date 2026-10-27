@@ -92,7 +92,7 @@ export function designGenomicSnp(raw, input) {
 }
 
 const escape = (s) => String(s ?? '').replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-export function buildGenomicSnpReport(r) {
+export function buildGenomicSnpReport(r, reportOptions = {}) {
   if (!r || r.err) throw Error('A validated nucleotide design is required for a report.');
   // Adapt nucleotide results to the shared report model; never pretend this is a protein edit.
   const clean = value => typeof value === 'string' ? escape(value) : Array.isArray(value) ? value.map(clean) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k,v])=>[k,clean(v)])) : value;
@@ -109,5 +109,5 @@ export function buildGenomicSnpReport(r) {
     guideSequenceQc:safe.candidates.map(c=>({...c.qc,guideName:c.name})),
     extraSectionHtml:pairSectionHtml(r),
   };
-  return buildReportHtml({...safe.input,projectType:'genomic-snv',notes:`${BLOCKING_POLICIES[r.input.blockingPolicy || 'none']}. Guides are listed by cut distance. ${r.enzyme ? 'Canonical-PAM checks assess the repaired allele; residual activity is unscored for this enzyme. No SpCas9 CFD is applied.' : 'Residual CFD estimates activity against the repaired allele, not genome-wide specificity or editing probability.'}`},result,safe.input.fileName,null,safe.warnings.map(text=>({level:'warning',text})));
+  return buildReportHtml({...safe.input,projectType:'genomic-snv',notes:`${BLOCKING_POLICIES[r.input.blockingPolicy || 'none']}. Guides are listed by cut distance. ${r.enzyme ? 'Canonical-PAM checks assess the repaired allele; residual activity is unscored for this enzyme. No SpCas9 CFD is applied.' : 'Residual CFD estimates activity against the repaired allele, not genome-wide specificity or editing probability.'}`},result,safe.input.fileName,null,safe.warnings.map(text=>({level:'warning',text})), null, reportOptions);
 }

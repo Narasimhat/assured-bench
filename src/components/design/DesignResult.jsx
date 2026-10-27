@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowRight, Check, Copy, Pencil } from "lucide-react";
+import { Check, Copy, Pencil } from "lucide-react";
 import { TakeHomeCard } from "./TakeHomeCard.jsx";
 import { getEnzyme } from "../../engine/design/enzymeConfig.js";
 import { getProjectTypeMeta } from "../../engine/design/reportHtml.js";
@@ -85,10 +85,9 @@ export function DesignResult({
   const typeLabel = editTypeLabel(designResult.type || currentProject?.editType);
   const status = designResult.procurement?.status || "review";
   const blockers = designResult.procurement?.blockers || [];
-  const warnings = designResult.procurement?.warnings || [];
 
   const proceedLabel =
-    status === "ready" ? "Proceed to Order" : status === "blocked" ? null : "Proceed with review";
+    status === "blocked" ? null : "Review & export order";
   const primaryIsFix = status === "blocked";
 
   return (
@@ -125,20 +124,17 @@ export function DesignResult({
         }
       />
 
-      {(status !== "ready" && (blockers.length > 0 || warnings.length > 0)) && (
+      {(status === "blocked" && blockers.length > 0) && (
         <div className="design-result-gates" role="status">
           {blockers.slice(0, 3).map((text, i) => (
             <p key={`b${i}`} className="design-result-gate design-result-gate-bad">{text}</p>
           ))}
-          {status === "review" && warnings.slice(0, 2).map((text, i) => (
-            <p key={`w${i}`} className="design-result-gate design-result-gate-warn">{text}</p>
-          ))}
         </div>
       )}
 
-      <section className="card design-result-reagents" aria-label="Orderable reagents">
+      <section className="card design-result-reagents" aria-label="Selected reagents">
         <div className="card-title" style={{ marginBottom: "0.75rem" }}>
-          <span>Order these reagents</span>
+          <span>Selected reagents</span>
           <span className="muted" style={{ fontWeight: 500, fontSize: "0.85rem" }}>
             {reagents.counts.guides} guide{reagents.counts.guides === 1 ? "" : "s"}
             {" · "}
@@ -169,14 +165,6 @@ export function DesignResult({
           />
         </div>
 
-        {!primaryIsFix && proceedLabel && (
-          <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-primary" onClick={onProceedToOrder}>
-              <span>{proceedLabel}</span>
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        )}
       </section>
 
       {children}

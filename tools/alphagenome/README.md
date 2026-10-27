@@ -119,3 +119,47 @@ biological accuracy, or wet-lab calibration.
 
 Sources: [SDK](https://github.com/google-deepmind/alphagenome),
 [documentation](https://google-deepmind-alphagenome.readthedocs-hosted.com/).
+
+## Broad PSC and derivative context panel (planning)
+
+The **Analysis & evidence** view now provides a regulatory study panel for a
+pluripotent reference and cardiac, neural, hepatic, pancreatic, vascular, renal,
+muscle and immune contexts. Its coverage is generated from the human
+`output_metadata` API. Each derivative entry is a lineage or tissue **proxy**;
+its differentiation protocol and maturation state have not been matched to the
+experimental cells. WTC11/H1/H9 are reference model contexts, not an automatic
+assignment of the user's cell line.
+
+**Use this study panel** adds a context plan to the current experiment. Use the
+header **Save** button to retain it between sessions. The scientific
+report includes the saved panel with an explicit **predictions not run** label.
+Exporting a context plan stays local and contains no DNA, model predictions or API
+credentials. This planning schema is not an executable v1 donor-review request.
+It does not extend the substitution runner to knockout or insertion alleles, and
+does not change guide selection or release decisions.
+
+The default broad panel contains WTC11 and nine derivative/state contexts. H1, H9,
+adult cardiac, additional neuronal, pancreatic, muscle and immune contexts can be
+selected individually. Shared `SPLICE_SITES` predictions are not counted as
+cell-specific splicing coverage. Assay counts describe model tracks, not
+independent biological replicates.
+
+Refresh the compact catalog explicitly with your local key:
+
+```bash
+.venv-alphagenome/bin/python tools/alphagenome/context_catalog.py \
+  --refresh --output src/services/data/alphaGenomeContexts.json
+```
+
+For reproducible offline regeneration, provide a saved human metadata snapshot:
+
+```bash
+.venv-alphagenome/bin/python tools/alphagenome/context_catalog.py \
+  --metadata-file local-reviews/alphagenome-human-output-metadata.json \
+  --output src/services/data/alphaGenomeContexts.json
+```
+
+The next implementation stage requires exact edited-allele construction,
+verified genomic mapping, indel-aware prediction/scoring, and persistence of
+matched result evidence. A configured context panel alone is not a completed
+regulatory review.

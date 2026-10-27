@@ -1,0 +1,20 @@
+[
+  {"id":"wtc11","label":"WTC11 iPSC reference","lineage":"Pluripotent","ontology":"EFO:0009747","match":"reference","default":true},
+  {"id":"h1","label":"H1 embryonic stem-cell reference","lineage":"Pluripotent","ontology":"EFO:0003042","match":"reference","default":false},
+  {"id":"h9","label":"H9 embryonic stem-cell reference","lineage":"Pluripotent","ontology":"EFO:0003045","match":"reference","default":false},
+  {"id":"cardiac","label":"Cardiac muscle cell","lineage":"Cardiac","ontology":"CL:0000746","match":"lineage-proxy","default":true},
+  {"id":"adult-cardiac","label":"Regular cardiac myocyte (adult reference)","lineage":"Cardiac","ontology":"CL:0002098","match":"lineage-proxy","default":false},
+  {"id":"neural-progenitor","label":"Neural progenitor cell","lineage":"Neural","ontology":"CL:0011020","match":"lineage-proxy","default":true},
+  {"id":"motor-neuron","label":"Motor neuron","lineage":"Neural","ontology":"CL:0000100","match":"lineage-proxy","default":true},
+  {"id":"glutamatergic-neuron","label":"Glutamatergic neuron","lineage":"Neural","ontology":"CL:0000679","match":"lineage-proxy","default":false},
+  {"id":"hepatic","label":"Hepatocyte","lineage":"Hepatic","ontology":"CL:0000182","match":"lineage-proxy","default":true},
+  {"id":"pancreatic","label":"Pancreatic beta cell","lineage":"Pancreatic","ontology":"CL:0000169","match":"lineage-proxy","default":true},
+  {"id":"pancreatic-progenitor","label":"Endocrine pancreatic progenitor","lineage":"Pancreatic","ontology":"CL:0002351","match":"lineage-proxy","default":false},
+  {"id":"vascular","label":"Endothelial cell","lineage":"Vascular","ontology":"CL:0000115","match":"lineage-proxy","default":true},
+  {"id":"renal","label":"Proximal-tubule epithelial cell","lineage":"Renal","ontology":"CL:0002306","match":"lineage-proxy","default":true},
+  {"id":"muscle-progenitor","label":"Skeletal muscle myoblast","lineage":"Muscle","ontology":"CL:0000515","match":"lineage-proxy","default":true},
+  {"id":"muscle-tissue","label":"Skeletal muscle tissue","lineage":"Muscle","ontology":"UBERON:0001134","match":"tissue-proxy","default":false},
+  {"id":"myeloid","label":"CD14-positive monocyte","lineage":"Immune","ontology":"CL:0001054","match":"lineage-proxy","default":true},
+  {"id":"t-cell","label":"CD8-positive alpha-beta T cell","lineage":"Immune","ontology":"CL:0000625","match":"lineage-proxy","default":false},
+  {"id":"b-cell","label":"B cell","lineage":"Immune","ontology":"CL:0000236","match":"lineage-proxy","default":false}
+]
