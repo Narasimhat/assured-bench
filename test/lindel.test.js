@@ -8,7 +8,7 @@ import { parseGB } from "../src/engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../src/engine/design/transcriptModel.js";
 import { parseLindelWeights, predictLindel, lindelEdits } from "../src/engine/design/lindel/lindel.js";
 import { loadLindel, LINDEL_WEIGHTS_URL } from "../src/engine/design/lindel/loadLindel.js";
-import { rankKoGuides, createKoOutcomeScorer, listKoCandidates, toCsv } from "../src/engine/design/koRank.js";
+import { rankKoGuides, createKoOutcomeScorer, listKoCandidates, predictKoCandidates, rankFromEdits, toCsv } from "../src/engine/design/koRank.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const fixture = (name) => path.join(HERE, "fixtures", name);
@@ -94,4 +94,29 @@ test("scorer: the engine's guide objects get the same numbers as the ranking, on
   assert.equal(score({ sp: "ACGTACGTACGTACGTACGT", str: "+", cut: 40 }), null, "too close to the end of the sequence");
   assert.equal(score({ sp: "ACGTACGTACGTACGTACGT", str: "+", cut: 5000 }), null, "spacer does not match the record");
   assert.ok(rows[G2].predicted_LoF_allele_pct < 40 && rows[EARLY].predicted_LoF_allele_pct > 89);
+});
+
+
+test("shared repair cache preserves full rankings and isolates weights, transcript models, thresholds and mismatched spacers", () => {
+  const candidates = listKoCandidates(model);
+  const guide = candidates[0];
+  const score = createKoOutcomeScorer(model, lindel);
+  const original = score(guide);
+  assert.strictEqual(createKoOutcomeScorer(model, lindel)(guide), original, "reselection reuses the same prediction");
+  assert.equal(score({ ...guide, spacer: "A".repeat(20) }), null, "a different spacer at the same cut cannot borrow a cached score");
+  assert.strictEqual(score(guide), original, "invalid input does not poison the valid guide");
+  assert.notStrictEqual(createKoOutcomeScorer(model, { ...lindel })(guide), original, "different weights have their own predictions");
+  const otherModel = { ...model, gene: "Other annotation" };
+  assert.notStrictEqual(createKoOutcomeScorer(otherModel, lindel)(guide), original, "other transcript annotations have their own consequences");
+  const threshold = { minFreq: 0.01 };
+  assert.notStrictEqual(createKoOutcomeScorer(model, lindel, threshold)(guide), original);
+  const independent = rankFromEdits(model, predictKoCandidates(model, lindel, threshold));
+  const cached = rankKoGuides(model, lindel, threshold);
+  assert.deepEqual(cached, independent, "every ranking field matches independent prediction and classification");
+  for (const row of cached) {
+    const g = candidates.find(c => c.spacer === row.spacer && c.strand === row.strand && c.exonIndex === row.coding_exon && c.offset === row.cut_after_exon_nt);
+    const hit = createKoOutcomeScorer(model, lindel, threshold)(g);
+    assert.equal(hit.lofPct, row.predicted_LoF_allele_pct);
+    assert.equal(hit.frameshiftPct, row.lindel_frameshift_pct);
+  }
 });

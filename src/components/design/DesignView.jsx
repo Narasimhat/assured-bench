@@ -251,6 +251,7 @@ export function DesignView({
   const [clinvarState, setClinvarState] = useState({ status: "idle", variants: [], message: "" });
   const [isLoadingGene, setIsLoadingGene] = useState(false);
   const [isDesigning, setIsDesigning] = useState(false);
+  const [designProgress, setDesignProgress] = useState("");
   const [error, setError] = useState(null);
 
   const setGeneInput = (gene) => onUpdateProject({ gene, geneMeta: null, genbankRaw: "" });
@@ -415,7 +416,11 @@ export function DesignView({
       return;
     }
     setIsDesigning(true);
+    setDesignProgress("Preparing guide design…");
     setError(null);
+    // Allow React and the browser to paint a stage before synchronous calculation starts.
+    const yieldToUi = () => new Promise(resolve => setTimeout(resolve, 0));
+    await yieldToUi();
     try {
       const resolvedTag = editType === "it"
         ? (INTERNAL_TAGS[tag] ? tag : "SPOT")
@@ -447,6 +452,8 @@ export function DesignView({
         ...(customGuidesOverride?.length ? { customGuides: customGuidesOverride } : {})
       };
 
+      setDesignProgress("Selecting guides and predicting repair outcomes…");
+      await yieldToUi();
       let result = runDesign(
         editType,
         genbankRaw,
@@ -492,6 +499,10 @@ export function DesignView({
             },
             initialDesignResult: result,
             preloadedLindel: koLindel || null,
+            yieldToUi,
+            onStep: ({ currentStep }) => {
+              if (currentStep) setDesignProgress(currentStep.title);
+            },
             preserveCustomGuides: Boolean(customGuidesOverride?.length),
             // choosing another pair for the same gene and reference does not change the isoform, protein and ClinVar lookups, so they are not repeated
             reuse: currentProject.biomniReport && currentProject.genbankRaw === genbankRaw && currentProject.biomniReport.intent?.gene === resolvedGene
@@ -507,6 +518,8 @@ export function DesignView({
         console.warn("Co-scientist enrichment skipped:", enrichErr?.message || enrichErr);
       }
 
+      setDesignProgress("Preparing the design report…");
+      await yieldToUi();
       result.procurement = summarizeProcurementReadiness(result);
       const svgScheme = buildDesignSchemeSvg(result);
       const caption = buildDesignSchemeCaption(result);
@@ -533,6 +546,7 @@ export function DesignView({
       setError("Design calculation failed: " + (err.message || String(err)));
     } finally {
       setIsDesigning(false);
+      setDesignProgress("");
     }
   };
 
@@ -1010,6 +1024,12 @@ export function DesignView({
                 <span>{isDesigning ? "Computing Design..." : "Generate design"}</span>
               </button>
             </div>
+
+            {isDesigning && (
+              <div role="status" aria-live="polite" style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                {designProgress}
+              </div>
+            )}
 
             {error && (
               <div role="alert" style={{ marginTop: "1rem", padding: "0.75rem", borderRadius: "8px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)", color: "var(--danger)", fontSize: "0.9rem", fontWeight: 600 }}>

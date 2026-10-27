@@ -8,7 +8,7 @@
 
 import { ENZYMES } from "../engine/design/enzymeConfig.js";
 import { withoutRunOverrides } from "./runOptions.js";
-import { parseGB, runDesign, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
+import { parseGB, runDesign, runDesignFromTranscriptModel, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
 import { assessKoGuide, codingModels } from "../engine/design/koOutcomes.js";
 import { koGuideWindow, rankKoGuides, summariseGuideOutcomes, createKoOutcomeScorer } from "../engine/design/koRank.js";
@@ -856,6 +856,7 @@ export async function runBiomniCoScientist(
     intentOverride = null,
     initialDesignResult = null,
     preloadedLindel = null,
+    yieldToUi = async () => {},
     preserveCustomGuides = false,
     reuse = null,
   } = {}
@@ -902,6 +903,7 @@ export async function runBiomniCoScientist(
     const item = plan[i];
     const t0 = Date.now();
     onStep({ status: "running", currentStep: item, completedSteps: [...steps], totalSteps: plan.length });
+    await yieldToUi();
 
     let output = { ok: true };
     try {
@@ -999,14 +1001,20 @@ export async function runBiomniCoScientist(
         const exonOf = (design) => (Number.isFinite(design?.codingExon) ? design.codingExon : null);
         const informedOptions = { ...options, ...(commonKoExons ? { commonKoExons } : {}), ...(cutCoverageFn ? { cutCoverage: cutCoverageFn } : {}) };
         const handedOver = initialDesignResult && !initialDesignResult.err;
+        const selectDesign = (selectionOptions) => {
+          const existingModel = handedOver && initialDesignResult.gb;
+          return designRunner === runDesign && existingModel && genbankRaw === currentProject.genbankRaw && currentGeneUpper === intent.gene
+            ? runDesignFromTranscriptModel(intent.editType, existingModel, intent.mutation, intent.tag, armLen, selectionOptions)
+            : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, selectionOptions);
+        };
         // One selector (koSelection.js) chooses the guides; the pan-isoform exons and the per-cut isoform coverage are inputs to it. A design handed over by Manual Design was
         // made before this evidence existed, so the same selector runs again with it; nothing else replaces the selector's pair.
-        let res = handedOver ? initialDesignResult : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, informedOptions);
+        let res = handedOver ? initialDesignResult : selectDesign(informedOptions);
         // a handed-over design is selected again only when the new evidence can change it: cut-level coverage is available, or its exon is not a pan-isoform common exon
         const needsSecondSelection = !handedOver || Boolean(cutCoverageFn) || Boolean(commonKoExons && !commonKoExons.includes(exonOf(initialDesignResult)));
         if ((commonKoExons || cutCoverageFn) && needsSecondSelection && res && !res.err) {
-          const baseline = handedOver ? res : designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, options);
-          const informed = handedOver ? designRunner(intent.editType, genbankRaw, intent.mutation, intent.tag, armLen, informedOptions) : res;
+          const baseline = handedOver ? res : selectDesign(options);
+          const informed = handedOver ? selectDesign(informedOptions) : res;
           if (informed && !informed.err && baseline && !baseline.err) {
             const spacersOf = (design) => (design.gs || []).map(g => g.sp).sort().join("|");
             if (exonOf(informed) !== exonOf(baseline)) informed.singleCdsDefault = { exon: baseline.exon, codingExon: exonOf(baseline), guides: (baseline.gs || []).slice(0, 2).map(g => g.sp) };
@@ -1060,7 +1068,9 @@ export async function runBiomniCoScientist(
         if (!loadedLindel) {
           loadedLindel = await lindelLoader();
         }
-        const model = normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
+        const model = designRunner === runDesign && designResult?.gb
+          ? designResult.gb
+          : normalizeGenBankToTranscriptModel(parseGB(genbankRaw), { expectedGene: intent.gene });
         const rawRows = rankKoGuides(model, loadedLindel);
         const isNmdBlindLocus = !rawRows.some(r => r.panel_tier === "robust" || r.panel_tier === "marginal");
 
@@ -1305,6 +1315,10 @@ export async function runBiomniCoScientist(
   }
 
   // known population variants under the guide targets and primer sites (dbSNP); "not assessed" when the query cannot run
+  if (designResult) {
+    onStep({ status: "running", currentStep: { tool: "screen_target_variants", title: "Check population variants in the selected guides" }, completedSteps: [...steps], totalSteps: plan.length });
+    await yieldToUi();
+  }
   const variantScreen = designResult
     ? await screenTargetVariants({ gene: intent.gene, genbankRaw, designResult, fetchFn })
     : null;

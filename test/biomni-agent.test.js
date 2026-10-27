@@ -181,3 +181,32 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   assert.match(reportHtml, /Broad GPP Brunello Library/);
   assert.match(reportHtml, /Wet-Lab Pre-Sequencing Genotyping Assay/);
 });
+
+test("manual evidence reselection reuses the transcript model, matches a fresh engine run, and yields after announcing each stage", async () => {
+  const { loadLindel } = await import("../src/engine/design/lindel/loadLindel.js");
+  const weights = await loadLindel();
+  const initial = runDesign("ko", dipk2aRaw, "", "", "", { enzyme: "spcas9", expectedGene: "DIPK2A", koLindel: weights });
+  const preferred = initial.codingExon === 1 ? 2 : 1;
+  const project = { gene: "DIPK2A", genbankRaw: dipk2aRaw, options: { enzyme: "spcas9" } };
+  const options = {
+    initialDesignResult: initial, preloadedLindel: weights,
+    fetchFn: async () => ({ ok: false, status: 404 }),
+    reuse: { gene: "DIPK2A", isoformAnalysis: { ok: true, recommendedCommonKoExons: [preferred], exons: [] } },
+  };
+  const events = [];
+  const optimized = await runBiomniCoScientist("Design a knockout for DIPK2A", project, {
+    ...options,
+    onStep: ({ currentStep }) => { if (currentStep) events.push(currentStep.tool); },
+    yieldToUi: async () => { events.push("yield"); },
+  });
+  assert.notStrictEqual(optimized.designResult, initial, "new evidence still triggers selection");
+  assert.strictEqual(optimized.designResult.gb, initial.gb, "the immutable transcript model is retained for scoring reuse");
+  const fresh = await runBiomniCoScientist("Design a knockout for DIPK2A", project, {
+    ...options, designRunner: (...args) => runDesign(...args),
+  });
+  assert.deepEqual(optimized.designResult, fresh.designResult);
+  assert.deepEqual(optimized.lindelRanking, fresh.lindelRanking);
+  assert.equal(events.at(-2), "screen_target_variants");
+  assert.ok(events.length > 2);
+  for (let i = 1; i < events.length; i += 2) assert.equal(events[i], "yield", "every announced stage gets a paint opportunity");
+});

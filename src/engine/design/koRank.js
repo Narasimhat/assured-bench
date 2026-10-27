@@ -66,20 +66,24 @@ export function summariseGuideOutcomes(model, guide) {
 const pct1 = (x) => Math.round(1000 * x) / 10;
 
 /** The ranking rows (one per guide with predicted outcomes), best predicted loss-of-function share first. */
+function rankingRow(model, guide, s) {
+  const tier = assessKoGuide(model, guide).tier;
+  return {
+    spacer: guide.spacer, strand: guide.strand, pam: guide.pam, coding_exon: guide.exonIndex, cut_after_exon_nt: guide.offset, gc_percent: guide.gc,
+    base_pos17: guide.spacer[16], panel_tier: tier,
+    lindel_frameshift_pct: Math.round(1000 * guide.lindelFrameshift) / 10, lindel_plus1_ins_pct: pct1(s.plus1),
+    predicted_LoF_allele_pct: pct1(s.lof), predicted_clear_NMD_allele_pct: pct1(s.clean), predicted_in_frame_pct: pct1(s.inframe), ge3bp_insertion_group_pct: pct1(s.group),
+    other_isoform_not_disrupted_pct: pct1(s.gap), predicted_biallelic_LoF_clone_pct: Math.round(s.lof ** 2 * 1000) / 10,
+  };
+}
+
+function sortRanking(rows) {
+  return rows.sort((a, b) => b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct || b.gc_percent - a.gc_percent);
+}
+
 export function rankFromEdits(model, payload) {
-  const rows = payload.guides.filter((g) => g.edits && g.edits.length).map((guide) => {
-    const s = summariseGuideOutcomes(model, guide);
-    const tier = assessKoGuide(model, guide).tier;
-    return {
-      spacer: guide.spacer, strand: guide.strand, pam: guide.pam, coding_exon: guide.exonIndex, cut_after_exon_nt: guide.offset, gc_percent: guide.gc,
-      base_pos17: guide.spacer[16], panel_tier: tier,
-      lindel_frameshift_pct: Math.round(1000 * guide.lindelFrameshift) / 10, lindel_plus1_ins_pct: pct1(s.plus1),
-      predicted_LoF_allele_pct: pct1(s.lof), predicted_clear_NMD_allele_pct: pct1(s.clean), predicted_in_frame_pct: pct1(s.inframe), ge3bp_insertion_group_pct: pct1(s.group),
-      other_isoform_not_disrupted_pct: pct1(s.gap), predicted_biallelic_LoF_clone_pct: Math.round(s.lof ** 2 * 1000) / 10,
-    };
-  });
-  rows.sort((a, b) => b.predicted_LoF_allele_pct - a.predicted_LoF_allele_pct || b.gc_percent - a.gc_percent);
-  return rows;
+  return sortRanking(payload.guides.filter((g) => g.edits && g.edits.length)
+    .map(guide => rankingRow(model, guide, summariseGuideOutcomes(model, guide))));
 }
 
 export const toCsv = (rows) => { const head = Object.keys(rows[0] || {}); return [head.join(","), ...rows.map((r) => head.map((h) => r[h]).join(","))].join("\n") + "\n"; };
@@ -94,29 +98,55 @@ export function predictKoCandidates(model, lindel, options = {}) {
 }
 
 /** Rank every candidate guide of a model with the JavaScript Lindel (same output as tools/ko-rank/run.sh, without Python). */
-export function rankKoGuides(model, lindel, options = {}) { return rankFromEdits(model, predictKoCandidates(model, lindel, options)); }
+export function rankKoGuides(model, lindel, options = {}) {
+  const rows = [];
+  for (const guide of listKoCandidates(model)) {
+    const outcome = cachedOutcome(model, lindel, guide, options);
+    if (outcome?.hasEdits) rows.push(rankingRow(model, { ...guide, lindelFrameshift: outcome.frameshift }, outcome.summary));
+  }
+  return sortRanking(rows);
+}
+
+// Transcript models and loaded weights are immutable during a run. Share pure predictions across
+// selection, evidence-based reselection and the ranking table; weak keys release them with the model.
+// Both the weights identity and outcome-frequency threshold are part of the cache scope.
+const outcomeCache = new WeakMap();
+function cachedOutcome(model, lindel, guide, options) {
+  let byWeights = outcomeCache.get(model);
+  if (!byWeights) { byWeights = new WeakMap(); outcomeCache.set(model, byWeights); }
+  let byThreshold = byWeights.get(lindel);
+  if (!byThreshold) { byThreshold = new Map(); byWeights.set(lindel, byThreshold); }
+  let cache = byThreshold.get(options.minFreq);
+  if (!cache) { cache = new Map(); byThreshold.set(options.minFreq, cache); }
+  const strand = guide.str === "-" || guide.strand === "-" ? "-" : "+";
+  const spacer = String(guide.sp || guide.spacer || "").toUpperCase();
+  const key = `${strand}:${guide.cut}:${spacer}`;
+  if (cache.has(key)) return cache.get(key);
+  let outcome = null;
+  const window65 = koGuideWindow(model, { ...guide, str: strand });
+  if (window65) {
+    const prediction = predictLindel(lindel, window65);
+    if (!prediction.error) {
+      const edits = lindelEdits(prediction, options.minFreq);
+      const s = summariseGuideOutcomes(model, { cut: guide.cut, strand, edits });
+      outcome = {
+        hasEdits: Boolean(edits.length), frameshift: prediction.frameshift, summary: s,
+        score: { lofPct: pct1(s.lof), biallelicPct: Math.round(s.lof ** 2 * 1000) / 10, frameshiftPct: pct1(prediction.frameshift), plus1Pct: pct1(s.plus1), inframePct: pct1(s.inframe), gapPct: pct1(s.gap) },
+      };
+    }
+  }
+  cache.set(key, outcome);
+  return outcome;
+}
 
 /**
  * A scorer for the design engine: `score(guide)` takes a guide as findSpCas9Guides returns it and gives
- * { lofPct, biallelicPct, frameshiftPct, plus1Pct, inframePct, gapPct } or null when the guide cannot be scored. Results are cached per cut and strand.
+ * { lofPct, biallelicPct, frameshiftPct, plus1Pct, inframePct, gapPct } or null when the guide cannot be scored. Results are cached per model, weights, frequency threshold, cut, strand and spacer.
  * The engine never waits on this: load the weights first (loadLindel), build the scorer, and pass it to the design as `koOutcomes`.
  */
 export function createKoOutcomeScorer(model, lindel, options = {}) {
-  const cache = new Map();
   return function score(guide) {
-    const strand = guide.str === "-" || guide.strand === "-" ? "-" : "+"; const key = `${strand}:${guide.cut}`;
-    if (cache.has(key)) return cache.get(key);
-    let result = null;
-    const window65 = koGuideWindow(model, { ...guide, str: strand });
-    if (window65) {
-      const prediction = predictLindel(lindel, window65);
-      if (!prediction.error) {
-        const edits = lindelEdits(prediction, options.minFreq);
-        const s = summariseGuideOutcomes(model, { cut: guide.cut, strand, edits });
-        result = { lofPct: pct1(s.lof), biallelicPct: Math.round(s.lof ** 2 * 1000) / 10, frameshiftPct: pct1(prediction.frameshift), plus1Pct: pct1(s.plus1), inframePct: pct1(s.inframe), gapPct: pct1(s.gap) };
-      }
-    }
-    cache.set(key, result);
-    return result;
+    const outcome = cachedOutcome(model, lindel, guide, options);
+    return outcome?.score || null;
   };
 }
