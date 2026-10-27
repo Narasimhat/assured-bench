@@ -567,7 +567,98 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
 .workflow-agent li { margin-bottom: 6px; }
 
 #bench-design-report { scroll-margin-top: 140px; }
-@media(max-width:700px){#bench-design-report{scroll-margin-top:12px}}
+#bench-design-result, #bench-take-home { scroll-margin-top: 140px; }
+@media(max-width:700px){
+  #bench-design-report{scroll-margin-top:12px}
+  #bench-design-result, #bench-take-home{scroll-margin-top:12px}
+}
+
+/* Product-first design result: identity, reagents, continue — not a dashboard of cards. */
+.design-result { display: flex; flex-direction: column; gap: 1rem; }
+.design-result-identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.design-result-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.design-result-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.45rem;
+  line-height: 1.25;
+  color: var(--text-main);
+}
+.design-result-title .muted { font-weight: 500; font-size: 0.95rem; }
+.design-result-reagents .card-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.design-result-reagent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 1rem;
+}
+.design-result-reagent-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.35rem;
+}
+.design-result-reagent-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.design-result-reagent-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 0.5rem;
+  align-items: start;
+}
+.design-result-reagent-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+.design-result-sequence {
+  grid-column: 1 / 2;
+  display: block;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  background: var(--primary-bg);
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+.design-result-gates {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+}
+.design-result-gate { margin: 0.25rem 0; font-size: 0.88rem; line-height: 1.4; }
+.design-result-gate-bad { color: var(--danger); font-weight: 600; }
+.design-result-gate-warn { color: var(--warning); }
 
 /* Keep optional agent controls out of the main design flow until requested. */
 .agent-optional { font-size: 0.75rem; font-weight: 500; color: var(--text-muted); margin-left: 8px; }

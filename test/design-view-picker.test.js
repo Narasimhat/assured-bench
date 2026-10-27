@@ -26,15 +26,22 @@ async function render(designResultFor, biomniReport = null) {
 
 test("the take-home comes first, then the open guide picker, then the closed full report", async () => {
   const html = await render(result => result);
+  const resultRoot = html.indexOf('id="bench-design-result"');
   const home = html.indexOf('id="bench-take-home"');
   const picker = html.indexOf('id="bench-ko-picker"');
   const report = html.indexOf('id="bench-design-report"');
-  assert.ok(home > 0 && picker > 0 && report > 0, "all three sections render");
-  assert.ok(home < picker && picker < report, "take-home, picker, report in that order");
+  assert.ok(resultRoot > 0 && home > 0 && picker > 0 && report > 0, "result shell and all three sections render");
+  assert.ok(resultRoot < home && home < picker && picker < report, "result, take-home, picker, report in that order");
   assert.match(html.slice(picker - 20, picker + 120), /<details[^>]*id="bench-ko-picker"[^>]*open/);
   assert.doesNotMatch(html.slice(report - 20, report + 120), /<details[^>]*id="bench-design-report"[^>]*open/, "the long report is closed until asked for");
   assert.match(html, /Choose the guide pair/);
   assert.ok((html.match(/Use this pair/g) || []).length >= 1);
+  // Result mode: parameter form and its dropdowns stay behind Edit design
+  assert.doesNotMatch(html, /1\. Design your edit/);
+  assert.doesNotMatch(html, /aria-label="Enzyme"/);
+  assert.match(html, /Edit design/);
+  assert.match(html, /Order these reagents/);
+  assert.match(html, /Advanced: Co-Scientist/);
 });
 
 test("a knockout design without a guide list says why instead of showing nothing", async () => {
@@ -62,8 +69,8 @@ test("the take-home states the transcripts hit, the watch-points and the next st
   assert.match(home, /DIPK2A-209/);
   assert.match(home, /Off-targets are not checked/);
   assert.match(home, /Proceed to Order/); assert.match(home, /Cas-OFFinder input/); assert.match(home, /Download report/);
-  // the evidence behind it is still on the screen, inside the closed Co-Scientist reference
-  assert.match(html, /Co-Scientist: evidence behind the design/);
+  // the evidence behind it is still on the screen, inside Advanced (closed by default)
+  assert.match(html, /Advanced: Co-Scientist/);
   assert.match(html, /Transcripts that contain each cut/);
   const none = await render(result => result, report);
   assert.match(none.slice(none.indexOf('id="bench-take-home"'), none.indexOf('id="bench-ko-picker"')), /Transcripts hit/);
