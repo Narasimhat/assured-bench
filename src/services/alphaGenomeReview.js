@@ -21,8 +21,13 @@ export const ALPHAGENOME_RESEARCH_TISSUES = Object.freeze([
   { id: "CL:0000084", label: "T cell (CL:0000084)", kind: "immune", match: "exact" },
 ]);
 
-/** Noise floor for raw maxAbsDelta before a track is treated as a research signal. Not a calibrated threshold. */
-const BLOCKER_DELTA_FLOOR = 1e-4;
+/** Noise floors for raw maxAbsDelta. Not calibrated thresholds — research heuristics only. */
+const BLOCKER_DELTA_FLOOR = {
+  RNA_SEQ: 1e-3,
+  SPLICE_SITES: 1e-3,
+  // Usage often sits on a coarse bin; equal tiny peaks must not alone force "dominate".
+  SPLICE_SITE_USAGE: 1e-2,
+};
 
 function comparisonTracks(report, id) {
   return report?.comparisons?.find((c) => c.id === id)?.tracks || [];
@@ -34,10 +39,18 @@ function peakByOutput(tracks, output) {
   return rows.reduce((best, t) => (t.maxAbsDelta > best.maxAbsDelta ? t : best), rows[0]);
 }
 
+function outputRatio(intendedPeak, blockerPeak, output) {
+  const floor = BLOCKER_DELTA_FLOOR[output] ?? 1e-4;
+  if (!intendedPeak || !blockerPeak) return null;
+  if (blockerPeak.maxAbsDelta <= floor) return 0;
+  if (intendedPeak.maxAbsDelta <= floor) return Infinity;
+  return blockerPeak.maxAbsDelta / intendedPeak.maxAbsDelta;
+}
+
 /**
  * Research-only allele safety read of an imported AlphaGenome report.
- * Compares reference→intended vs intended→full-donor peaks so silent blockers
- * that dominate expression/splicing deltas can be flagged in take-home / UI.
+ * RNA-seq and splice-site peaks lead the verdict; splice-usage alone does not
+ * force "dominate" when both peaks sit on a quantization floor.
  * Never changes READY/BLOCKED; raw track units are assay-specific.
  */
 export function summarizeBlockerSafety(report, request = null) {
@@ -48,16 +61,12 @@ export function summarizeBlockerSafety(report, request = null) {
 
   const outputs = ["RNA_SEQ", "SPLICE_SITES", "SPLICE_SITE_USAGE"];
   const byOutput = {};
-  let blockersDominate = false;
-  let blockersNotable = false;
   for (const output of outputs) {
     const intendedPeak = peakByOutput(intended, output);
     const blockerPeak = peakByOutput(blockers, output);
     if (!intendedPeak || !blockerPeak) continue;
-    const ratio = intendedPeak.maxAbsDelta > BLOCKER_DELTA_FLOOR
-      ? blockerPeak.maxAbsDelta / intendedPeak.maxAbsDelta
-      : (blockerPeak.maxAbsDelta > BLOCKER_DELTA_FLOOR ? Infinity : 0);
-    const entry = {
+    const ratio = outputRatio(intendedPeak, blockerPeak, output);
+    byOutput[output] = {
       output,
       intendedMaxAbsDelta: intendedPeak.maxAbsDelta,
       blockerMaxAbsDelta: blockerPeak.maxAbsDelta,
@@ -65,32 +74,34 @@ export function summarizeBlockerSafety(report, request = null) {
       blockerTrack: `${blockerPeak.name} (${blockerPeak.strand || "."})`,
       intendedTrack: `${intendedPeak.name} (${intendedPeak.strand || "."})`,
     };
-    byOutput[output] = entry;
-    if (blockerPeak.maxAbsDelta <= BLOCKER_DELTA_FLOOR) continue;
-    if (ratio >= 1) blockersDominate = true;
-    else if (ratio >= 0.5) blockersNotable = true;
   }
   if (!Object.keys(byOutput).length) return null;
 
+  // Primary signals for redesign: expression and splice-site class. Usage is supporting only.
+  const primary = ["RNA_SEQ", "SPLICE_SITES"].map((o) => byOutput[o]).filter(Boolean);
+  const usage = byOutput.SPLICE_SITE_USAGE;
+  const dominateLead = primary.find((e) => e.ratio >= 1) || null;
+  const notableLead = primary.find((e) => e.ratio >= 0.5) || null;
+  // Usage can reinforce dominate only when clearly above its own floor and primary is already notable.
+  const usageDominates = usage && usage.ratio >= 1.25 && usage.blockerMaxAbsDelta > BLOCKER_DELTA_FLOOR.SPLICE_SITE_USAGE;
+
   const ontology = request?.ontologyTerms?.[0] || report.ontologyTerms?.[0] || "the selected tissue";
   const donor = request?.donor || report.donor || "this donor";
-  const rna = byOutput.RNA_SEQ;
-  const splice = byOutput.SPLICE_SITES || byOutput.SPLICE_SITE_USAGE;
   let severity = "info";
   let verdict = "blockers_minor";
   let text;
   let short;
-  if (blockersDominate) {
+  if (dominateLead || (notableLead && usageDominates)) {
     severity = "warn";
     verdict = "blockers_dominate";
-    const lead = rna && rna.ratio >= 1 ? rna : (splice && splice.ratio >= 1 ? splice : rna || splice);
+    const lead = dominateLead || usage;
     text = `Donor blockers on ${donor} drive ${lead.output.replace(/_/g, "-").toLowerCase()} changes as large as or larger than the intended edit in ${ontology} (peak maxAbsΔ ${lead.blockerMaxAbsDelta.toPrecision(3)} vs intended ${lead.intendedMaxAbsDelta.toPrecision(3)} on ${lead.blockerTrack}). Try an alternate silent blocker set — research signal only, not a release gate.`;
     short = "donor blockers may drive expression/splicing changes";
-  } else if (blockersNotable) {
+  } else if (notableLead) {
     severity = "warn";
     verdict = "blockers_notable";
-    const lead = rna && rna.ratio >= 0.5 ? rna : splice || rna;
-    text = `Donor blockers on ${donor} add a notable share of the ${lead.output.replace(/_/g, "-").toLowerCase()} delta in ${ontology} (about ${Math.round(lead.ratio * 100)}% of the intended-edit peak). Consider an alternate silent set if another matched donor is available.`;
+    const lead = notableLead;
+    text = `Donor blockers on ${donor} add a notable share of the ${lead.output.replace(/_/g, "-").toLowerCase()} delta in ${ontology} (about ${Math.round(Math.min(lead.ratio, 10) * 100)}% of the intended-edit peak). Consider an alternate silent set if another matched donor is available.`;
     short = "blocker side-effects are worth checking";
   } else {
     text = `Imported AlphaGenome review for ${donor} in ${ontology}: blocker-associated deltas stay below the intended-edit peaks in this context (research only; not a safety proof).`;
@@ -105,9 +116,9 @@ export function summarizeBlockerSafety(report, request = null) {
     ontology,
     donor,
     byOutput,
-    nextStep: blockersDominate || blockersNotable
-      ? "Compare the other matched donor (or regenerate silent blockers), then re-run AlphaGenome on the leaner allele."
-      : null,
+    nextStep: verdict === "blockers_minor"
+      ? null
+      : "Compare the other matched donor (or regenerate silent blockers), then re-run AlphaGenome on the leaner allele.",
   };
 }
 

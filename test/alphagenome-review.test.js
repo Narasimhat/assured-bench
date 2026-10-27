@@ -167,6 +167,12 @@ test("blocker-safety summary flags when silent blockers dominate intended-edit p
   assert.match(dominate.text, /ssODN1/);
   assert.match(dominate.text, /EFO:0009747/);
   assert.match(dominate.nextStep, /alternate|leaner|blocker/i);
+
+  // Equal tiny splice-usage peaks must not alone force dominate when RNA blockers are minor.
+  const usageNoise = summarizeBlockerSafety(fakeReport({
+    intendedRna: 1.75, blockerRna: 1.25, intendedSplice: 0.00390625, blockerSplice: 0.00390625,
+  }));
+  assert.equal(usageNoise.verdict, "blockers_notable", "RNA ~71% of intended → notable; usage floor ignored");
 });
 
 test("take-home watch line carries AlphaGenome blocker risk without changing procurement status", async () => {
