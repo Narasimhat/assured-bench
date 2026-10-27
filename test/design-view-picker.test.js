@@ -41,7 +41,7 @@ test("the take-home comes first, then the open guide picker, then the closed ful
   assert.doesNotMatch(html, /aria-label="Enzyme"/);
   assert.match(html, /Edit design/);
   assert.match(html, /Order these reagents/);
-  assert.match(html, /Advanced: Co-Scientist/);
+  assert.match(html, /Advanced: compare enzymes/);
 });
 
 test("a knockout design without a guide list says why instead of showing nothing", async () => {
@@ -69,9 +69,9 @@ test("the take-home states the transcripts hit, the watch-points and the next st
   assert.match(home, /DIPK2A-209/);
   assert.match(home, /Off-targets are not checked/);
   assert.match(home, /Proceed to Order/); assert.match(home, /Cas-OFFinder input/); assert.match(home, /Download report/);
-  // the evidence behind it is still on the screen, inside Advanced (closed by default)
-  assert.match(html, /Advanced: Co-Scientist/);
-  assert.match(html, /Transcripts that contain each cut/);
+  // enzyme compare stays available under Advanced; transcript evidence is in the take-home / report
+  assert.match(html, /Advanced: compare enzymes/);
+  assert.match(html, /Transcripts hit/);
   const none = await render(result => result, report);
   assert.match(none.slice(none.indexOf('id="bench-take-home"'), none.indexOf('id="bench-ko-picker"')), /Transcripts hit/);
 });

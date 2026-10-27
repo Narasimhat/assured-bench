@@ -36,7 +36,7 @@ export function assessKoEligibility(guide, { enzyme = "spcas9", delivery = "rnp"
 }
 
 const inside = (model, cut) => model.cdsSegments.find(([start, end]) => start < cut && cut < end);
-// One ordering for single guides, used for the pair search, the backups and the ranking table of the Co-Scientist panel.
+// One ordering for single guides, used for the pair search, the backups and the ranking table.
 // Coding coverage, then functional tier, then (when a pan-isoform analysis supplied common exons) whether the guide cuts one, then (when transcript
 // annotations were supplied) the share of annotated coding transcripts that contain the cut, then isoform escape, then predicted LoF after the GC penalty
 // in 5-point steps, then the remaining sequence flags. The transcript share is a separate key, not a multiplier on LoF: a multiplier mixes a fraction with

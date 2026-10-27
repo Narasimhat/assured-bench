@@ -582,7 +582,7 @@ export function DesignView({
             <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: "normal", marginTop: "0.15rem" }}>
               {designResult
                 ? "Change parameters and regenerate. Your current result stays until you generate again."
-                : "Choose any of the 6 ASSURED project types, fetch a MANE Select reference from Ensembl/NCBI or ClinVar, or launch a preset."}
+                : "One path: choose the edit type, load a gene reference (or a preset), set options, then Generate design. Evidence checks run automatically with the design."}
             </div>
           </div>
 
@@ -1047,8 +1047,7 @@ export function DesignView({
         )}
       </div>}
 
-      {/* Before a design exists the Co-Scientist panel is the way in; Result mode demotes it under Advanced. */}
-      {!designResult && <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />}
+      {/* One design path only: the form → Generate (evidence checks run there). Enzyme compare is optional after a result. */}
 
       {showResult && (
         <DesignResult
@@ -1126,7 +1125,7 @@ export function DesignView({
 
           <details className="card" style={{ marginTop: "1rem" }}>
             <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-              Advanced: Co-Scientist &amp; enzyme compare
+              Advanced: compare enzymes
             </summary>
             <div style={{ marginTop: "0.75rem" }}>
               <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />

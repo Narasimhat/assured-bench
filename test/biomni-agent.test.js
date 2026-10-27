@@ -174,7 +174,7 @@ test("runBiomniCoScientist executes end-to-end KO + Lindel ranking and PM + enzy
   // the take-home is the first thing in the report, before the guides; the Co-Scientist checks are a closed fold after them
   assert.match(reportHtml, /<section class="th"/);
   assert.ok(reportHtml.indexOf('class="th"') < reportHtml.indexOf("<h2>gRNA Sequences</h2>"), "take-home before the guide table");
-  assert.match(reportHtml, /<details class="fold"><summary>Co-Scientist checks: isoforms, gene constraint, variants, library, screening/);
+  assert.match(reportHtml, /<details class="fold"><summary>Design checks: isoforms, gene constraint, variants, library, screening/);
   assert.match(reportHtml, /Review before ordering/); assert.match(reportHtml, /<h3>Next<\/h3>/);
   assert.match(reportHtml, /exon 2 \(coding exon 2\) is present in \d+ of \d+ RefSeq coding isoforms/);
   assert.doesNotMatch(reportHtml, /\(100%\)/, "an exon-level share is not reported as a percentage of isoforms covered");
