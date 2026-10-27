@@ -1129,7 +1129,7 @@ export function DesignView({
             </summary>
             <div style={{ marginTop: "0.75rem" }}>
               <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />
-              <AlphaGenomeReview key={currentProject.id} project={currentProject} />
+              <AlphaGenomeReview key={currentProject.id} project={currentProject} onUpdateProject={onUpdateProject} />
             </div>
           </details>
         </DesignResult>

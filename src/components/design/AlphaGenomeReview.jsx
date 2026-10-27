@@ -6,36 +6,111 @@ import {
   validateAlphaGenomeReport,
 } from "../../services/alphaGenomeReview.js";
 
+function formFromSaved(saved, project) {
+  const options = saved?.options;
+  const request = saved?.request;
+  const mapping = alphaGenomeMapping(project);
+  const donors = project?.designResult?.os || [];
+  let donorIndex = Number.isInteger(options?.donorIndex) ? options.donorIndex : 0;
+  if (request?.donor && donors.length) {
+    const byName = donors.findIndex((d) => d.n === request.donor);
+    if (byName >= 0) donorIndex = byName;
+  }
+  return {
+    chromosome: options?.chromosome != null
+      ? String(options.chromosome)
+      : (request?.chromosome ? String(request.chromosome).replace(/^chr/i, "") : (mapping?.chromosome || "")),
+    referenceStart: options?.referenceStart != null
+      ? String(options.referenceStart)
+      : (request?.reference?.start != null ? String(request.reference.start) : (mapping?.referenceStart != null ? String(mapping.referenceStart) : "")),
+    orientation: options?.orientation != null
+      ? String(options.orientation)
+      : (mapping?.orientation != null ? String(mapping.orientation) : ""),
+    ontologyTerm: options?.ontologyTerm || request?.ontologyTerms?.[0] || ALPHAGENOME_RESEARCH_TISSUES[0]?.id || "",
+    sequenceLength: options?.sequenceLength || request?.sequenceLength || 16384,
+    donorIndex,
+    confirmed: Boolean(saved?.report && saved?.request),
+  };
+}
+
+function reviewFingerprint({ designResult, genbankRaw, chromosome, referenceStart, orientation, ontologyTerm, sequenceLength, donorIndex, confirmed }) {
+  return JSON.stringify({
+    designType: designResult?.type || null,
+    designGene: designResult?.gene || null,
+    donorCount: designResult?.os?.length || 0,
+    donorName: designResult?.os?.[donorIndex]?.n || null,
+    genbankLen: String(genbankRaw || "").length,
+    chromosome: String(chromosome || ""),
+    referenceStart: String(referenceStart || ""),
+    orientation: String(orientation || ""),
+    ontologyTerm: String(ontologyTerm || ""),
+    sequenceLength: Number(sequenceLength) || 0,
+    donorIndex: Number(donorIndex) || 0,
+    confirmed: Boolean(confirmed),
+  });
+}
+
 /** Research-only AlphaGenome donor review. Does not gate design release; API key stays local. */
-export function AlphaGenomeReview({ project }) {
-  const declared = alphaGenomeMapping(project);
-  const [chromosome, setChromosome] = useState(declared?.chromosome || "");
-  const [referenceStart, setReferenceStart] = useState(declared?.referenceStart || "");
-  const [orientation, setOrientation] = useState(declared?.orientation || "");
-  const [ontologyTerm, setOntologyTerm] = useState(ALPHAGENOME_RESEARCH_TISSUES[0]?.id || "");
-  const [sequenceLength, setSequenceLength] = useState(16384);
-  const [donorIndex, setDonorIndex] = useState(0);
-  const [confirmed, setConfirmed] = useState(false);
-  const [report, setReport] = useState(null);
+export function AlphaGenomeReview({ project, onUpdateProject }) {
+  const saved = project?.alphaGenomeReview;
+  const initial = formFromSaved(saved, project);
+  const [chromosome, setChromosome] = useState(initial.chromosome);
+  const [referenceStart, setReferenceStart] = useState(initial.referenceStart);
+  const [orientation, setOrientation] = useState(initial.orientation);
+  const [ontologyTerm, setOntologyTerm] = useState(initial.ontologyTerm);
+  const [sequenceLength, setSequenceLength] = useState(initial.sequenceLength);
+  const [donorIndex, setDonorIndex] = useState(initial.donorIndex);
+  const [confirmed, setConfirmed] = useState(initial.confirmed);
+  const [report, setReport] = useState(saved?.report || null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);
+  const lastFingerprint = useRef(null);
   const options = { assembly: "GRCh38", chromosome, referenceStart: Number(referenceStart), orientation: Number(orientation), ontologyTerm: ontologyTerm.trim(), sequenceLength, donorIndex, mappingConfirmed: confirmed };
 
   useEffect(() => {
-    generation.current += 1;
-    setReport(null); setError(""); setBusy(false);
-    return () => { generation.current += 1; };
-  }, [project.designResult, project.genbankRaw, chromosome, referenceStart, orientation, ontologyTerm, sequenceLength, donorIndex, confirmed]);
+    const next = formFromSaved(project?.alphaGenomeReview, project);
+    setChromosome(next.chromosome);
+    setReferenceStart(next.referenceStart);
+    setOrientation(next.orientation);
+    setOntologyTerm(next.ontologyTerm);
+    setSequenceLength(next.sequenceLength);
+    setDonorIndex(next.donorIndex);
+    setConfirmed(next.confirmed);
+    setReport(project?.alphaGenomeReview?.report || null);
+    setError("");
+    setBusy(false);
+    lastFingerprint.current = null;
+  }, [project.id, project.genbankRaw]);
 
   useEffect(() => {
-    const mapping = alphaGenomeMapping(project);
-    setChromosome(mapping?.chromosome || "");
-    setReferenceStart(mapping?.referenceStart != null ? String(mapping.referenceStart) : "");
-    setOrientation(mapping?.orientation != null ? String(mapping.orientation) : "");
-    setConfirmed(false);
-    setDonorIndex(0);
-  }, [project.id, project.genbankRaw]);
+    if (project?.alphaGenomeReview?.report) setReport(project.alphaGenomeReview.report);
+  }, [project?.alphaGenomeReview?.report]);
+
+  useEffect(() => {
+    const fingerprint = reviewFingerprint({
+      designResult: project.designResult,
+      genbankRaw: project.genbankRaw,
+      chromosome,
+      referenceStart,
+      orientation,
+      ontologyTerm,
+      sequenceLength,
+      donorIndex,
+      confirmed,
+    });
+    if (lastFingerprint.current == null) {
+      lastFingerprint.current = fingerprint;
+      return;
+    }
+    if (lastFingerprint.current === fingerprint) return;
+    lastFingerprint.current = fingerprint;
+    generation.current += 1;
+    setReport(null);
+    setError("");
+    setBusy(false);
+    if (onUpdateProject && project?.alphaGenomeReview) onUpdateProject({ alphaGenomeReview: null });
+  }, [project.designResult, project.genbankRaw, chromosome, referenceStart, orientation, ontologyTerm, sequenceLength, donorIndex, confirmed, onUpdateProject, project?.alphaGenomeReview]);
 
   const detectedMapping = alphaGenomeMapping(project);
   const mappingAutoFilled = Boolean(
@@ -69,12 +144,31 @@ export function AlphaGenomeReview({ project }) {
       if (file.size > 5000000) throw new Error("Review JSON must be smaller than 5 MB.");
       const request = await buildAlphaGenomeRequest(project, options);
       const imported = validateAlphaGenomeReport(JSON.parse(await file.text()), request);
-      if (generation.current === current) setReport(imported);
+      if (generation.current !== current) return;
+      setReport(imported);
+      if (onUpdateProject) {
+        onUpdateProject({
+          alphaGenomeReview: {
+            request,
+            report: imported,
+            importedAt: new Date().toISOString(),
+            options: {
+              chromosome: String(chromosome).replace(/^chr/i, ""),
+              referenceStart: Number(referenceStart),
+              orientation: Number(orientation),
+              ontologyTerm: ontologyTerm.trim(),
+              sequenceLength,
+              donorIndex,
+            },
+          },
+        });
+      }
     } catch (e) { if (generation.current === current) setError(e.message); }
     finally { if (generation.current === current) setBusy(false); }
   }
 
   const supported = ["pm", "genomic-snv"].includes(project.designResult?.type);
+  const savedForReport = Boolean(project?.alphaGenomeReview?.report && project?.alphaGenomeReview?.request);
   return <details className="card alphagenome-review" style={{ marginTop: "1rem", padding: "1rem" }}>
     <summary><strong>AlphaGenome (research) · donor functional review</strong></summary>
     <p>
@@ -143,7 +237,12 @@ export function AlphaGenomeReview({ project }) {
         <button className="btn btn-secondary" type="button" disabled={busy || !confirmed} onClick={exportRequest}>1. Export review request</button>
         <label>2. Import completed review <input type="file" accept="application/json,.json" disabled={busy || !confirmed} onChange={importReport} /></label>
       </div>
-      <p className="muted">Local instructions: <code>tools/alphagenome/README.md</code>. Keep the resulting JSON as a separate review artifact; it is not saved into the design or used to release a design.</p>
+      <p className="muted">
+        Local instructions: <code>tools/alphagenome/README.md</code>.
+        {savedForReport
+          ? " Imported review is saved on this experiment and attached as a research fold when you download the design HTML report — it still does not gate release."
+          : " After import, the review is saved on this experiment and included in the downloaded design HTML report as a research fold (not a release gate)."}
+      </p>
       {busy && <p role="status">Checking the current donor review…</p>}
       {error && <p role="alert" className="error">{error}</p>}
       {report && <div>

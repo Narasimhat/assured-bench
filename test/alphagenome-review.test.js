@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { buildAlphaGenomeRequest, reviewRequestId, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
+import { appendAlphaGenomeReview, generateReportHtml } from "../src/services/designExport.js";
 import { runDesign } from "../src/engine/design/designEngine.js";
 import { buildQcDesignSpec } from "../src/engine/design/qcExport.js";
+import { updateProject, createProject } from "../src/services/projectState.js";
 
 function project() {
   const sequence = "A".repeat(250);
@@ -135,4 +137,42 @@ test("step 1: GenBank annotations auto-detect GRCh38 mapping for AlphaGenome", a
 
   assert.equal(alphaGenomeMapping({ genbankRaw: apoe }).grch38, true);
   assert.equal(alphaGenomeMapping({ genbankRaw: tp53 }), null);
+});
+
+test("step 2: imported AlphaGenome review folds into the design HTML report and clears on redesign", async () => {
+  const request = await buildAlphaGenomeRequest(project(), mapping);
+  const report = {
+    schema: "assured-alphagenome-review/1", status: "complete", evidenceType: "model-prediction",
+    requestId: request.requestId, modelVersion: "ALL_FOLDS", sdkVersion: "0.10.0",
+    comparisons: ["reference_to_intended", "reference_to_full_donor", "intended_to_full_donor"].map(id => ({
+      id,
+      tracks: request.requestedOutputs.map(output => ({
+        name: "test<script>", output, strand: "+", meanDelta: 0.1, meanAbsDelta: 0.2, maxAbsDelta: 0.3,
+      })),
+    })),
+  };
+  const review = { request, report, importedAt: "2026-10-27T09:00:00.000Z", options: { ...mapping, donorIndex: 0, sequenceLength: 16384 } };
+
+  assert.equal(appendAlphaGenomeReview("<html><body>x</body></html>", null), "<html><body>x</body></html>");
+  assert.equal(appendAlphaGenomeReview("<html><body>x</body></html>", { report }), "<html><body>x</body></html>");
+
+  const folded = appendAlphaGenomeReview("<html><body>report</body></html>", review);
+  assert.match(folded, /AlphaGenome research review \(not a release gate\)/);
+  assert.match(folded, /Research only/);
+  assert.match(folded, /test&lt;script&gt;/);
+  assert.ok(!folded.includes("test<script>"));
+  assert.match(folded, /Reference → intended edit/);
+  assert.match(folded, /Intended edit → full donor allele/);
+
+  const raw = readFileSync(new URL("../public/references/tp53-NG_017013.2.gb", import.meta.url), "utf8");
+  const design = runDesign("pm", raw, "R175H", "", "", { enzyme: "spcas9", expectedGene: "TP53" });
+  assert.ok(!design.err, design.err);
+  const html = generateReportHtml({ gene: "TP53", editType: "pm", options: {}, alphaGenomeReview: review, genbankRaw: raw }, design);
+  assert.match(html, /AlphaGenome research review \(not a release gate\)/);
+  assert.match(html, new RegExp(String(request.requestId).slice(0, 12)));
+
+  const base = { ...createProject(), gene: "TP53", editType: "pm", designResult: design, alphaGenomeReview: review };
+  const cleared = updateProject(base, { mutation: "R248Q" });
+  assert.equal(cleared.alphaGenomeReview, null);
+  assert.equal(cleared.designResult, null);
 });
