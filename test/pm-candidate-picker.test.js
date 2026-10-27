@@ -38,7 +38,7 @@ test("without a regulatory report the picker lists the pairs that passed, states
     assert.doesNotMatch(html, /Best-supported|Equally supported/);
     assert.equal((html.match(/>Not run</g) || []).length, 2, "two top-tier rows shown, regulatory status not run");
     assert.match(html, /Regulatory comparison with AlphaGenome \(research use\)/);
-    assert.match(html, /the key never enters the browser/);
+    assert.match(html, /never enters the browser/);
     assert.match(html, /value="19"/); assert.match(html, /value="44905754"/, "the Ensembl-style location line prefills the mapping, unconfirmed");
   });
 });
@@ -91,4 +91,38 @@ test("the picker is offered for SpCas9 point-mutation designs only, and its entr
   assert.match(design, /executeDesign\(\[candidate\.guide\.sp\], \{ avoidBlockerPositions/);
   assert.match(design, /onUseCandidate=\{handleUseCandidate\}/);
   assert.match(read("../src/services/runOptions.js"), /PER_RUN_KEYS = \["customGuides", "avoidBlockerPositions"\]/);
+});
+
+test("one-click AlphaGenome: the helper controls are on the page, nothing is contacted on render, and the manual route stays available", async () => {
+  await withModules(async (m) => {
+    const design = m.cand.designWithCandidates(APOE, "R176C", OPTIONS);
+    const contacted = [];
+    const helperFetch = async (...args) => { contacted.push(args); throw new Error("must not be called on render"); };
+    const html = renderToStaticMarkup(React.createElement(m.picker.PmCandidatePicker, { project: project(design), result: design, onUseCandidate() {}, helperFetch }));
+    assert.equal(contacted.length, 0, "rendering never touches the local helper");
+    assert.match(html, /Run the comparison here/);
+    assert.match(html, /python3 tools\/alphagenome\/rank\.py --serve/);
+    assert.match(html, /aria-label="Helper address"[^>]*value="http:\/\/127\.0\.0\.1:8765"/);
+    assert.match(html, /aria-label="Session code" type="password" autoComplete="off"/);
+    assert.match(html, /Check connection/); assert.match(html, /Run AlphaGenome comparison/);
+    assert.match(html, /Not connected yet\. Nothing is sent until you click\./);
+    assert.match(html, /the sequence windows go from your computer to Google/);
+    assert.match(html, /No helper: export the request and import the report by hand/); assert.match(html, /Export request/); assert.match(html, /Import report/);
+    assert.match(html, /never enters the browser/);
+  });
+});
+
+test("one-click AlphaGenome: connection, running and finished states say what is happening", async () => {
+  await withModules(async (m) => {
+    const design = m.cand.designWithCandidates(APOE, "R176C", OPTIONS);
+    const render = (initialHelper) => renderToStaticMarkup(React.createElement(m.picker.PmCandidatePicker, { project: project(design), result: design, onUseCandidate() {}, initialHelper }));
+    assert.match(render({ state: { status: "ok", health: { keyConfigured: true, sdkVersion: "0.10.0", nullsCached: 1 } } }), /Helper connected; AlphaGenome key configured; SDK 0\.10\.0; 1 null cached\./);
+    assert.match(render({ state: { status: "ok", health: { keyConfigured: false, nullsCached: 0 } } }), /no AlphaGenome key configured on that computer; 0 nulls cached/);
+    assert.match(render({ state: { status: "down", message: "The helper could not be reached at http://127.0.0.1:8765." } }), /could not be reached at http:\/\/127\.0\.0\.1:8765/);
+    const running = render({ state: { status: "running" } });
+    assert.match(running, /first comparison for a locus also builds the null/); assert.match(running, /Keep the helper&#x27;s terminal open/);
+    assert.match(running, /<button[^>]*disabled=""[^>]*>[^<]*(<svg[^>]*>.*?<\/svg>)?\s*Run AlphaGenome comparison/s, "cannot be started twice");
+    assert.match(render({ state: { status: "done", finishedAt: "10:42:07" } }), /Comparison finished at 10:42:07; the report was checked against this request and ranked below\./);
+    assert.match(render({ settings: { url: "http://localhost:9001", token: "abc" } }), /value="http:\/\/localhost:9001"/);
+  });
 });

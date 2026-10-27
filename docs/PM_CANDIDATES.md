@@ -42,8 +42,38 @@ Example (APOE R176C, bundled reference): 14 guides, 28 guide/donor versions, 4 p
 Research use. AlphaGenome terms are non-commercial and each prediction sends a sequence window to Google; the key stays
 local (see `README.md`).
 
+**One click (local helper).** The page cannot call AlphaGenome itself (the service speaks gRPC to its own client, and the key
+must not enter a browser), so a small helper runs on your computer and the page talks to it:
+
 ```bash
-# 1. In Bench: Alternative guides > Regulatory comparison > Export request   (one JSON file)
+python3 tools/alphagenome/rank.py --serve        # once per session; prints a session code
+# In Bench: Regulatory comparison > paste the session code > Run AlphaGenome comparison
+```
+
+The page builds the request, the helper runs the comparison with your key, and the page checks the report against that
+request and applies the same fixed rule as for an imported file. The first run for a locus also builds the null (about 90
+predictions; about 10-20 s in the earlier APOE run, longer if your API quota throttles) and caches it in `local-reviews/null-cache/`; later runs reuse it.
+
+What the helper protects, and what it does not:
+- it listens on 127.0.0.1 only; it answers only the pages you allow (`https://assured-bench.vercel.app` and the local dev
+  server by default; add one with `--origin https://...`) and only for `Host: 127.0.0.1|localhost:<port>`;
+- `POST /rank` needs the session code printed at start-up; one comparison at a time; request size is capped;
+- the key stays in the helper process (it is read from `ALPHAGENOME_API_KEY` or `local-reviews/alphagenome-api-key.local`);
+  `/health` reports only whether a key exists; error replies never contain upstream error text, sequences or the key;
+- the page sends nothing until you click, and never probes the address on load (a browser may ask for local-network permission);
+- sequence windows still go from your computer to Google for each prediction; the AlphaGenome terms (non-commercial use) apply.
+
+Browsers. The page is served over https and calls `http://127.0.0.1`. Chrome allows this after a local-network permission
+prompt (allow it for the Bench site; the setting is "Apps on device" in site settings in recent versions); the helper
+answers the preflight with `Access-Control-Allow-Private-Network`. Firefox should allow it (loopback is treated as potentially trustworthy; not tested here). Safari may
+refuse an https page's request to `http://127.0.0.1`; use Chrome or Firefox, or run Bench locally (`npm run dev`, origin
+`http://localhost:5173`), or use the manual route below. Browser behaviour has changed between releases; the helper's
+protocol is tested, the browsers' prompts are not.
+
+**Manual route (no helper).**
+
+```bash
+# 1. In Bench: Regulatory comparison > No helper > Export request   (one JSON file)
 python3 tools/alphagenome/rank.py request.json --validate-only          # offline, no key, no network
 python3 tools/alphagenome/rank.py request.json --run --output report.json --null null-cache.json
 # 2. In Bench: Import report (matched to the exported request)
@@ -99,13 +129,16 @@ APOE and TP53 candidate.
 - SpCas9 point mutations only. Plus-strand genes in a chromosome-forward GRCh38 reference only (minus-strand is refused).
 - The mapping (chromosome, reference start) is confirmed by the user; an Ensembl-style `GRCh38 ... Location: chrN start-end`
   line prefills it.
-- An imported ranking lives in the open page only; export the request again to reproduce it (the request is deterministic).
+- A ranking, whether imported or run through the helper, lives in the open page only; run it again to reproduce it (the request is deterministic and the model's predictions repeat exactly).
 - Model output is uncalibrated and does not predict cutting, HDR, clone fitness or protein function.
 
 ## 5. Tests
 
-`npm test` (candidate set, ranking service, picker render tests, parity with the saved APOE run) and, with the AlphaGenome
-SDK installed, `cd tools/alphagenome && PYTHONPATH=. python3 -m unittest test_rank test_review test_context_catalog`.
+`npm test` (candidate set, ranking service, helper client, picker render tests, parity with the saved APOE run) and, with the
+AlphaGenome SDK installed, `cd tools/alphagenome && PYTHONPATH=. python3 -m unittest test_rank test_helper test_review test_context_catalog`.
+`test/fixtures/alphagenome-helper/wire.json` is what the Python helper sent in its own tests; the page's tests replay it, and
+`test_helper.py` fails when it goes stale (`UPDATE_WIRE_FIXTURE=1` regenerates it). Neither suite runs a real browser, a real
+listening socket across processes, or the hosted model; first use on your machine is the integration test.
 The parity fixtures (`test/fixtures/alphagenome-ranking/`) are real predictions from the earlier APOE R176C run; the fake
 client in `test_rank.py` is for plumbing only. A Python reference of the statistic re-derives the expected values that the
 JavaScript must reproduce.

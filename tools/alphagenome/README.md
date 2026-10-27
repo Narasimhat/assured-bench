@@ -176,3 +176,15 @@ python3 tools/alphagenome/rank.py request.json --run --output report.json --null
 ```
 
 The request comes from Bench (Alternative guides > Regulatory comparison). The key is read as in `review.py`; plus-strand genes only.
+
+### One click from the page: `rank.py --serve`
+
+```bash
+python3 tools/alphagenome/rank.py --serve [--port 8765] [--origin https://your-bench.example] [--token CODE] [--null-dir DIR]
+```
+
+Starts a helper on 127.0.0.1 that the Bench page calls instead of the export/import steps. It prints a session code to paste
+into the page, holds the key (same sources as `review.py`), caches nulls in `local-reviews/null-cache/`, and runs one
+comparison at a time. Only the allowed page origins can use it (default `https://assured-bench.vercel.app`,
+`http://localhost:5173`, `http://127.0.0.1:5173`). Routes: `GET /health`, `POST /rank`. Safeguards and browser notes are in
+`docs/PM_CANDIDATES.md` section 2. Sequence windows still go to Google; non-commercial use only.

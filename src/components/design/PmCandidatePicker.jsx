@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { RefreshCw, Download, Upload } from "lucide-react";
+import { RefreshCw, Download, Upload, Play } from "lucide-react";
 import { parseGB } from "../../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../../engine/design/transcriptModel.js";
 import { buildPmCandidateSet } from "../../engine/design/pmCandidates.js";
 import { alphaGenomeMapping } from "../../services/alphaGenomeReview.js";
 import { REGULATORY_CONTEXT_CATALOG } from "../../services/regulatoryContexts.js";
 import { buildCandidateRankingRequest, rankCandidates, validateRankingReport } from "../../services/candidateRanking.js";
+import { HELPER_START_COMMAND, checkHelper, loadHelperSettings, runHelperComparison, saveHelperSettings } from "../../services/alphaGenomeHelper.js";
 
 const fmtCfd = (v) => (Number.isFinite(v) ? v.toFixed(v === 0 ? 0 : 4) : "\u2014");
 const FLAG_TEXT = {
@@ -16,6 +17,17 @@ const FLAG_TEXT = {
 };
 const SHOW_FLAGS = ["pamDisrupted", "singleMismatchIntactPam", "gcOutside40to60"];
 const GATE_TEXT = { G1: "protein change", G2: "re-cut protection", G3: "cut distance", G4: "donor arm", G5: "spacer uniqueness", G6: "GC limits" };
+
+function helperStatusText(state) {
+  switch (state.status) {
+    case "checking": return "Checking the helper\u2026";
+    case "running": return "Running. The first comparison for a locus also builds the null of random silent changes (about 90 predictions; seconds to a few minutes depending on your API quota); later runs reuse it. Keep the helper's terminal open.";
+    case "done": return `Comparison finished at ${state.finishedAt}; the report was checked against this request and ranked below.`;
+    case "down": return state.message;
+    case "ok": return `Helper connected${state.health?.keyConfigured ? "; AlphaGenome key configured" : "; no AlphaGenome key configured on that computer"}${state.health?.sdkVersion ? `; SDK ${state.health.sdkVersion}` : ""}${Number.isFinite(state.health?.nullsCached) ? `; ${state.health.nullsCached} null${state.health.nullsCached === 1 ? "" : "s"} cached` : ""}.`;
+    default: return "Not connected yet. Nothing is sent until you click.";
+  }
+}
 
 function download(name, value) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value)], { type: "application/json" }));
@@ -28,12 +40,16 @@ function download(name, value) {
  * and, when an AlphaGenome ranking report has been imported, which pairs are equally supported. Applying a pair reruns the design for that
  * guide and that donor version. Genome-wide specificity is never assessed here and is stated on screen.
  */
-export function PmCandidatePicker({ project, result, busy = false, onUseCandidate, initialRanking = null, defaultShowAlternatives = false, defaultShowExcluded = false }) {
+export function PmCandidatePicker({ project, result, busy = false, onUseCandidate, initialRanking = null, defaultShowAlternatives = false, defaultShowExcluded = false, helperFetch, initialHelper = null }) {
   const [showAlternatives, setShowAlternatives] = useState(defaultShowAlternatives);
   const [showExcluded, setShowExcluded] = useState(defaultShowExcluded);
   const [ranking, setRanking] = useState(initialRanking);
   const [pending, setPending] = useState(null); // { request, alleleOfCandidate, contexts } exported but not yet answered
   const [error, setError] = useState("");
+  // Local helper (tools/alphagenome/helper.py). Nothing is contacted until the user clicks: a browser may ask permission for local-network access.
+  const [helper, setHelper] = useState(() => ({ ...loadHelperSettings(), ...(initialHelper?.settings || {}) }));
+  const [helperState, setHelperState] = useState(initialHelper?.state || { status: "unchecked" }); // unchecked | checking | ok | down | running | done
+  const fetchFn = helperFetch || (typeof fetch === "function" ? fetch.bind(globalThis) : undefined);
   // The mapping reader on main needs a "chromosome:GRCh38:..." line; Ensembl-style records say "GRCh38 ... Location: chr19 start-end". Prefill only; the user confirms.
   const detected = useMemo(() => {
     const exact = alphaGenomeMapping(project);
@@ -63,14 +79,14 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
   const rest = built.candidates.filter((c) => !topIds.has(c.id));
   const catalog = REGULATORY_CONTEXT_CATALOG.contexts.filter((c) => c.available);
 
+  const setupOptions = () => ({
+    contexts: [primary, ...(second && second !== primary ? [second] : [])], mappingConfirmed: mapping.confirmed,
+    mapping: { assembly: "GRCh38", chromosome: String(mapping.chromosome), referenceStart: Number(mapping.referenceStart), orientation: 1 },
+  });
   const exportRequest = async () => {
     setError("");
     try {
-      const contexts = [primary, ...(second && second !== primary ? [second] : [])];
-      const setup = await buildCandidateRankingRequest(project, built, {
-        contexts, mappingConfirmed: mapping.confirmed,
-        mapping: { assembly: "GRCh38", chromosome: String(mapping.chromosome), referenceStart: Number(mapping.referenceStart), orientation: 1 },
-      });
+      const setup = await buildCandidateRankingRequest(project, built, setupOptions());
       setPending(setup); download(`alphagenome-candidates-${setup.request.requestId.slice(0, 12)}.json`, setup.request);
     } catch (e) { setError(String(e?.message || e)); }
   };
@@ -83,6 +99,19 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
       setRanking(rankCandidates(built, { ...pending, report }));
     } catch (e) { setError(String(e?.message || e)); }
     event.target.value = "";
+  };
+  const changeHelper = (patch) => { const next = { ...helper, ...patch }; setHelper(next); saveHelperSettings(patch); };
+  const checkConnection = async () => {
+    setError(""); setHelperState({ status: "checking" });
+    const out = await checkHelper(helper.url, { fetchFn });
+    setHelperState(out.ok ? { status: "ok", health: out.health } : { status: "down", message: out.message });
+  };
+  const runHere = async () => {
+    setError(""); setHelperState({ status: "running" });
+    try {
+      const out = await runHelperComparison(project, built, { ...setupOptions(), url: helper.url, token: helper.token, fetchFn });
+      setPending(out.setup); setRanking(out.ranking); setHelperState({ status: "done", finishedAt: new Date().toLocaleTimeString() });
+    } catch (e) { setHelperState({ status: "unchecked" }); setError(String(e?.message || e)); }
   };
 
   const row = (c) => {
@@ -120,16 +149,33 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
 
     <details style={{ marginTop: "0.75rem" }} open={Boolean(ranking) || undefined}>
       <summary style={{ cursor: "pointer", fontWeight: 600 }}>Regulatory comparison with AlphaGenome (research use)</summary>
-      <p style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>The model compares each pair's blocking changes with the intended edit alone inside the gene, and with random silent changes of the same size. It can demote a pair that departs from those, never rescue one, and it does not predict cutting, HDR or clone fitness. Run tools/alphagenome/rank.py locally with your own key; the key never enters the browser. Plus-strand genes only.</p>
+      <p style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>The model compares each pair's blocking changes with the intended edit alone inside the gene, and with random silent changes of the same size. It can demote a pair that departs from those, never rescue one, and it does not predict cutting, HDR or clone fitness. Predictions run on your own computer with your own AlphaGenome key, through the local helper below or by exporting the request; the key never enters the browser. Plus-strand genes only.</p>
       <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "end", fontSize: "0.85rem" }}>
         <label>Primary context<br /><select value={primary} onChange={(e) => setPrimary(e.target.value)}>{catalog.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
         <label>Second context (optional)<br /><select value={second} onChange={(e) => setSecond(e.target.value)}><option value="">None</option>{catalog.filter((c) => c.id !== primary).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
         <label>Chromosome<br /><input value={mapping.chromosome} onChange={(e) => setMapping({ ...mapping, chromosome: e.target.value, confirmed: false })} style={{ width: "5rem" }} /></label>
         <label>Reference start (1-based, GRCh38)<br /><input value={mapping.referenceStart} onChange={(e) => setMapping({ ...mapping, referenceStart: e.target.value, confirmed: false })} style={{ width: "9rem" }} /></label>
         <label><input type="checkbox" checked={mapping.confirmed} onChange={(e) => setMapping({ ...mapping, confirmed: e.target.checked })} /> I checked this mapping</label>
-        <button type="button" className="btn btn-secondary" onClick={exportRequest}><Download size={14} /> Export request</button>
-        <label className="btn btn-secondary" style={{ cursor: pending ? "pointer" : "not-allowed", opacity: pending ? 1 : 0.6 }}><Upload size={14} /> Import report<input type="file" accept="application/json" onChange={importReport} disabled={!pending} style={{ display: "none" }} /></label>
       </div>
+      <div style={{ margin: "0.75rem 0 0.25rem", padding: "0.6rem 0.75rem", border: "1px solid var(--border, #ccc)", borderRadius: 6, fontSize: "0.85rem" }}>
+        <p style={{ margin: "0 0 0.4rem", fontWeight: 600 }}>Run the comparison here</p>
+        <p style={{ margin: "0 0 0.4rem" }}>Start the helper once on your computer, from the assured-bench folder: <code>{HELPER_START_COMMAND}</code>. It prints a session code, runs the predictions with your key, and sends back the report this page ranks. The key stays on your computer; the sequence windows go from your computer to Google.</p>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "end" }}>
+          <label>Helper address<br /><input aria-label="Helper address" value={helper.url} onChange={(e) => changeHelper({ url: e.target.value })} style={{ width: "13rem" }} /></label>
+          <label>Session code<br /><input aria-label="Session code" type="password" autoComplete="off" value={helper.token} onChange={(e) => changeHelper({ token: e.target.value })} style={{ width: "11rem" }} /></label>
+          <button type="button" className="btn btn-secondary" onClick={checkConnection} disabled={helperState.status === "checking" || helperState.status === "running"}>Check connection</button>
+          <button type="button" className="btn btn-primary" onClick={runHere} disabled={helperState.status === "running"}><Play size={14} /> Run AlphaGenome comparison</button>
+        </div>
+        <p role="status" style={{ margin: "0.4rem 0 0", color: "var(--text-muted)" }}>{helperStatusText(helperState)}</p>
+      </div>
+      <details style={{ margin: "0.4rem 0" }}>
+        <summary style={{ cursor: "pointer", fontSize: "0.85rem" }}>No helper: export the request and import the report by hand</summary>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center", margin: "0.4rem 0" }}>
+          <button type="button" className="btn btn-secondary" onClick={exportRequest}><Download size={14} /> Export request</button>
+          <span style={{ fontSize: "0.82rem" }}>then run <code>python3 tools/alphagenome/rank.py --run request.json --output report.json</code></span>
+          <label className="btn btn-secondary" style={{ cursor: pending ? "pointer" : "not-allowed", opacity: pending ? 1 : 0.6 }}><Upload size={14} /> Import report<input type="file" accept="application/json" onChange={importReport} disabled={!pending} style={{ display: "none" }} /></label>
+        </div>
+      </details>
       {error && <p role="alert" style={{ color: "var(--danger, #b00020)" }}>{error}</p>}
       {ranking && <p style={{ fontSize: "0.82rem" }}>{ranking.primaryContext.label}: predicted exon RNA-seq of the reference allele (plus strand) averages {ranking.primaryContext.referenceExonMeanPlus.toFixed(2)}{ranking.primaryContext.informative ? "" : "; too low to rank on"}. {ranking.modelSeparatesCandidates ? "The model flagged at least one pair." : "The model did not separate any pair from random silent changes."} {ranking.tie && ranking.tieBreak ? `If one pair must be ordered first, a ${ranking.tieBreak.basis} gives ${ranking.tieBreak.order.map((id) => built.candidates.find((c) => c.id === id)?.label).join(", then ")}.` : ""}</p>}
     </details>
