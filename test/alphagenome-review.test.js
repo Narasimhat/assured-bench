@@ -93,3 +93,12 @@ test("report import rejects stale donor/tissue requests, incomplete runs and inv
   const payload = { ...request }; delete payload.requestId;
   assert.equal(await reviewRequestId(payload), request.requestId);
 });
+
+test("research tissue presets are ontology IDs AlphaGenome can be asked for", async () => {
+  const { ALPHAGENOME_RESEARCH_TISSUES } = await import("../src/services/alphaGenomeReview.js");
+  assert.ok(ALPHAGENOME_RESEARCH_TISSUES.length >= 5);
+  for (const tissue of ALPHAGENOME_RESEARCH_TISSUES) {
+    assert.match(tissue.id, /^(?:UBERON|CL|EFO):\d+$/);
+    assert.ok(tissue.label.includes(tissue.id));
+  }
+});

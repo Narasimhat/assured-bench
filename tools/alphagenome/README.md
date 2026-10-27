@@ -1,5 +1,7 @@
 # Local AlphaGenome donor review
 
+**Research track:** see [RESEARCH.md](./RESEARCH.md) for goals, commercial boundaries, and the `cursor/alphagenome-research-c6a3` branch.
+
 This optional first integration reviews **human GRCh38 substitution donors**.
 It compares reference → intended edit, reference → full donor allele, and
 intended edit → full donor allele. All blocking changes in one selected donor

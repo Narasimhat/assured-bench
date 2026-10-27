@@ -2,6 +2,18 @@ import { buildQcDesignSpec } from "../engine/design/qcExport.js";
 import { readGenomicReferenceMetadata } from "../engine/design/genomicSnp.js";
 
 export const ALPHAGENOME_REQUEST_SCHEMA = "assured-alphagenome-request/1";
+
+/** Research tissue/cell presets. IDs must still match AlphaGenome output metadata for the run; unsupported tracks fail rather than substituting. */
+export const ALPHAGENOME_RESEARCH_TISSUES = Object.freeze([
+  { id: "UBERON:0002107", label: "Liver (UBERON:0002107)" },
+  { id: "UBERON:0000948", label: "Heart (UBERON:0000948)" },
+  { id: "UBERON:0002048", label: "Lung (UBERON:0002048)" },
+  { id: "CL:0002322", label: "Embryonic stem cell (CL:0002322)" },
+  { id: "CL:0000057", label: "Fibroblast (CL:0000057)" },
+  { id: "CL:0000084", label: "T cell (CL:0000084)" },
+  { id: "EFO:0004905", label: "iPSC (EFO:0004905)" },
+]);
+
 const rc = sequence => [...sequence].reverse().map(b => ({ A: "T", C: "G", G: "C", T: "A", N: "N" }[b])).join("");
 const stable = value => value && typeof value === "object"
   ? Array.isArray(value) ? value.map(stable) : Object.fromEntries(Object.keys(value).sort().map(k => [k, stable(value[k])]))

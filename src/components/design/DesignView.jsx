@@ -1125,7 +1125,7 @@ export function DesignView({
 
           <details className="card" style={{ marginTop: "1rem" }}>
             <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-              Advanced: compare enzymes
+              Advanced: compare enzymes · AlphaGenome (research)
             </summary>
             <div style={{ marginTop: "0.75rem" }}>
               <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />

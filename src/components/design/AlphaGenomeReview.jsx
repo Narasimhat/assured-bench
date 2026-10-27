@@ -1,12 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
-import { alphaGenomeMapping, buildAlphaGenomeRequest, validateAlphaGenomeReport } from "../../services/alphaGenomeReview.js";
+import {
+  ALPHAGENOME_RESEARCH_TISSUES,
+  alphaGenomeMapping,
+  buildAlphaGenomeRequest,
+  validateAlphaGenomeReport,
+} from "../../services/alphaGenomeReview.js";
 
+/** Research-only AlphaGenome donor review. Does not gate design release; API key stays local. */
 export function AlphaGenomeReview({ project }) {
   const declared = alphaGenomeMapping(project);
   const [chromosome, setChromosome] = useState(declared?.chromosome || "");
   const [referenceStart, setReferenceStart] = useState(declared?.referenceStart || "");
   const [orientation, setOrientation] = useState(declared?.orientation || "");
-  const [ontologyTerm, setOntologyTerm] = useState("");
+  const [ontologyTerm, setOntologyTerm] = useState(ALPHAGENOME_RESEARCH_TISSUES[0]?.id || "");
   const [sequenceLength, setSequenceLength] = useState(16384);
   const [donorIndex, setDonorIndex] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
@@ -59,10 +65,15 @@ export function AlphaGenomeReview({ project }) {
 
   const supported = ["pm", "genomic-snv"].includes(project.designResult?.type);
   return <details className="card alphagenome-review" style={{ marginTop: "1rem", padding: "1rem" }}>
-    <summary><strong>AlphaGenome · optional donor functional review</strong></summary>
-    <p>Compare reference, intended substitution, and intended substitution plus donor blockers for expression and splicing effects. Results are exploratory model evidence and do not change guide ranking or QC decisions.</p>
-    {!supported ? <p className="muted">Generate a point-mutation or genomic SNP design to review a matched donor. Knockout and tag reviews are not supported in this first version.</p> : <>
-      <p className="muted">Exporting stays local. Running the Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome. Your API key stays in your local environment.</p>
+    <summary><strong>AlphaGenome (research) · donor functional review</strong></summary>
+    <p>
+      <span style={{ display: "inline-block", padding: "0.1rem 0.45rem", borderRadius: 999, background: "#e0f2fe", color: "#075985", fontWeight: 700, fontSize: "0.75rem", marginRight: "0.4rem" }}>Research only</span>
+      Compare reference, intended substitution, and intended substitution plus donor blockers for expression and splicing effects.
+      Results are exploratory model evidence and do not change guide ranking, procurement status, or QC decisions.
+      Hosted AlphaGenome access is for non-commercial research — see <code>tools/alphagenome/RESEARCH.md</code>.
+    </p>
+    {!supported ? <p className="muted">Generate a point-mutation or genomic SNP design to review a matched donor. Knockout and tag reviews are not supported in this research adapter yet.</p> : <>
+      <p className="muted">Exporting stays local. Running the Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome. Your API key stays in your local environment — never in the browser or Vercel.</p>
       <fieldset disabled={busy} style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
         <legend>Human GRCh38 reference mapping</legend>
         <label>Chromosome <input aria-label="AlphaGenome chromosome" value={chromosome} onChange={e => { setChromosome(e.target.value); setConfirmed(false); }} placeholder="17" size={5} /></label>
@@ -73,13 +84,19 @@ export function AlphaGenomeReview({ project }) {
         <label>Matched donor <select value={donorIndex} onChange={e => setDonorIndex(Number(e.target.value))}>
           {(project.designResult.os || []).map((d, i) => <option key={i} value={i}>{d.n || `Donor ${i + 1}`}</option>)}
         </select></label>
+        <label>Research tissue / cell type
+          <select aria-label="AlphaGenome research tissue" value={ALPHAGENOME_RESEARCH_TISSUES.some(t => t.id === ontologyTerm) ? ontologyTerm : ""} onChange={e => setOntologyTerm(e.target.value)}>
+            <option value="">Custom ontology ID…</option>
+            {ALPHAGENOME_RESEARCH_TISSUES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </label>
         <label>Tissue/cell ontology ID <input value={ontologyTerm} onChange={e => setOntologyTerm(e.target.value)} placeholder="UBERON:… / CL:… / EFO:…" /></label>
         <label>Context <select value={sequenceLength} onChange={e => setSequenceLength(Number(e.target.value))}>
           <option value={16384}>16,384 bp · local context</option><option value={131072}>131,072 bp · wider context</option>
         </select></label>
         <label className="alpha-review-confirmation" style={{ flexBasis: "100%" }}><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I verified that this reference maps to human GRCh38 at the chromosome start and orientation above.</label>
       </fieldset>
-      <p className="muted">Choose an ontology identifier supported by AlphaGenome output metadata for your experimental tissue/cell type. A missing match is reported as unavailable; no substitute tissue is chosen.</p>
+      <p className="muted">Presets are starting points for research lines. The ontology ID must still be present in AlphaGenome output metadata for your run; a missing match is reported as unavailable — no substitute tissue is chosen.</p>
       <div className="alpha-review-actions" style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", marginTop: "0.75rem" }}>
         <button className="btn btn-secondary" type="button" disabled={busy || !confirmed} onClick={exportRequest}>1. Export review request</button>
         <label>2. Import completed review <input type="file" accept="application/json,.json" disabled={busy || !confirmed} onChange={importReport} /></label>
