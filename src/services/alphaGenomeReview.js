@@ -24,6 +24,7 @@ export const ALPHAGENOME_RESEARCH_TISSUES = Object.freeze([
 /** Noise floors for raw maxAbsDelta. Not calibrated thresholds — research heuristics only. */
 const BLOCKER_DELTA_FLOOR = {
   RNA_SEQ: 1e-3,
+  // Splice-site probabilities often quantize near ~1/256; equal tiny bins must not force dominate.
   SPLICE_SITES: 1e-3,
   // Usage often sits on a coarse bin; equal tiny peaks must not alone force "dominate".
   SPLICE_SITE_USAGE: 1e-2,
@@ -44,7 +45,10 @@ function outputRatio(intendedPeak, blockerPeak, output) {
   if (!intendedPeak || !blockerPeak) return null;
   if (blockerPeak.maxAbsDelta <= floor) return 0;
   if (intendedPeak.maxAbsDelta <= floor) return Infinity;
-  return blockerPeak.maxAbsDelta / intendedPeak.maxAbsDelta;
+  const ratio = blockerPeak.maxAbsDelta / intendedPeak.maxAbsDelta;
+  // Near-equal peaks just above the assay floor are quantization noise, not redesign signals.
+  if (ratio <= 1.05 && blockerPeak.maxAbsDelta <= floor * 5) return 0;
+  return ratio;
 }
 
 /**
