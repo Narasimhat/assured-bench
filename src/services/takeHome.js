@@ -2,6 +2,7 @@
 // design result and the design-checks report, shown at the top of the Design screen and at the top of the report. Everything here is already computed
 // elsewhere; this only selects and phrases it, in plain words, and says what is not checked.
 import { exonLabel } from "./exonLabels.js";
+import { summarizeBlockerSafety } from "./alphaGenomeReview.js";
 
 const TYPE_NAME = { ko: "knockout", pm: "point mutation", it: "internal tag", ct: "C-terminal tag", nt: "N-terminal tag", "genomic-snv": "genomic SNV" };
 const TONE_RANK = { bad: 0, warn: 1, info: 2 };
@@ -59,13 +60,14 @@ function constraintFlag(viability) {
   return { tone: "warn", key: "constraint", short: constrained || essential ? "the gene is constrained or essential" : "knockout cells may outgrow the rest", text };
 }
 
-export function buildTakeHome({ designResult: d, biomniReport: b = null } = {}) {
+export function buildTakeHome({ designResult: d, biomniReport: b = null, alphaGenomeReview: alpha = null } = {}) {
   if (!d || d.err) return null;
   const gene = d.gene || b?.intent?.gene || "the gene";
   const guides = (d.gs || []).slice(0, 2).map((g, i) => ({ n: g.n, name: `gRNA${i + 1}`, short: `gRNA${i + 1}`, spacer: g.sp, pam: g.pm || g.pam, strand: g.str, gc: g.gc, lofPct: g.ko?.outcomes?.lofPct ?? null }));
   const status = statusOf(d);
   const flags = [];
   let headline; let bottomLine; const facts = []; let nextSteps = []; let openChecks = [];
+  const blockerSafety = alpha?.report ? summarizeBlockerSafety(alpha.report, alpha.request) : null;
 
   if (d.type === "ko") {
     const exon = d.transcriptExon && d.transcriptExon === d.codingExon ? `exon ${d.codingExon}` : d.transcriptExon ? exonLabel(d.codingExon, d.transcriptExon - d.codingExon) : (d.codingExon ? `coding exon ${d.codingExon}` : "the coding sequence");
@@ -120,9 +122,25 @@ export function buildTakeHome({ designResult: d, biomniReport: b = null } = {}) 
     openChecks = ["genome-wide specificity"];
   }
 
+  // AlphaGenome is a tissue-aware allele safety check for substitution donors — watch/next only, never READY/BLOCKED.
+  if (blockerSafety && ["pm", "genomic-snv"].includes(d.type)) {
+    flags.push({
+      tone: blockerSafety.severity === "warn" ? "warn" : "info",
+      key: "alphagenome",
+      short: blockerSafety.short,
+      text: blockerSafety.text,
+    });
+    if (blockerSafety.nextStep && !nextSteps.includes(blockerSafety.nextStep)) {
+      nextSteps = [blockerSafety.nextStep, ...nextSteps].slice(0, 4);
+    }
+    if (blockerSafety.severity === "warn" && blockerSafety.short && !/Main risk:/.test(bottomLine)) {
+      bottomLine = `${bottomLine}${bottomLine.endsWith(".") ? "" : "."} Main risk: ${blockerSafety.short}.`;
+    }
+  }
+
   const ordered = flags.map((f, i) => ({ ...f, i })).sort((x, y) => TONE_RANK[x.tone] - TONE_RANK[y.tone] || x.i - y.i).map(({ i, ...f }) => ({ ...f, text: clip(f.text, 230) }));
   const MAX = 4;
-  return { type: d.type, gene, headline, bottomLine, status: { ...status, detail: openChecks.length ? `${openChecks.length} checks are still open: ${openChecks.join(", ")}.` : "" }, facts, watch: ordered.slice(0, MAX), watchMore: Math.max(0, ordered.length - MAX), nextSteps, guides };
+  return { type: d.type, gene, headline, bottomLine, status: { ...status, detail: openChecks.length ? `${openChecks.length} checks are still open: ${openChecks.join(", ")}.` : "" }, facts, watch: ordered.slice(0, MAX), watchMore: Math.max(0, ordered.length - MAX), nextSteps, guides, blockerSafety };
 }
 
 /** The take-home as plain lines (text report, tests). */

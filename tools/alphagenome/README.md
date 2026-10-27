@@ -1,9 +1,12 @@
 # Local AlphaGenome donor review
 
-This optional first integration reviews **human GRCh38 substitution donors**.
+**Research track:** see [RESEARCH.md](./RESEARCH.md) for the product rule (**ASSURED designs; AlphaGenome stress-tests the allele**), verified PSC contexts (WTC11 / H1 / H9), and commercial boundaries on `cursor/alphagenome-research-c6a3`.
+
+This optional integration is a **tissue-aware allele safety check** for **human GRCh38 substitution donors**.
 It compares reference → intended edit, reference → full donor allele, and
 intended edit → full donor allele. All blocking changes in one selected donor
-are evaluated jointly. Donor alternatives are separate requests.
+are evaluated jointly. Donor alternatives are separate requests. Imported
+results can add a take-home watch line when blockers dominate — never a READY gate.
 
 The existing design engine and QC release gates are unchanged. These are
 exploratory RNA-seq / splice-site / splice-usage **raw track differences**, not
@@ -27,15 +30,16 @@ an immutable model-weights checksum here.
 
 ## 2. Export from Bench
 
-Generate a point-mutation or genomic SNP design. Open **AlphaGenome · optional
-donor functional review** below Workflow Agent. Choose one donor, enter the
-chromosome, **lowest chromosome-plus coordinate of the complete uploaded
-reference**, and orientation. For a minus-strand uploaded record, use −1; the
-exporter reverses coordinates and complements alleles. No assembly or orientation
-is guessed. Confirm the mapping only after checking it.
+Generate a point-mutation or genomic SNP design. Open **AlphaGenome (research) ·
+allele safety check**. Choose one donor, enter the chromosome, **lowest
+chromosome-plus coordinate of the complete uploaded reference**, and orientation.
+For a minus-strand uploaded record, use −1; the exporter reverses coordinates and
+complements alleles. No assembly or orientation is guessed. Confirm the mapping
+only after checking it.
 
-Enter the tissue/cell ontology ID from the model's output metadata. To inspect
-available tracks in a local Python session with an API client:
+Pick an exact PSC/derivative preset (default WTC11 `EFO:0009747`) or enter an
+ontology ID from the model's output metadata. Generic iPSC IDs are not preset —
+they lack tracks. To inspect available tracks in a local Python session:
 
 ```python
 import os

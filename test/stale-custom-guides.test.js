@@ -32,11 +32,16 @@ test("a project that still carries another gene's custom guides designs a new ge
 
 test("the screens that start a design from saved options strip the per-run settings, and none saves them back", () => {
   const read = (f) => fs.readFileSync(path.join(ROOT, "src", f), "utf8");
-  const design = read("components/design/DesignView.jsx"), agent = read("components/design/WorkflowAgent.jsx"), service = read("services/biomniAgent.js");
+  const design = read("components/design/DesignView.jsx");
+  const agent = read("components/design/WorkflowAgent.jsx");
+  const service = read("services/biomniAgent.js");
+  // Design form → Generate is the only design entry; evidence checks reuse withoutRunOverrides.
   assert.match(design, /\.\.\.withoutRunOverrides\(currentProject\.options\),\s*\n\s*enzyme,/);
   assert.match(design, /options: \{ \.\.\.withoutRunOverrides\(currentProject\.options\), \.\.\.withoutRunOverrides\(options\) \}/);
-  assert.match(agent, /\.\.\.withoutRunOverrides\(project\?\.options\),\s*\n\s*enzyme: enzymeId/);
-  assert.match(agent, /options: withoutRunOverrides\(opts\)/);
+  assert.match(design, /import \{ withoutRunOverrides \} from "\.\.\/\.\.\/services\/runOptions\.js"/);
   assert.match(service, /\.\.\.withoutRunOverrides\(currentProject\?\.options\),\s*\n\s*enzyme: intent\.enzyme,\s*\n\s*spacerLength/);
-  for (const [name, src] of [["DesignView", design], ["WorkflowAgent", agent]]) assert.match(src, /import \{ withoutRunOverrides \} from "\.\.\/\.\.\/services\/runOptions\.js"/, name);
+  // Enzyme compare applies a candidate built from agentRequest (stripped options) and clears customGuides.
+  assert.match(agent, /options: \{ \.\.\.request\.options, enzyme: candidate\.enzyme/);
+  assert.match(agent, /customGuides: \[\]/);
+  assert.doesNotMatch(agent, /applyRescueOption/, "NL rescue redesign path was removed; one design entry only");
 });

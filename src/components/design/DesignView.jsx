@@ -271,7 +271,13 @@ export function DesignView({
 
   // Active design result
   const designResult = currentProject?.designResult || null;
-  const takeHome = designResult ? buildTakeHome({ designResult, biomniReport: currentProject?.biomniReport || null }) : null;
+  const takeHome = designResult
+    ? buildTakeHome({
+      designResult,
+      biomniReport: currentProject?.biomniReport || null,
+      alphaGenomeReview: currentProject?.alphaGenomeReview || null,
+    })
+    : null;
   const reagents = designResult
     ? projectDesignReagents(designResult, geneMeta?.geneSymbol || geneInput.trim() || designResult.gene || "")
     : null;
@@ -1125,11 +1131,11 @@ export function DesignView({
 
           <details className="card" style={{ marginTop: "1rem" }}>
             <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-main)", userSelect: "none" }}>
-              Advanced: compare enzymes
+              Advanced: compare enzymes · AlphaGenome (research)
             </summary>
             <div style={{ marginTop: "0.75rem" }}>
               <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} />
-              <AlphaGenomeReview key={currentProject.id} project={currentProject} />
+              <AlphaGenomeReview key={currentProject.id} project={currentProject} onUpdateProject={onUpdateProject} />
             </div>
           </details>
         </DesignResult>

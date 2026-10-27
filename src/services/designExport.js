@@ -21,7 +21,8 @@ import { buildTakeHome } from "./takeHome.js";
 export function generateReportHtml(project, designResult) {
   if (!designResult) return "";
   if (designResult.type === "genomic-snv" && Array.isArray(designResult.candidates)) {
-    return appendWorkflowRecommendation(buildGenomicSnpReport(designResult), designResult.workflowRecommendation);
+    const genomic = appendWorkflowRecommendation(buildGenomicSnpReport(designResult), designResult.workflowRecommendation);
+    return appendAlphaGenomeReview(genomic, project?.alphaGenomeReview);
   }
 
   const projectType = project.editType || designResult.type || "ko";
@@ -49,10 +50,15 @@ export function generateReportHtml(project, designResult) {
     reviewItems,
     null
   );
-  const takeHome = buildTakeHome({ designResult, biomniReport: project?.biomniReport || null });
+  const takeHome = buildTakeHome({
+    designResult,
+    biomniReport: project?.biomniReport || null,
+    alphaGenomeReview: project?.alphaGenomeReview || null,
+  });
   const withTakeHome = html.replace("<!--TAKEHOME-->", takeHome ? renderTakeHomeHtml(takeHome) : "");
   const withBiomni = appendBiomniSummary(withTakeHome, project?.biomniReport, designResult);
-  return appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation);
+  const withWorkflow = appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation);
+  return appendAlphaGenomeReview(withWorkflow, project?.alphaGenomeReview);
 }
 
 /** The take-home as the first block of the report: status, what was designed, the bottom line, four numbers, what to watch, what to do next. */
@@ -148,6 +154,30 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   const section = `<details class="fold"><summary>Design checks: isoforms, gene constraint, variants, library, screening</summary><div class="body" style="font-size:13px">${lines.join("")}</div></details>`;
   return html.includes("<!--EVIDENCE-->") ? html.replace("<!--EVIDENCE-->", () => section) : html.replace(/<body[^>]*>/i, body => body + section);
 }
+/** Research-only AlphaGenome fold. Never a release gate — exploratory model evidence. */
+export function appendAlphaGenomeReview(html, review) {
+  if (!html || !review?.report || !review?.request) return html;
+  const report = review.report;
+  const request = review.request;
+  const titles = {
+    reference_to_intended: "Reference → intended edit",
+    reference_to_full_donor: "Reference → full donor allele",
+    intended_to_full_donor: "Intended edit → full donor allele (blocker-associated differences)",
+  };
+  const comparisons = (report.comparisons || []).map((c) => {
+    const rows = (c.tracks || []).map((t) =>
+      `<tr><td>${escapeHtml(t.output)}: ${escapeHtml(t.name)} (${escapeHtml(t.strand || "")})</td><td>${escapeHtml(t.meanAbsDelta)}</td><td>${escapeHtml(t.maxAbsDelta)}</td></tr>`
+    ).join("");
+    return `<details class="fold"><summary>${escapeHtml(titles[c.id] || c.id)}</summary><div class="body"><table><thead><tr><th>Output / track</th><th>Mean |Δ|</th><th>Max |Δ|</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  }).join("");
+  const section = `<details class="fold"><summary>AlphaGenome research review (not a release gate)</summary><div class="body" style="font-size:13px">
+    <p><strong>Research only.</strong> Model ${escapeHtml(report.modelVersion)} · SDK ${escapeHtml(report.sdkVersion)}. Tissue ${escapeHtml((request.ontologyTerms || []).join(", ") || "unspecified")}; donor ${escapeHtml(request.donor || "")}; context ${escapeHtml(request.sequenceLength)} bp. Request ${escapeHtml(String(request.requestId || "").slice(0, 12))}…</p>
+    <p>Raw track differences are exploratory. They do not change guide ranking, procurement status, or QC decisions.</p>
+    ${comparisons}
+  </div></details>`;
+  return html.replace(/<body[^>]*>/i, (body) => body + section);
+}
+
 export function appendWorkflowRecommendation(html, audit) {
   if (!isAgentAudit(audit)) return html;
   const selected = audit.candidates.find(c => c.enzyme === audit.selectedEnzyme);
