@@ -113,7 +113,11 @@ test("research tissue presets are exact PSC/derivative ontology IDs (not generic
   }
 });
 
-function fakeReport({ intendedRna = 1, blockerRna = 0.2, intendedSplice = 0.01, blockerSplice = 0.002 } = {}) {
+function fakeReport({
+  intendedRna = 1, blockerRna = 0.2,
+  intendedSites = 0.01, blockerSites = 0.002,
+  intendedUsage = 0.01, blockerUsage = 0.002,
+} = {}) {
   const track = (output, name, maxAbsDelta) => ({
     name, output, strand: "+", meanDelta: 0, meanAbsDelta: maxAbsDelta / 2, maxAbsDelta,
   });
@@ -125,24 +129,24 @@ function fakeReport({ intendedRna = 1, blockerRna = 0.2, intendedSplice = 0.01, 
         id: "reference_to_intended",
         tracks: [
           track("RNA_SEQ", "WTC11 polyA", intendedRna),
-          track("SPLICE_SITES", "donor", intendedSplice),
-          track("SPLICE_SITE_USAGE", "usage_WTC11", intendedSplice),
+          track("SPLICE_SITES", "donor", intendedSites),
+          track("SPLICE_SITE_USAGE", "usage_WTC11", intendedUsage),
         ],
       },
       {
         id: "reference_to_full_donor",
         tracks: [
           track("RNA_SEQ", "WTC11 polyA", intendedRna + blockerRna),
-          track("SPLICE_SITES", "donor", intendedSplice + blockerSplice),
-          track("SPLICE_SITE_USAGE", "usage_WTC11", intendedSplice + blockerSplice),
+          track("SPLICE_SITES", "donor", intendedSites + blockerSites),
+          track("SPLICE_SITE_USAGE", "usage_WTC11", intendedUsage + blockerUsage),
         ],
       },
       {
         id: "intended_to_full_donor",
         tracks: [
           track("RNA_SEQ", "WTC11 polyA", blockerRna),
-          track("SPLICE_SITES", "donor", blockerSplice),
-          track("SPLICE_SITE_USAGE", "usage_WTC11", blockerSplice),
+          track("SPLICE_SITES", "donor", blockerSites),
+          track("SPLICE_SITE_USAGE", "usage_WTC11", blockerUsage),
         ],
       },
     ],
@@ -168,9 +172,11 @@ test("blocker-safety summary flags when silent blockers dominate intended-edit p
   assert.match(dominate.text, /EFO:0009747/);
   assert.match(dominate.nextStep, /alternate|leaner|blocker/i);
 
-  // Equal tiny splice-usage peaks must not alone force dominate when RNA blockers are minor.
+  // Equal tiny splice-usage bins must not alone force dominate (RNA ~71% → notable).
   const usageNoise = summarizeBlockerSafety(fakeReport({
-    intendedRna: 1.75, blockerRna: 1.25, intendedSplice: 0.00390625, blockerSplice: 0.00390625,
+    intendedRna: 1.75, blockerRna: 1.25,
+    intendedSites: 0.015625, blockerSites: 0.00819,
+    intendedUsage: 0.00390625, blockerUsage: 0.00390625,
   }));
   assert.equal(usageNoise.verdict, "blockers_notable", "RNA ~71% of intended → notable; usage floor ignored");
 });
