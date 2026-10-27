@@ -193,6 +193,7 @@ export function buildPmCandidateSet(model, mutation, options = {}) {
   const rows = [];
   for (const guide of guides) {
     const blocked = new Set(codonInfo.genomicPositions);
+    const avoided = []; // blocker positions of the earlier donor versions of this guide
     for (let version = 0; version < rule.donorVersionsPerGuide; version += 1) {
       const set = findPointMutationBlockingSet(model, guide, blocked, { maxChanges, allowNonCodingBlockers: options.allowNonCodingBlockers });
       if (!set.length) break;
@@ -201,7 +202,7 @@ export function buildPmCandidateSet(model, mutation, options = {}) {
         const engineProtection = assessGuideAgainstPointMutationDonor(guide, donor);
         const ev = evaluateRow(model, edit, guide, donor, set, engineProtection, rule);
         rows.push({
-          key: `${guide.str}${guide.ps}.v${version}`, guideKey: `${guide.str}${guide.ps}`, version,
+          key: `${guide.str}${guide.ps}.v${version}`, guideKey: `${guide.str}${guide.ps}`, version, avoid: [...avoided],
           guide: { sp: guide.sp, pam: guide.pam, str: guide.str, gc: ev.gc, ps: guide.ps, cut: guide.cut, d: guide.d },
           blockers: set.map((m) => ({ gp: m.gp, nb: m.nb, lb: m.lb, oc: m.oc, nc: m.nc, pur: m.pur })),
           donor: { ssodn: donor.od, genomicDonor: donor.genomicDonor, start: donor.donorStart, end: donor.donorEnd, orientation: guide.str === "-" ? "plus" : "reverse-complement" },
@@ -209,7 +210,7 @@ export function buildPmCandidateSet(model, mutation, options = {}) {
           ...ev,
         });
       }
-      set.forEach((m) => blocked.add(m.gp));
+      set.forEach((m) => { blocked.add(m.gp); avoided.push(m.gp); });
     }
   }
   const passing = rows.filter((r) => r.passes)
@@ -223,7 +224,7 @@ export function buildPmCandidateSet(model, mutation, options = {}) {
   const tiers = [...new Set(kept.map((r) => r.stage1Key.join(",")))];
   const candidates = kept.map((row, index) => ({
     id: row.key, label: `Candidate ${index + 1}`,
-    guide: row.guide, donorVersion: row.version, blockers: row.blockers, donor: row.donor,
+    guide: row.guide, donorVersion: row.version, avoidBlockerPositions: row.avoid, blockers: row.blockers, donor: row.donor,
     substitutions: row.substitutions, alleleSignature: signatureOf(row.substitutions),
     protection: { engineTier: row.engine.tier, engineCfd: row.engine.cfd, ...row.verified },
     gates: row.gates, flags: row.flags,
@@ -255,4 +256,12 @@ export function designWithCandidates(gbRaw, mutation, options = {}) {
   const parsed = parseGB(gbRaw);
   const model = normalizeGenBankToTranscriptModel(parsed, { expectedGene: options.expectedGene });
   return { ...result, pmCandidates: buildPmCandidateSet(model, mutation, options) };
+}
+
+/**
+ * Options that make runDesign reproduce one candidate exactly: its guide alone, its donor version, the same blocker cap.
+ * The result's single ssODN is the candidate's ssODN.
+ */
+export function candidateDesignOptions(options, candidate) {
+  return { ...options, customGuides: [candidate.guide.sp], avoidBlockerPositions: [...(candidate.avoidBlockerPositions || [])], ensureGuidePair: false, coDeliveryBlocking: false };
 }

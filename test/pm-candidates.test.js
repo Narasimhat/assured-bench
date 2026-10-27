@@ -7,7 +7,7 @@ import { runDesign, parseGB } from "../src/engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel, getCodonAtAa, findSpCas9Guides } from "../src/engine/design/transcriptModel.js";
 import { toAA } from "../src/engine/design/designEngine.js";
 import { reverseComplementDna } from "../src/engine/design/enzymeGuides.js";
-import { buildPmCandidateSet, designWithCandidates, evaluateRow, PM_CANDIDATE_RULE, PM_CANDIDATE_SCHEMA } from "../src/engine/design/pmCandidates.js";
+import { buildPmCandidateSet, designWithCandidates, evaluateRow, candidateDesignOptions, PM_CANDIDATE_RULE, PM_CANDIDATE_SCHEMA } from "../src/engine/design/pmCandidates.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ref = (name) => fs.readFileSync(path.join(HERE, "..", "public", "references", name), "utf8");
@@ -141,4 +141,34 @@ test("negative control: the gates reject a donor with an extra amino-acid change
   assert.equal(gates({ ...base, genomicDonor: missing.join("") }).G1, false);
   const short = gates({ ...base, genomicDonor: base.genomicDonor.slice(0, 100) });
   assert.equal(short.G1, false); assert.equal(short.G4, false);
+});
+
+test("applying a candidate reproduces its guide and ssODN exactly, including later donor versions", () => {
+  for (const [raw, gene, mutation] of [[APOE, "APOE", "R176C"], [TP53, "TP53", "R175H"]]) {
+    const options = { deliveryMethod: "rnp", maxBlockingChanges: 3, expectedGene: gene };
+    const set = designWithCandidates(raw, mutation, options).pmCandidates;
+    assert.ok(set.candidates.length >= 3);
+    for (const c of set.candidates) {
+      const applied = runDesign("pm", raw, mutation, "", 400, candidateDesignOptions(options, c));
+      assert.equal(applied.err, undefined, `${gene} ${c.id}: ${applied.err}`);
+      assert.equal(applied.gs.length, 1, `${gene} ${c.id}: one guide`);
+      assert.equal(applied.gs[0].sp, c.guide.sp);
+      assert.equal(applied.os[0].genomicDonor, c.donor.genomicDonor, `${gene} ${c.id}: plus-strand donor`);
+      assert.equal(applied.os[0].od, c.donor.ssodn, `${gene} ${c.id}: ssODN as ordered`);
+    }
+  }
+  // A second donor version really differs from the first for the same guide, and carries disjoint blockers.
+  const apoe = designWithCandidates(APOE, "R176C", APOE_OPTIONS).pmCandidates;
+  const sameGuide = apoe.candidates.filter((c) => c.guide.sp === "CCCCGGCCTGGTACACTGCC");
+  assert.equal(sameGuide.length, 2);
+  const [v0, v1] = [...sameGuide].sort((a, b) => a.donorVersion - b.donorVersion);
+  assert.notEqual(v0.donor.genomicDonor, v1.donor.genomicDonor);
+  assert.equal(v0.blockers.filter((b) => v1.blockers.some((x) => x.gp === b.gp)).length, 0);
+  assert.deepEqual(v1.avoidBlockerPositions, v0.blockers.map((b) => b.gp));
+});
+
+test("the avoid-positions option leaves ordinary designs untouched", () => {
+  const withEmpty = runDesign("pm", APOE, "R176C", "", 400, { ...APOE_OPTIONS, avoidBlockerPositions: [] });
+  const plain = runDesign("pm", APOE, "R176C", "", 400, APOE_OPTIONS);
+  assert.equal(JSON.stringify(withEmpty), JSON.stringify(plain));
 });

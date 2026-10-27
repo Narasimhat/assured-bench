@@ -3195,6 +3195,8 @@ function designPMCore(gb, mutationString, options = {}) {
     : rawSelectedGuides.filter((guide, index, guides) => index === 0 || guides.slice(0, index).every((existing) => Math.abs(existing.cut - guide.cut) >= minimumAlternativeCutOffset));
   const removedRedundantGuideCount = rawSelectedGuides.length - selectedGuides.length;
   const blockedPositions = new Set(codonInfo.genomicPositions);
+  // A candidate's later donor versions avoid the blocker positions of the versions before them (see pmCandidates.js).
+  for (const position of options.avoidBlockerPositions || []) if (Number.isInteger(position)) blockedPositions.add(position);
 
   const result = {
     type: "pm",
