@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Download, Upload, Play } from "lucide-react";
 import { parseGB } from "../../engine/design/designEngine.js";
 import { normalizeGenBankToTranscriptModel } from "../../engine/design/transcriptModel.js";
 import { buildPmCandidateSet } from "../../engine/design/pmCandidates.js";
 import { alphaGenomeMapping } from "../../services/alphaGenomeReview.js";
 import { REGULATORY_CONTEXT_CATALOG } from "../../services/regulatoryContexts.js";
-import { buildCandidateRankingRequest, rankCandidates, validateRankingReport } from "../../services/candidateRanking.js";
+import { HUMAN_CHROMOSOMES, buildCandidateRankingRequest, normalizeChromosome, rankCandidates, validateRankingReport } from "../../services/candidateRanking.js";
 import { HELPER_START_COMMAND, checkHelper, loadHelperSettings, runHelperComparison, saveHelperSettings } from "../../services/alphaGenomeHelper.js";
 
 const fmtCfd = (v) => (Number.isFinite(v) ? v.toFixed(v === 0 ? 0 : 4) : "\u2014");
@@ -58,7 +58,10 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
     const m = /GRCh38[\s\S]{0,120}?Location:\s*chr([0-9XY]+)\s+(\d+)-(\d+)/i.exec(raw);
     return m ? { chromosome: m[1].toUpperCase(), referenceStart: Number(m[2]) } : null;
   }, [project?.genbankRaw]);
-  const [mapping, setMapping] = useState({ chromosome: detected?.chromosome || "", referenceStart: detected?.referenceStart || "", confirmed: false });
+  const fromReference = (d) => ({ chromosome: HUMAN_CHROMOSOMES.includes(normalizeChromosome(d?.chromosome)) ? normalizeChromosome(d.chromosome) : "", referenceStart: d?.referenceStart || "", confirmed: false });
+  const [mapping, setMapping] = useState(() => fromReference(detected));
+  // A different reference (another gene, a re-upload) must not keep the previous one's mapping, nor its confirmation.
+  useEffect(() => { setMapping(fromReference(detected)); }, [project?.genbankRaw]); // eslint-disable-line react-hooks/exhaustive-deps
   const [primary, setPrimary] = useState("wtc11");
   const [second, setSecond] = useState("");
 
@@ -78,6 +81,12 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
   const lead = built.candidates.filter((c) => topIds.has(c.id));
   const rest = built.candidates.filter((c) => !topIds.has(c.id));
   const catalog = REGULATORY_CONTEXT_CATALOG.contexts.filter((c) => c.available);
+  const start = Number(mapping.referenceStart);
+  const missing = [
+    ...(HUMAN_CHROMOSOMES.includes(normalizeChromosome(mapping.chromosome)) ? [] : ["select the chromosome"]),
+    ...(Number.isSafeInteger(start) && start >= 1 ? [] : ["enter the GRCh38 position (1-based) of the first base of the uploaded sequence"]),
+    ...(mapping.confirmed ? [] : ["tick \u201cI checked this mapping\u201d"]),
+  ];
 
   const setupOptions = () => ({
     contexts: [primary, ...(second && second !== primary ? [second] : [])], mappingConfirmed: mapping.confirmed,
@@ -153,10 +162,11 @@ export function PmCandidatePicker({ project, result, busy = false, onUseCandidat
       <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "end", fontSize: "0.85rem" }}>
         <label>Primary context<br /><select value={primary} onChange={(e) => setPrimary(e.target.value)}>{catalog.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
         <label>Second context (optional)<br /><select value={second} onChange={(e) => setSecond(e.target.value)}><option value="">None</option>{catalog.filter((c) => c.id !== primary).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
-        <label>Chromosome<br /><input value={mapping.chromosome} onChange={(e) => setMapping({ ...mapping, chromosome: e.target.value, confirmed: false })} style={{ width: "5rem" }} /></label>
+        <label>Chromosome (GRCh38)<br /><select aria-label="Chromosome" value={mapping.chromosome} onChange={(e) => setMapping({ ...mapping, chromosome: e.target.value, confirmed: false })}><option value="">Select…</option>{HUMAN_CHROMOSOMES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
         <label>Reference start (1-based, GRCh38)<br /><input value={mapping.referenceStart} onChange={(e) => setMapping({ ...mapping, referenceStart: e.target.value, confirmed: false })} style={{ width: "9rem" }} /></label>
         <label><input type="checkbox" checked={mapping.confirmed} onChange={(e) => setMapping({ ...mapping, confirmed: e.target.checked })} /> I checked this mapping</label>
       </div>
+      <p role="note" style={{ fontSize: "0.82rem", margin: "0.4rem 0 0", color: mapping.confirmed && !missing.length ? "var(--text-muted)" : "var(--warning, #8a5a00)" }}>{missing.length ? `${detected ? "" : "Bench could not read where this reference sits in GRCh38. "}Before running: ${missing.join("; ")}.` : "Mapping ready: the helper checks it against GRCh38 before predicting and refuses a mismatch."}</p>
       <div style={{ margin: "0.75rem 0 0.25rem", padding: "0.6rem 0.75rem", border: "1px solid var(--border, #ccc)", borderRadius: 6, fontSize: "0.85rem" }}>
         <p style={{ margin: "0 0 0.4rem", fontWeight: 600 }}>Run the comparison here</p>
         <p style={{ margin: "0 0 0.4rem" }}>Start the helper once on your computer, from the assured-bench folder: <code>{HELPER_START_COMMAND}</code>. It prints a session code, runs the predictions with your key, and sends back the report this page ranks. The key stays on your computer; the sequence windows go from your computer to Google.</p>

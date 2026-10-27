@@ -126,3 +126,22 @@ test("one-click AlphaGenome: connection, running and finished states say what is
     assert.match(render({ settings: { url: "http://localhost:9001", token: "abc" } }), /value="http:\/\/localhost:9001"/);
   });
 });
+
+test("the mapping fields say what is missing: a reference that names its location is prefilled, one that does not asks for the chromosome from a list", async () => {
+  await withModules(async (m) => {
+    const design = m.cand.designWithCandidates(APOE, "R176C", OPTIONS);
+    const html = renderToStaticMarkup(React.createElement(m.picker.PmCandidatePicker, { project: project(design), result: design, onUseCandidate() {} }));
+    assert.match(html, /<select aria-label="Chromosome"[^>]*>.*<option value="19" selected="">19<\/option>/s, "chromosome 19 is read from the reference and selected");
+    assert.match(html, /Before running: tick \u201cI checked this mapping\u201d\./);
+    assert.doesNotMatch(html, /could not read where this reference sits/);
+
+    // The same record with its location line removed: nothing to prefill, so the page must say so and offer a list, not a bare text box.
+    const unlocated = { ...project(design), genbankRaw: APOE.replace(/GRCh38[\s\S]{0,120}?Location:\s*chr\d+\s+\d+-\d+/i, "location not stated") };
+    assert.ok(unlocated.genbankRaw !== APOE, "the test record really lost its location");
+    const bare = renderToStaticMarkup(React.createElement(m.picker.PmCandidatePicker, { project: unlocated, result: design, onUseCandidate() {} }));
+    assert.match(bare, /<option value="" selected="">Select\u2026<\/option>/);
+    assert.match(bare, /Bench could not read where this reference sits in GRCh38\. Before running: select the chromosome; enter the GRCh38 position \(1-based\) of the first base of the uploaded sequence; tick \u201cI checked this mapping\u201d\./);
+    for (const c of ["1", "22", "X", "Y"]) assert.match(bare, new RegExp(`<option value="${c}">${c}</option>`));
+    assert.doesNotMatch(bare, /<option value="(?:23|24|M|MT)"/);
+  });
+});

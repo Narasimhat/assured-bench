@@ -30,6 +30,9 @@ export const RANKING_RULE = Object.freeze({
 });
 
 const GRCH38_CHROMOSOMES = /^(?:[1-9]|1\d|2[0-2]|X|Y)$/;
+export const HUMAN_CHROMOSOMES = Object.freeze([...Array.from({ length: 22 }, (_, i) => String(i + 1)), "X", "Y"]);
+/** "chr19", " 19 " and "x" all become the bare form the request uses; anything else is left for the validity check to refuse. */
+export const normalizeChromosome = (value) => String(value ?? "").trim().replace(/^chr/i, "").toUpperCase();
 
 /** Accept a catalog id ("glutamatergic-neuron") or an ontology identifier ("CL:0000679"). */
 export function resolveContext(idOrOntology) {
@@ -51,9 +54,9 @@ export async function buildCandidateRankingRequest(project, candidateSet, {
   if (!gb?.genomicSequence) throw new Error("A design with an uploaded genomic reference is required.");
   if (!mappingConfirmed) throw new Error("Confirm the assembly and genomic mapping of the uploaded reference.");
   if (!mapping || mapping.assembly !== "GRCh38") throw new Error("This integration supports human GRCh38 only; no liftover or assembly inference.");
-  const chrom = String(mapping.chromosome || "").replace(/^chr/i, "").toUpperCase();
-  if (!GRCH38_CHROMOSOMES.test(chrom)) throw new Error("Choose a human chromosome 1-22, X or Y.");
-  if (!Number.isSafeInteger(mapping.referenceStart) || mapping.referenceStart < 1) throw new Error("Provide the 1-based chromosome start of the uploaded reference.");
+  const chrom = normalizeChromosome(mapping.chromosome);
+  if (!GRCH38_CHROMOSOMES.test(chrom)) throw new Error("Select the human chromosome the uploaded reference sits on (1-22, X or Y). Bench could not read it from the reference, so it has to be chosen.");
+  if (!Number.isSafeInteger(mapping.referenceStart) || mapping.referenceStart < 1) throw new Error("Enter the GRCh38 position (1-based) of the first base of the uploaded reference. Bench could not read it from the reference, so it has to be entered.");
   if (mapping.orientation !== 1 || gb.strand !== 1) throw new Error("Candidate ranking currently supports plus-strand genes in a chromosome-forward reference only.");
   if (![16384, 131072].includes(sequenceLength)) throw new Error("Choose a 16,384 or 131,072 bp prediction context.");
   const resolved = (contexts?.length ? contexts : []).map(resolveContext);

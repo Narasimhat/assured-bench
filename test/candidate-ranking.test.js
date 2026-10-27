@@ -9,7 +9,7 @@ import { designWithCandidates, buildPmCandidateSet } from "../src/engine/design/
 import { normalizeGenBankToTranscriptModel } from "../src/engine/design/transcriptModel.js";
 import { parseGB } from "../src/engine/design/designEngine.js";
 import {
-  buildCandidateRankingRequest, validateRankingReport, rankCandidates, compositeScore, resolveContext, metricNames,
+  buildCandidateRankingRequest, validateRankingReport, rankCandidates, compositeScore, resolveContext, metricNames, normalizeChromosome, HUMAN_CHROMOSOMES,
 } from "../src/services/candidateRanking.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -197,4 +197,16 @@ test("report validation refuses a report for another request, a changed null, mi
   assert.throws(() => validateRankingReport(reordered, request), /alleles differ/);
   const noSignal = fixtureReport(request); delete noSignal.referenceSignal[WTC11];
   assert.throws(() => validateRankingReport(noSignal, request), /reference signal/);
+});
+
+test("chromosome input: tolerant of chr19, spaces and case; a missing or invalid chromosome gets a message that says what to do", async () => {
+  assert.deepEqual(["19", "chr19", " Chr19 ", "x", "chrY", ""].map(normalizeChromosome), ["19", "19", "19", "X", "Y", ""]);
+  assert.equal(HUMAN_CHROMOSOMES.length, 24); assert.deepEqual(HUMAN_CHROMOSOMES.slice(-3), ["22", "X", "Y"]);
+  const design = designWithCandidates(APOE, "R176C", OPTIONS);
+  const project = { gene: "APOE", genbankRaw: APOE, designResult: design };
+  const tryWith = (chromosome) => buildCandidateRankingRequest(project, design.pmCandidates, { contexts: CONTEXTS, mappingConfirmed: true, mapping: { ...MAPPING, chromosome } });
+  const typed = await tryWith(" chr19 ");
+  assert.equal(typed.request.chromosome, "chr19", "the request names the chromosome the way the model's interval does, whatever form was typed");
+  for (const bad of ["", "   ", "23", "MT", "NC_000019.10", "chr"]) await assert.rejects(tryWith(bad), /Select the human chromosome the uploaded reference sits on \(1-22, X or Y\)/, JSON.stringify(bad));
+  await assert.rejects(buildCandidateRankingRequest(project, design.pmCandidates, { contexts: CONTEXTS, mappingConfirmed: true, mapping: { ...MAPPING, referenceStart: NaN } }), /Enter the GRCh38 position \(1-based\) of the first base/);
 });
