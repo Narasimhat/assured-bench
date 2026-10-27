@@ -271,7 +271,13 @@ export function DesignView({
 
   // Active design result
   const designResult = currentProject?.designResult || null;
-  const takeHome = designResult ? buildTakeHome({ designResult, biomniReport: currentProject?.biomniReport || null }) : null;
+  const takeHome = designResult
+    ? buildTakeHome({
+      designResult,
+      biomniReport: currentProject?.biomniReport || null,
+      alphaGenomeReview: currentProject?.alphaGenomeReview || null,
+    })
+    : null;
   const reagents = designResult
     ? projectDesignReagents(designResult, geneMeta?.geneSymbol || geneInput.trim() || designResult.gene || "")
     : null;

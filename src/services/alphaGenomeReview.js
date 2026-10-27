@@ -3,16 +3,113 @@ import { readGenomicReferenceMetadata } from "../engine/design/genomicSnp.js";
 
 export const ALPHAGENOME_REQUEST_SCHEMA = "assured-alphagenome-request/1";
 
-/** Research tissue/cell presets. IDs must still match AlphaGenome output metadata for the run; unsupported tracks fail rather than substituting. */
+/**
+ * Research tissue/cell presets verified against live AlphaGenome output metadata
+ * (RNA-seq + splice-usage coverage unless noted). Generic iPSC (EFO:0004905) and
+ * CL:0002322 / CL:0000057 are absent from current tracks — use exact PSC lines.
+ * Assay coverage differs by line; unsupported tracks fail rather than substituting.
+ */
 export const ALPHAGENOME_RESEARCH_TISSUES = Object.freeze([
-  { id: "UBERON:0002107", label: "Liver (UBERON:0002107)" },
-  { id: "UBERON:0000948", label: "Heart (UBERON:0000948)" },
-  { id: "UBERON:0002048", label: "Lung (UBERON:0002048)" },
-  { id: "CL:0002322", label: "Embryonic stem cell (CL:0002322)" },
-  { id: "CL:0000057", label: "Fibroblast (CL:0000057)" },
-  { id: "CL:0000084", label: "T cell (CL:0000084)" },
-  { id: "EFO:0004905", label: "iPSC (EFO:0004905)" },
+  { id: "EFO:0009747", label: "WTC11 PSC (EFO:0009747)", kind: "psc", match: "exact" },
+  { id: "EFO:0003042", label: "H1 hESC (EFO:0003042)", kind: "psc", match: "exact" },
+  { id: "EFO:0003045", label: "H9 hESC (EFO:0003045)", kind: "psc", match: "exact" },
+  { id: "CL:0000746", label: "Cardiac muscle cell (CL:0000746)", kind: "derivative", match: "exact" },
+  { id: "CL:0000182", label: "Hepatocyte (CL:0000182)", kind: "derivative", match: "exact" },
+  { id: "CL:0000679", label: "Glutamatergic neuron (CL:0000679)", kind: "derivative", match: "exact" },
+  { id: "UBERON:0002107", label: "Liver tissue (UBERON:0002107)", kind: "tissue", match: "exact" },
+  { id: "UBERON:0000948", label: "Heart tissue (UBERON:0000948)", kind: "tissue", match: "exact" },
+  { id: "CL:0000084", label: "T cell (CL:0000084)", kind: "immune", match: "exact" },
 ]);
+
+/** Noise floor for raw maxAbsDelta before a track is treated as a research signal. Not a calibrated threshold. */
+const BLOCKER_DELTA_FLOOR = 1e-4;
+
+function comparisonTracks(report, id) {
+  return report?.comparisons?.find((c) => c.id === id)?.tracks || [];
+}
+
+function peakByOutput(tracks, output) {
+  const rows = tracks.filter((t) => t.output === output && Number.isFinite(t.maxAbsDelta));
+  if (!rows.length) return null;
+  return rows.reduce((best, t) => (t.maxAbsDelta > best.maxAbsDelta ? t : best), rows[0]);
+}
+
+/**
+ * Research-only allele safety read of an imported AlphaGenome report.
+ * Compares reference→intended vs intended→full-donor peaks so silent blockers
+ * that dominate expression/splicing deltas can be flagged in take-home / UI.
+ * Never changes READY/BLOCKED; raw track units are assay-specific.
+ */
+export function summarizeBlockerSafety(report, request = null) {
+  if (!report || report.status !== "complete" || !Array.isArray(report.comparisons)) return null;
+  const intended = comparisonTracks(report, "reference_to_intended");
+  const blockers = comparisonTracks(report, "intended_to_full_donor");
+  if (!intended.length || !blockers.length) return null;
+
+  const outputs = ["RNA_SEQ", "SPLICE_SITES", "SPLICE_SITE_USAGE"];
+  const byOutput = {};
+  let blockersDominate = false;
+  let blockersNotable = false;
+  for (const output of outputs) {
+    const intendedPeak = peakByOutput(intended, output);
+    const blockerPeak = peakByOutput(blockers, output);
+    if (!intendedPeak || !blockerPeak) continue;
+    const ratio = intendedPeak.maxAbsDelta > BLOCKER_DELTA_FLOOR
+      ? blockerPeak.maxAbsDelta / intendedPeak.maxAbsDelta
+      : (blockerPeak.maxAbsDelta > BLOCKER_DELTA_FLOOR ? Infinity : 0);
+    const entry = {
+      output,
+      intendedMaxAbsDelta: intendedPeak.maxAbsDelta,
+      blockerMaxAbsDelta: blockerPeak.maxAbsDelta,
+      ratio,
+      blockerTrack: `${blockerPeak.name} (${blockerPeak.strand || "."})`,
+      intendedTrack: `${intendedPeak.name} (${intendedPeak.strand || "."})`,
+    };
+    byOutput[output] = entry;
+    if (blockerPeak.maxAbsDelta <= BLOCKER_DELTA_FLOOR) continue;
+    if (ratio >= 1) blockersDominate = true;
+    else if (ratio >= 0.5) blockersNotable = true;
+  }
+  if (!Object.keys(byOutput).length) return null;
+
+  const ontology = request?.ontologyTerms?.[0] || report.ontologyTerms?.[0] || "the selected tissue";
+  const donor = request?.donor || report.donor || "this donor";
+  const rna = byOutput.RNA_SEQ;
+  const splice = byOutput.SPLICE_SITES || byOutput.SPLICE_SITE_USAGE;
+  let severity = "info";
+  let verdict = "blockers_minor";
+  let text;
+  let short;
+  if (blockersDominate) {
+    severity = "warn";
+    verdict = "blockers_dominate";
+    const lead = rna && rna.ratio >= 1 ? rna : (splice && splice.ratio >= 1 ? splice : rna || splice);
+    text = `Donor blockers on ${donor} drive ${lead.output.replace(/_/g, "-").toLowerCase()} changes as large as or larger than the intended edit in ${ontology} (peak maxAbsΔ ${lead.blockerMaxAbsDelta.toPrecision(3)} vs intended ${lead.intendedMaxAbsDelta.toPrecision(3)} on ${lead.blockerTrack}). Try an alternate silent blocker set — research signal only, not a release gate.`;
+    short = "donor blockers may drive expression/splicing changes";
+  } else if (blockersNotable) {
+    severity = "warn";
+    verdict = "blockers_notable";
+    const lead = rna && rna.ratio >= 0.5 ? rna : splice || rna;
+    text = `Donor blockers on ${donor} add a notable share of the ${lead.output.replace(/_/g, "-").toLowerCase()} delta in ${ontology} (about ${Math.round(lead.ratio * 100)}% of the intended-edit peak). Consider an alternate silent set if another matched donor is available.`;
+    short = "blocker side-effects are worth checking";
+  } else {
+    text = `Imported AlphaGenome review for ${donor} in ${ontology}: blocker-associated deltas stay below the intended-edit peaks in this context (research only; not a safety proof).`;
+    short = "blocker deltas look smaller than the intended edit";
+  }
+
+  return {
+    severity,
+    verdict,
+    text,
+    short,
+    ontology,
+    donor,
+    byOutput,
+    nextStep: blockersDominate || blockersNotable
+      ? "Compare the other matched donor (or regenerate silent blockers), then re-run AlphaGenome on the leaner allele."
+      : null,
+  };
+}
 
 const rc = sequence => [...sequence].reverse().map(b => ({ A: "T", C: "G", G: "C", T: "A", N: "N" }[b])).join("");
 const stable = value => value && typeof value === "object"

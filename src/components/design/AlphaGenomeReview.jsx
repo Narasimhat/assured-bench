@@ -4,6 +4,7 @@ import {
   alphaGenomeMapping,
   buildAlphaGenomeRequest,
   compareDonorBlockerLayouts,
+  summarizeBlockerSafety,
   validateAlphaGenomeReport,
 } from "../../services/alphaGenomeReview.js";
 
@@ -27,7 +28,7 @@ function formFromSaved(saved, project) {
     orientation: options?.orientation != null
       ? String(options.orientation)
       : (mapping?.orientation != null ? String(mapping.orientation) : ""),
-    ontologyTerm: options?.ontologyTerm || request?.ontologyTerms?.[0] || ALPHAGENOME_RESEARCH_TISSUES[0]?.id || "",
+    ontologyTerm: options?.ontologyTerm || request?.ontologyTerms?.[0] || "EFO:0009747",
     sequenceLength: options?.sequenceLength || request?.sequenceLength || 16384,
     donorIndex,
     confirmed: Boolean(saved?.report && saved?.request),
@@ -191,15 +192,16 @@ export function AlphaGenomeReview({ project, onUpdateProject }) {
       donorCompareError = e.message;
     }
   }
+  const blockerSafety = report ? summarizeBlockerSafety(report, project?.alphaGenomeReview?.request) : null;
   return <details className="card alphagenome-review" style={{ marginTop: "1rem", padding: "1rem" }}>
-    <summary><strong>AlphaGenome (research) · donor functional review</strong></summary>
+    <summary><strong>AlphaGenome (research) · allele safety check</strong></summary>
     <p>
       <span style={{ display: "inline-block", padding: "0.1rem 0.45rem", borderRadius: 999, background: "#e0f2fe", color: "#075985", fontWeight: 700, fontSize: "0.75rem", marginRight: "0.4rem" }}>Research only</span>
-      Compare reference, intended substitution, and intended substitution plus donor blockers for expression and splicing effects.
-      Results are exploratory model evidence and do not change guide ranking, procurement status, or QC decisions.
+      ASSURED designs the edit; AlphaGenome stress-tests the allele in a selected cell context — intended substitution vs intended plus silent blockers vs reference.
+      Results feed take-home watch lines only; they do not change guide ranking, READY/BLOCKED, or QC.
       Hosted AlphaGenome access is for non-commercial research — see <code>tools/alphagenome/RESEARCH.md</code>.
     </p>
-    {!supported ? <p className="muted">Generate a point-mutation or genomic SNP design to review a matched donor. Knockout and tag reviews are not supported in this research adapter yet.</p> : <>
+    {!supported ? <p className="muted">Generate a point-mutation or genomic SNP design to review a matched donor. Knockout and tag/insert reviews are later research steps (junction windows), not this adapter.</p> : <>
       <p className="muted">Exporting stays local. Running the Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome. Your API key stays in your local environment — never in the browser or Vercel.</p>
       {detectedMapping?.grch38 ? (
         <p role="status" style={{ margin: "0.5rem 0", padding: "0.5rem 0.75rem", borderRadius: 8, background: "#ecfdf5", border: "1px solid #a7f3d0", fontSize: "0.88rem" }}>
@@ -266,7 +268,11 @@ export function AlphaGenomeReview({ project, onUpdateProject }) {
         </select></label>
         <label className="alpha-review-confirmation" style={{ flexBasis: "100%" }}><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> I verified that this reference maps to human GRCh38 at the chromosome start and orientation above.</label>
       </fieldset>
-      <p className="muted">Presets are starting points for research lines. The ontology ID must still be present in AlphaGenome output metadata for your run; a missing match is reported as unavailable — no substitute tissue is chosen.</p>
+      <p className="muted">
+        Presets are exact biosamples verified in AlphaGenome metadata (WTC11 / H1 / H9 PSCs and selected derivatives).
+        Generic iPSC IDs are not listed because they lack tracks — pick the exact line or a clearly related derivative.
+        A missing ontology match fails rather than substituting another tissue.
+      </p>
       {donors.length >= 2 && (
         <div className="alpha-donor-compare" style={{ marginTop: "0.75rem", padding: "0.75rem", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
           <h4 style={{ margin: "0 0 0.35rem" }}>Donor A vs B · blocker layouts</h4>
@@ -326,14 +332,31 @@ export function AlphaGenomeReview({ project, onUpdateProject }) {
       {busy && <p role="status">Checking the current donor review…</p>}
       {error && <p role="alert" className="error">{error}</p>}
       {report && <div>
-        <h4>Functional review · model prediction</h4>
+        <h4>Allele safety · model prediction</h4>
         <p>Model {report.modelVersion} · SDK {report.sdkVersion}. Raw track differences have assay-specific units; larger differences are not automatically harmful.</p>
+        {blockerSafety && (
+          <p
+            role="status"
+            style={{
+              margin: "0.5rem 0 0.75rem",
+              padding: "0.65rem 0.75rem",
+              borderRadius: 8,
+              background: blockerSafety.severity === "warn" ? "#fffbeb" : "#f0f9ff",
+              border: `1px solid ${blockerSafety.severity === "warn" ? "#fde68a" : "#bae6fd"}`,
+              fontSize: "0.9rem",
+            }}
+          >
+            <strong>{blockerSafety.verdict === "blockers_dominate" ? "Blockers dominate." : blockerSafety.verdict === "blockers_notable" ? "Blockers notable." : "Blockers minor."}</strong>{" "}
+            {blockerSafety.text}
+            {blockerSafety.nextStep ? <> <em>{blockerSafety.nextStep}</em></> : null}
+          </p>
+        )}
         {report.comparisons.map(c => <details key={c.id}>
-          <summary>{({ reference_to_intended: "Reference → intended edit", reference_to_full_donor: "Reference → full donor allele", intended_to_full_donor: "Intended edit → full donor allele (additional blocker-associated differences)" })[c.id]}</summary>
+          <summary>{({ reference_to_intended: "Reference → intended edit (expected functional effect)", reference_to_full_donor: "Reference → full donor allele", intended_to_full_donor: "Intended edit → full donor allele (blocker-associated differences)" })[c.id]}</summary>
           <div style={{ overflowX: "auto" }}><table><thead><tr><th>Output / track</th><th>Mean absolute difference</th><th>Maximum absolute difference</th></tr></thead>
             <tbody>{c.tracks.map((t, i) => <tr key={i}><td>{t.output}: {t.name} ({t.strand})</td><td>{t.meanAbsDelta.toPrecision(4)}</td><td>{t.maxAbsDelta.toPrecision(4)}</td></tr>)}</tbody></table></div>
         </details>)}
-        <p className="muted">Exploratory comparison across the selected context, not a calibrated gene-level variant score, editing-efficiency estimate, or experimental confirmation. Tissue coverage and biological effects require review.</p>
+        <p className="muted">Exploratory comparison across the selected context, not a calibrated gene-level variant score, editing-efficiency estimate, or experimental confirmation. Does not replace Lindel, CFD, enzyme compare, or off-target search.</p>
       </div>}
     </>}
   </details>;

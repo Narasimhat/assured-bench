@@ -4,8 +4,9 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildAlphaGenomeRequest, compareDonorBlockerLayouts, listDonorAlleleVariants, reviewRequestId, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
+import { buildAlphaGenomeRequest, compareDonorBlockerLayouts, listDonorAlleleVariants, reviewRequestId, summarizeBlockerSafety, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
 import { appendAlphaGenomeReview, generateReportHtml } from "../src/services/designExport.js";
+import { buildTakeHome } from "../src/services/takeHome.js";
 import { runDesign } from "../src/engine/design/designEngine.js";
 import { buildQcDesignSpec } from "../src/engine/design/qcExport.js";
 import { updateProject, createProject } from "../src/services/projectState.js";
@@ -96,13 +97,100 @@ test("report import rejects stale donor/tissue requests, incomplete runs and inv
   assert.equal(await reviewRequestId(payload), request.requestId);
 });
 
-test("research tissue presets are ontology IDs AlphaGenome can be asked for", async () => {
+test("research tissue presets are exact PSC/derivative ontology IDs (not generic iPSC)", async () => {
   const { ALPHAGENOME_RESEARCH_TISSUES } = await import("../src/services/alphaGenomeReview.js");
   assert.ok(ALPHAGENOME_RESEARCH_TISSUES.length >= 5);
+  const ids = ALPHAGENOME_RESEARCH_TISSUES.map((t) => t.id);
+  assert.ok(ids.includes("EFO:0009747"), "WTC11");
+  assert.ok(ids.includes("EFO:0003042"), "H1");
+  assert.ok(ids.includes("EFO:0003045"), "H9");
+  assert.ok(!ids.includes("EFO:0004905"), "generic iPSC has no tracks");
+  assert.ok(!ids.includes("CL:0002322"), "generic ESC has no tracks");
   for (const tissue of ALPHAGENOME_RESEARCH_TISSUES) {
     assert.match(tissue.id, /^(?:UBERON|CL|EFO):\d+$/);
     assert.ok(tissue.label.includes(tissue.id));
+    assert.equal(tissue.match, "exact");
   }
+});
+
+function fakeReport({ intendedRna = 1, blockerRna = 0.2, intendedSplice = 0.01, blockerSplice = 0.002 } = {}) {
+  const track = (output, name, maxAbsDelta) => ({
+    name, output, strand: "+", meanDelta: 0, meanAbsDelta: maxAbsDelta / 2, maxAbsDelta,
+  });
+  return {
+    schema: "assured-alphagenome-review/1", status: "complete", evidenceType: "model-prediction",
+    requestId: "x", modelVersion: "ALL_FOLDS", sdkVersion: "0.10.0", ontologyTerms: ["EFO:0009747"],
+    comparisons: [
+      {
+        id: "reference_to_intended",
+        tracks: [
+          track("RNA_SEQ", "WTC11 polyA", intendedRna),
+          track("SPLICE_SITES", "donor", intendedSplice),
+          track("SPLICE_SITE_USAGE", "usage_WTC11", intendedSplice),
+        ],
+      },
+      {
+        id: "reference_to_full_donor",
+        tracks: [
+          track("RNA_SEQ", "WTC11 polyA", intendedRna + blockerRna),
+          track("SPLICE_SITES", "donor", intendedSplice + blockerSplice),
+          track("SPLICE_SITE_USAGE", "usage_WTC11", intendedSplice + blockerSplice),
+        ],
+      },
+      {
+        id: "intended_to_full_donor",
+        tracks: [
+          track("RNA_SEQ", "WTC11 polyA", blockerRna),
+          track("SPLICE_SITES", "donor", blockerSplice),
+          track("SPLICE_SITE_USAGE", "usage_WTC11", blockerSplice),
+        ],
+      },
+    ],
+  };
+}
+
+test("blocker-safety summary flags when silent blockers dominate intended-edit peaks", () => {
+  const minor = summarizeBlockerSafety(fakeReport({ intendedRna: 2, blockerRna: 0.2 }));
+  assert.equal(minor.verdict, "blockers_minor");
+  assert.equal(minor.severity, "info");
+
+  const notable = summarizeBlockerSafety(fakeReport({ intendedRna: 2, blockerRna: 1.2 }));
+  assert.equal(notable.verdict, "blockers_notable");
+  assert.equal(notable.severity, "warn");
+  assert.match(notable.text, /notable share/i);
+
+  const dominate = summarizeBlockerSafety(fakeReport({ intendedRna: 1.25, blockerRna: 2.5 }), {
+    donor: "ssODN1", ontologyTerms: ["EFO:0009747"],
+  });
+  assert.equal(dominate.verdict, "blockers_dominate");
+  assert.equal(dominate.severity, "warn");
+  assert.match(dominate.text, /ssODN1/);
+  assert.match(dominate.text, /EFO:0009747/);
+  assert.match(dominate.nextStep, /alternate|leaner|blocker/i);
+});
+
+test("take-home watch line carries AlphaGenome blocker risk without changing procurement status", async () => {
+  const design = {
+    type: "pm", gene: "APOE", mutation: "R176C",
+    gs: [{ n: "g1", sp: "ACGTACGTACGTACGTACGT", pm: "TGG", str: "+" }],
+    dl: 127, amp: "WT ~480 bp",
+    procurement: { status: "ready", blockers: [], warnings: [] },
+  };
+  const request = { donor: "ssODN1", ontologyTerms: ["EFO:0009747"], requestedOutputs: ["RNA_SEQ", "SPLICE_SITES", "SPLICE_SITE_USAGE"] };
+  const without = buildTakeHome({ designResult: design });
+  assert.equal(without.status.label, "Ready to order");
+  assert.ok(!without.watch.some((w) => w.key === "alphagenome"));
+
+  const withAlpha = buildTakeHome({
+    designResult: design,
+    alphaGenomeReview: { request, report: fakeReport({ intendedRna: 1, blockerRna: 2 }) },
+  });
+  assert.equal(withAlpha.status.label, "Ready to order", "AlphaGenome must not gate READY");
+  const watch = withAlpha.watch.find((w) => w.key === "alphagenome");
+  assert.ok(watch);
+  assert.equal(watch.tone, "warn");
+  assert.match(withAlpha.bottomLine, /Main risk:.*blocker/i);
+  assert.ok(withAlpha.nextSteps[0].match(/blocker|donor|AlphaGenome/i));
 });
 
 test("step 1: GenBank annotations auto-detect GRCh38 mapping for AlphaGenome", async () => {

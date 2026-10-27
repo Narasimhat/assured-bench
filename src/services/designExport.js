@@ -50,7 +50,11 @@ export function generateReportHtml(project, designResult) {
     reviewItems,
     null
   );
-  const takeHome = buildTakeHome({ designResult, biomniReport: project?.biomniReport || null });
+  const takeHome = buildTakeHome({
+    designResult,
+    biomniReport: project?.biomniReport || null,
+    alphaGenomeReview: project?.alphaGenomeReview || null,
+  });
   const withTakeHome = html.replace("<!--TAKEHOME-->", takeHome ? renderTakeHomeHtml(takeHome) : "");
   const withBiomni = appendBiomniSummary(withTakeHome, project?.biomniReport, designResult);
   const withWorkflow = appendWorkflowRecommendation(withBiomni, designResult.workflowRecommendation);
