@@ -12,7 +12,7 @@
 import { buildCandidateRankingRequest, rankCandidates, validateRankingReport } from "./candidateRanking.js";
 
 export const HELPER_SCHEMA = "assured-alphagenome-helper/1";
-export const HELPER_DEFAULT_URL = "http://127.0.0.1:8765";
+export const HELPER_DEFAULT_URL = "http://127.0.0.1:18765";
 export const HELPER_START_COMMAND = "python3 tools/alphagenome/rank.py --serve";
 export const HELPER_HEALTH_TIMEOUT_MS = 8000;
 export const HELPER_RANK_TIMEOUT_MS = 10 * 60 * 1000;
@@ -28,7 +28,7 @@ export class HelperError extends Error {
 /** Origin of the helper. Plain http is accepted for loopback addresses only; anything else must be https. */
 export function normalizeHelperUrl(input) {
   let text = String(input ?? "").trim();
-  if (!text) throw new HelperError("bad-url", "Enter the helper address, for example http://127.0.0.1:8765.");
+  if (!text) throw new HelperError("bad-url", "Enter the helper address, for example http://127.0.0.1:18765.");
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = `http://${text}`;
   let url;
   try { url = new URL(text); } catch { throw new HelperError("bad-url", "That helper address is not a valid URL."); }

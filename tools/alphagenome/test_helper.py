@@ -193,7 +193,7 @@ class HelperServer(unittest.TestCase):
         original, helper.ThreadingHTTPServer = helper.ThreadingHTTPServer, Taken
         try:
             with self.assertRaises(SystemExit) as raised:
-                helper.serve(port=8765, null_dir=Path(self.tmp.name) / "n")
+                helper.serve(port=18765, null_dir=Path(self.tmp.name) / "n")
         finally:
             helper.ThreadingHTTPServer = original
         self.assertEqual(raised.exception.code, 1)

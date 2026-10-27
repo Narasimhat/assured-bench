@@ -16,7 +16,7 @@ const APOE = read("..", "public", "references", "apoe-ensg00000130203.gb");
 const WIRE = JSON.parse(read("fixtures", "alphagenome-helper", "wire.json"));
 const OPTIONS = { deliveryMethod: "rnp", maxBlockingChanges: 3, expectedGene: "APOE" };
 const MAPPING = { assembly: "GRCh38", chromosome: "19", referenceStart: 44905754, orientation: 1 };
-const URL0 = "http://127.0.0.1:8765";
+const URL0 = "http://127.0.0.1:18765";
 
 const response = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => { if (body === undefined) throw new SyntaxError("no body"); return body; } });
 const replay = (name) => response(WIRE.errors[name].status, { error: WIRE.errors[name].error, code: WIRE.errors[name].code });
@@ -28,11 +28,11 @@ function mockHelper(answer) {
 }
 
 test("helper address: plain http only for this computer, https otherwise, no credentials", () => {
-  assert.equal(normalizeHelperUrl("http://127.0.0.1:8765/"), "http://127.0.0.1:8765");
-  assert.equal(normalizeHelperUrl("127.0.0.1:8765"), "http://127.0.0.1:8765");
+  assert.equal(normalizeHelperUrl("http://127.0.0.1:18765/"), "http://127.0.0.1:18765");
+  assert.equal(normalizeHelperUrl("127.0.0.1:18765"), "http://127.0.0.1:18765");
   assert.equal(normalizeHelperUrl(" localhost:9000/rank "), "http://localhost:9000");
   assert.equal(normalizeHelperUrl("https://lab-gpu.example.org:8443/x"), "https://lab-gpu.example.org:8443");
-  for (const bad of ["", "   ", "http://lab-gpu.example.org:8765", "http://192.168.1.20:8765", "ftp://127.0.0.1", "http://user:pw@127.0.0.1:8765", "http://", "http://[::1]:8765"]) {
+  for (const bad of ["", "   ", "http://lab-gpu.example.org:18765", "http://192.168.1.20:18765", "ftp://127.0.0.1", "http://user:pw@127.0.0.1:18765", "http://", "http://[::1]:18765"]) {
     assert.throws(() => normalizeHelperUrl(bad), (e) => e instanceof HelperError && e.code === "bad-url", JSON.stringify(bad));
   }
 });
@@ -64,10 +64,10 @@ test("health check: reads the helper's identity, and tells a wrong service or a 
 test("ranking call: sends the request with the session code to the configured address, and nothing else", async () => {
   const request = { requestId: "abc123", schema: "x", contexts: ["CL:0000679"] };
   const fetchFn = mockHelper(() => response(200, { requestId: "abc123", schema: "report" }));
-  const report = await runHelperRanking(request, { url: "http://localhost:8765/", token: " session-code-123 ", fetchFn });
+  const report = await runHelperRanking(request, { url: "http://localhost:18765/", token: " session-code-123 ", fetchFn });
   assert.deepEqual(report, { requestId: "abc123", schema: "report" });
   const { url, init } = fetchFn.calls[0];
-  assert.equal(url, "http://localhost:8765/rank"); assert.equal(init.method, "POST");
+  assert.equal(url, "http://localhost:18765/rank"); assert.equal(init.method, "POST");
   assert.deepEqual(init.headers, { "Content-Type": "application/json", "X-Assured-Token": "session-code-123" });
   assert.deepEqual(JSON.parse(init.body), request); assert.equal(init.targetAddressSpace, "loopback"); assert.equal(init.cache, "no-store");
   assert.ok(!url.includes("session-code") && !init.body.includes("session-code"), "the session code travels only in its header");
@@ -162,6 +162,6 @@ test("the deployed Content-Security-Policy lets the page reach the helper at its
   const allowed = (origin) => { const u = new URL(origin); return connect.some((source) => { const m = /^(https?):\/\/([^:/]+)(?::(\*|\d+))?$/.exec(source); return m && `${m[1]}:` === u.protocol && m[2] === u.hostname && (m[3] === "*" || m[3] === (u.port || (u.protocol === "https:" ? "443" : "80"))); }); };
   assert.ok(allowed(HELPER_DEFAULT_URL), "a browser would block the helper call without this");
   assert.ok(allowed("http://localhost:9000"));
-  assert.ok(!allowed("http://192.168.1.20:8765") && !allowed("http://example.org:8765"));
+  assert.ok(!allowed("http://192.168.1.20:18765") && !allowed("http://example.org:18765"));
   assert.ok(connect.includes("https:"), "an https helper elsewhere (the lab server option) stays reachable");
 });

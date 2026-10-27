@@ -102,7 +102,7 @@ test("one-click AlphaGenome: the helper controls are on the page, nothing is con
     assert.equal(contacted.length, 0, "rendering never touches the local helper");
     assert.match(html, /Run the comparison here/);
     assert.match(html, /python3 tools\/alphagenome\/rank\.py --serve/);
-    assert.match(html, /aria-label="Helper address"[^>]*value="http:\/\/127\.0\.0\.1:8765"/);
+    assert.match(html, /aria-label="Helper address"[^>]*value="http:\/\/127\.0\.0\.1:18765"/);
     assert.match(html, /aria-label="Session code" type="password" autoComplete="off"/);
     assert.match(html, /Check connection/); assert.match(html, /Run AlphaGenome comparison/);
     assert.match(html, /Not connected yet\. Nothing is sent until you click\./);
@@ -118,7 +118,7 @@ test("one-click AlphaGenome: connection, running and finished states say what is
     const render = (initialHelper) => renderToStaticMarkup(React.createElement(m.picker.PmCandidatePicker, { project: project(design), result: design, onUseCandidate() {}, initialHelper }));
     assert.match(render({ state: { status: "ok", health: { keyConfigured: true, sdkVersion: "0.10.0", nullsCached: 1 } } }), /Helper connected; AlphaGenome key configured; SDK 0\.10\.0; 1 null cached\./);
     assert.match(render({ state: { status: "ok", health: { keyConfigured: false, nullsCached: 0 } } }), /no AlphaGenome key configured on that computer; 0 nulls cached/);
-    assert.match(render({ state: { status: "down", message: "The helper could not be reached at http://127.0.0.1:8765." } }), /could not be reached at http:\/\/127\.0\.0\.1:8765/);
+    assert.match(render({ state: { status: "down", message: "The helper could not be reached at http://127.0.0.1:18765." } }), /could not be reached at http:\/\/127\.0\.0\.1:18765/);
     const running = render({ state: { status: "running" } });
     assert.match(running, /first comparison for a locus also builds the null/); assert.match(running, /Keep the helper&#x27;s terminal open/);
     assert.match(running, /<button[^>]*disabled=""[^>]*>[^<]*(<svg[^>]*>.*?<\/svg>)?\s*Run AlphaGenome comparison/s, "cannot be started twice");

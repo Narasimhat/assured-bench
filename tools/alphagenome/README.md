@@ -180,7 +180,7 @@ The request comes from Bench (Alternative guides > Regulatory comparison). The k
 ### One click from the page: `rank.py --serve`
 
 ```bash
-python3 tools/alphagenome/rank.py --serve [--port 8765] [--origin https://your-bench.example] [--token CODE] [--null-dir DIR]
+python3 tools/alphagenome/rank.py --serve [--port 18765] [--origin https://your-bench.example] [--token CODE] [--null-dir DIR]
 ```
 
 Starts a helper on 127.0.0.1 that the Bench page calls instead of the export/import steps. It prints a session code to paste

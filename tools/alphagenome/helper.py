@@ -32,7 +32,7 @@ import rank
 import review as single
 
 HELPER_SCHEMA = "assured-alphagenome-helper/1"
-DEFAULT_PORT = 8765
+DEFAULT_PORT = 18765  # 8765 is a common default for other local tools and was already taken on the first machine tried
 DEFAULT_ORIGINS = ("https://assured-bench.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173")
 MAX_BODY = 4_000_000
 NULL_DIR = Path(__file__).resolve().parents[2] / "local-reviews" / "null-cache"

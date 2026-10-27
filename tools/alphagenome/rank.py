@@ -375,7 +375,7 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--null", type=Path, dest="null_path", help="Null cache; built and written here when missing")
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--port", type=int, default=8765, help="--serve: port (default 8765)")
+    parser.add_argument("--port", type=int, default=18765, help="--serve: port (default 18765)")
     parser.add_argument("--origin", action="append", default=[], help="--serve: an extra page origin to allow, e.g. https://my-bench.example")
     parser.add_argument("--token", help="--serve: fixed session code instead of a random one")
     parser.add_argument("--null-dir", type=Path, help="--serve: where computed nulls are cached")
