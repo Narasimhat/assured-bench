@@ -23,8 +23,12 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:  # --validate-only needs no numerical stack
+    np = None
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # run from any directory
 import review as single  # same directory: Ensembl context fetch and key loading
 
 SCHEMA_REQUEST = "assured-alphagenome-candidates-request/1"
@@ -121,8 +125,14 @@ def context_interval(request):
     return start, start + request["sequenceLength"]
 
 
+def _require_numpy():
+    if np is None:
+        raise ImportError("numpy is required for predictions and metrics; install tools/alphagenome/requirements.txt.")
+
+
 def gene_geometry(request):
     """Gene-body slice in context coordinates plus exon and splice-site masks in gene-body coordinates."""
+    _require_numpy()
     ann = request["annotation"]
     start0, _ = context_interval(request)
     gs, ge = ann["geneStart"], ann["geneEnd"]

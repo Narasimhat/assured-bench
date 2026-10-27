@@ -196,5 +196,51 @@ class RunWithFakeClient(unittest.TestCase):
         self.assertEqual(m["M4_new_site_gain"], 0.0)
 
 
+FLOORS = {"M1_expr_log2": 0.002, "M2_local_rel": 0.005, "M3_splice_annot_loss": 1 / 256, "M4_new_site_gain": 1 / 256, "M5_usage_annot": 1 / 256}
+
+
+def reference_composite(metrics, k, null_alleles, context):
+    """Independent reference for the decision rule's statistic (the rule itself lives in src/services/candidateRanking.js)."""
+    names = rank.metric_names(context)
+    pool = [a["metrics"] for a in null_alleles if a["k"] == k]
+
+    def z_scores(values, against):
+        out = {}
+        for m in names:
+            x = np.array([p[m] for p in against])
+            out[m] = (values[m] - x.mean()) / max(x.std(), FLOORS[m.split("|")[0]])
+        return out
+    composite = max(z_scores(metrics, pool).values())
+    own = [max(z_scores(pool[j], pool[:j] + pool[j + 1:]).values()) for j in range(len(pool))]
+    return composite, (1 + sum(1 for x in own if x >= composite)) / (len(pool) + 1)
+
+
+class DecisionStatistic(unittest.TestCase):
+    def setUp(self):
+        base = ROOT / "test/fixtures/alphagenome-ranking"
+        self.report = json.loads((base / "apoe-r176c-report.json").read_text())
+        self.expected = json.loads((base / "apoe-r176c-expected.json").read_text())
+        self.ks = {"a1": 2, "a2": 2, "a3": 3, "a4": 1}
+
+    def test_saved_run_matches_the_expected_fixture(self):
+        for allele in self.report["alleles"]:
+            for context in CONTEXTS:
+                z, p = reference_composite(allele["metrics"], self.ks[allele["id"]], self.report["null"]["alleles"], context)
+                self.assertAlmostEqual(z, self.expected["composite_z"][allele["id"]][context], places=9)
+                self.assertAlmostEqual(p, self.expected["p"][allele["id"]][context], places=12)
+
+    def test_the_statistic_can_flag_and_does_not_over_flag(self):
+        null = self.report["null"]["alleles"]
+        strong = dict(self.report["alleles"][0]["metrics"]); strong["M1_expr_log2|CL:0000679"] = 0.3
+        _, p = reference_composite(strong, 2, null, "CL:0000679")
+        self.assertAlmostEqual(p, 1 / 31, places=12)
+        # each null allele treated as a candidate against the rest: about 1 in 30 flagged at 0.05
+        for k in (1, 2, 3):
+            members = [a for a in null if a["k"] == k]
+            flagged = sum(1 for j, m in enumerate(members)
+                          if reference_composite(m["metrics"], k, [a for a in null if a["k"] != k] + members[:j] + members[j + 1:], "CL:0000679")[1] <= 0.05)
+            self.assertLessEqual(flagged / len(members), 0.07)
+
+
 if __name__ == "__main__":
     unittest.main()
