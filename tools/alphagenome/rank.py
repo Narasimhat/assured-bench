@@ -1,4 +1,4 @@
-"""Offline AlphaGenome comparison of several substitution donors (research use).
+"""AlphaGenome comparison of several substitution donors (research use).
 
 One request holds the intended edit, several donor alleles (the intended edit plus each
 candidate's silent blockers), and one to four cell contexts. The tool predicts the reference,
@@ -7,9 +7,9 @@ compares each donor with the intended-edit-only allele inside the annotated gene
 builds, or loads, a null: random synonymous blocker sets of the same size near the edit, so a
 donor's effect can be read against what any silent change of that size does.
 
-No network activity without --run or --build-null. A live run retrieves GRCh38 context from
+No network activity without --run or --serve. A live run retrieves GRCh38 context from
 Ensembl and sends sequences to Google; the API key stays local (see review.py).
-Run --validate-only first.
+Run --validate-only first. --serve starts the local helper the Bench page uses (see helper.py).
 """
 import argparse
 import hashlib
@@ -367,14 +367,25 @@ def run_ranking(request, predict, context, model_version, sdk_version, null_stor
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("request", type=Path)
+    parser.add_argument("request", type=Path, nargs="?")
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--validate-only", action="store_true", help="Validate locally; no SDK, key or network required")
     mode.add_argument("--run", action="store_true", help="Retrieve Ensembl context and send sequences to the AlphaGenome API")
+    mode.add_argument("--serve", action="store_true", help="Run the local helper the Bench page talks to (127.0.0.1 only)")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--null", type=Path, dest="null_path", help="Null cache; built and written here when missing")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--port", type=int, default=8765, help="--serve: port (default 8765)")
+    parser.add_argument("--origin", action="append", default=[], help="--serve: an extra page origin to allow, e.g. https://my-bench.example")
+    parser.add_argument("--token", help="--serve: fixed session code instead of a random one")
+    parser.add_argument("--null-dir", type=Path, help="--serve: where computed nulls are cached")
     args = parser.parse_args()
+    if args.serve:
+        import helper
+        helper.serve(port=args.port, origins=args.origin, token=args.token, null_dir=args.null_dir or helper.NULL_DIR)
+        return
+    if not args.request:
+        parser.error("a request file is required")
     request = validate_request(json.loads(args.request.read_text()))
     if args.validate_only:
         start0, end0 = context_interval(request)

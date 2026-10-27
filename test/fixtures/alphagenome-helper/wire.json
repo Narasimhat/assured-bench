@@ -1,0 +1,68 @@
+{
+  "errors": {
+    "bad-json": {
+      "code": "bad-json",
+      "error": "The request body is not valid JSON.",
+      "status": 400
+    },
+    "bad-origin": {
+      "code": "bad-origin",
+      "error": "This page is not allowed to use the helper.",
+      "status": 403
+    },
+    "bad-token": {
+      "code": "bad-token",
+      "error": "The session code is missing or wrong. Copy it from the helper's terminal.",
+      "status": 401
+    },
+    "busy": {
+      "code": "busy",
+      "error": "Another comparison is running. Wait for it to finish.",
+      "status": 409
+    },
+    "invalid-request": {
+      "code": "invalid-request",
+      "status": 400
+    },
+    "no-key": {
+      "code": "no-key",
+      "error": "No AlphaGenome key is configured for the helper. Run tools/alphagenome/configure_key.py or set ALPHAGENOME_API_KEY, then restart it.",
+      "status": 412
+    },
+    "too-large": {
+      "code": "too-large",
+      "error": "The request is empty or larger than the helper accepts.",
+      "status": 413
+    }
+  },
+  "health": {
+    "body": {
+      "busy": false,
+      "keyConfigured": true,
+      "model": "ALL_FOLDS",
+      "nullsCached": 0,
+      "schema": "assured-alphagenome-helper/1",
+      "sdkVersion": "0.10.0",
+      "status": "ok",
+      "tokenRequired": true
+    },
+    "headers": {
+      "Access-Control-Allow-Origin": "https://assured-bench.vercel.app",
+      "Access-Control-Allow-Private-Network": "true",
+      "Vary": "Origin"
+    },
+    "status": 200
+  },
+  "origin": "https://assured-bench.vercel.app",
+  "preflight": {
+    "headers": {
+      "Access-Control-Allow-Headers": "Content-Type, X-Assured-Token",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Origin": "https://assured-bench.vercel.app",
+      "Access-Control-Allow-Private-Network": "true",
+      "Access-Control-Max-Age": "600"
+    },
+    "status": 204
+  },
+  "token": "session-code-123"
+}
