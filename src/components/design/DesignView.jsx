@@ -1,3 +1,4 @@
+import { AlphaGenomeReview } from "./AlphaGenomeReview.jsx";
 import React, { useState } from "react";
 import {
   runDesign,
@@ -1096,6 +1097,7 @@ export function DesignView({
 
           <div style={{ marginTop: "1rem" }}>
             <WorkflowAgent project={currentProject} onUpdateProject={onUpdateProject} collapsed />
+            <AlphaGenomeReview key={currentProject.id} project={currentProject} />
           </div>
         </>
       )}

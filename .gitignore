@@ -8,3 +8,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .vercel
+
+# Optional local AlphaGenome environment and sensitive run artifacts
+.venv-alphagenome/
+__pycache__/
+*.pyc
+.env
+.env.*
+!*.example
+local-reviews/

@@ -304,7 +304,7 @@ export function WorkflowAgent({ project, onUpdateProject, collapsed = false }) {
                   <strong>{s.title}</strong> <code>[{s.tool}]</code> ({s.durationMs} ms) —{" "}
                   <span style={{ color: s.status === "completed" ? "#15803d" : "#b45309" }}>{s.status.toUpperCase()}</span>
                   <div className="muted" style={{ fontSize: "0.82rem" }}>{s.rationale}</div>
-                  {s.output?.source && <div style={{ fontSize: "0.8rem", color: "#0f766e" }}>✓ Source: {s.output.source} ({s.output.sequenceLength} bp)</div>}
+                  {s.output?.source && <div style={{ fontSize: "0.8rem", color: "#0f766e" }}>Source: {s.output.source}{Number.isFinite(s.output.sequenceLength) ? ` (${s.output.sequenceLength} bp)` : ""}</div>}
                   {s.output?.error && <div style={{ fontSize: "0.8rem", color: "#b91c1c" }}>⚠ {s.output.error}</div>}
                 </li>
               ))}
@@ -717,6 +717,12 @@ export function WorkflowAgent({ project, onUpdateProject, collapsed = false }) {
           ) : (
             <p className="muted" style={{ marginTop: "0.5rem", marginBottom: 0, fontSize: "0.85rem" }}>Clonal screening estimate: {biomniResult.screeningPower.reason}</p>
           ))}
+          {biomniResult.evidence?.length > 0 && (
+            <details style={{ marginTop: "0.5rem" }}>
+              <summary>Evidence sources and limitations</summary>
+              <ul>{biomniResult.evidence.map(e => <li key={e.topic}><strong>{e.topic}:</strong> {e.type} — {e.source}</li>)}</ul>
+            </details>
+          )}
           </details>
         </div>
       )}

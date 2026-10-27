@@ -1,0 +1,121 @@
+# Local AlphaGenome donor review
+
+This optional first integration reviews **human GRCh38 substitution donors**.
+It compares reference → intended edit, reference → full donor allele, and
+intended edit → full donor allele. All blocking changes in one selected donor
+are evaluated jointly. Donor alternatives are separate requests.
+
+The existing design engine and QC release gates are unchanged. These are
+exploratory RNA-seq / splice-site / splice-usage **raw track differences**, not
+calibrated variant scores, pathogenicity calls, cutting efficiency or HDR yield.
+Metrics are aggregated over the entire selected context, not a gene annotation
+mask. Do not compare numbers across assays or interpret a zero as proven safety.
+No automated release or ranking threshold is applied.
+
+## 1. Set up locally
+
+Use Python 3.10+ (3.12 recommended). Create a separate environment in the repository:
+
+```bash
+python3.12 -m venv .venv-alphagenome
+.venv-alphagenome/bin/python -m pip install -r tools/alphagenome/requirements.txt
+```
+
+The adapter pins SDK 0.10.0 and selects `ModelVersion.ALL_FOLDS` explicitly.
+The report records that selector and SDK version; the service does not expose
+an immutable model-weights checksum here.
+
+## 2. Export from Bench
+
+Generate a point-mutation or genomic SNP design. Open **AlphaGenome · optional
+donor functional review** below Workflow Agent. Choose one donor, enter the
+chromosome, **lowest chromosome-plus coordinate of the complete uploaded
+reference**, and orientation. For a minus-strand uploaded record, use −1; the
+exporter reverses coordinates and complements alleles. No assembly or orientation
+is guessed. Confirm the mapping only after checking it.
+
+Enter the tissue/cell ontology ID from the model's output metadata. To inspect
+available tracks in a local Python session with an API client:
+
+```python
+import os
+from alphagenome.models import dna_client
+client = dna_client.create(os.environ["ALPHAGENOME_API_KEY"])
+metadata = client.output_metadata()
+print(metadata.rna_seq)
+print(metadata.splice_site_usage)
+```
+
+Use a supported, biologically appropriate `UBERON:…`, `CL:…`, or `EFO:…` ID.
+Unsupported tracks fail rather than substituting an unrelated tissue. Tissue-
+agnostic splice-site predictions may also be returned; inspect track metadata.
+16,384 bp is the initial local-context option; 131,072 bp includes wider context
+with greater resource use. Neither guarantees complete regulatory coverage.
+
+Click **Export review request**. Move the file into an ignored `local-reviews/`
+directory if desired. It contains sequence data and has not been sent anywhere.
+
+## 3. Validate without network access
+
+```bash
+python3 tools/alphagenome/review.py local-reviews/assured-alphagenome-request.json --validate-only
+```
+
+This checks the request digest, mapping, alleles and supported settings. It does
+**not** validate against the remote GRCh38 reference or make model predictions.
+
+## 4. Run an actual review
+
+Obtain your own [AlphaGenome API key](https://deepmind.google/science/alphagenome/).
+The hosted API is currently offered for non-commercial research; review its
+current terms for your intended use. Configure it through a hidden local prompt:
+
+```bash
+.venv-alphagenome/bin/python tools/alphagenome/configure_key.py
+```
+
+The prompt saves the key in ignored `local-reviews/alphagenome-api-key.local`,
+with file permissions `0600` (your account only). It never echoes the key.
+The runner loads it automatically. Alternatively, set `ALPHAGENOME_API_KEY` in
+the local shell environment; that value takes precedence. Do not put the key in
+Git, a request JSON, a `VITE_` variable or chat. Re-running setup replaces the
+previous local key.
+
+```bash
+.venv-alphagenome/bin/python tools/alphagenome/review.py \
+  local-reviews/assured-alphagenome-request.json \
+  --run --output local-reviews/alphagenome-review.json
+```
+
+`--run` retrieves GRCh38 chromosome-plus context from Ensembl, checks **every
+overlapping uploaded reference base**, then sends the reference/intended/full
+donor sequences to Google AlphaGenome. A disagreement stops execution; the tool
+does not silently replace sample variants, change assemblies, or pad chromosome
+ends. Gene-oriented records without a verified genomic mapping cannot be used.
+Reference and model requests require internet access. Existing output files are
+not overwritten. Failures never produce a completed review.
+
+## 5. Import and inspect
+
+Use **Import completed review** in the same panel with the same mapping, donor,
+tissue and context. The request SHA-256 prevents accidental reuse with different
+inputs; it is not a signature authenticating Google's response. Only import
+reports from a trusted local runner. Changed inputs clear the displayed result.
+
+Inspect all three comparisons and the assay/track names. Results remain separate
+review artifacts in this version; they are not persisted into Bench projects,
+merged into design reports, or used as release gates. Preserve the JSON locally.
+
+## Local checks
+
+```bash
+node --test test/alphagenome-review.test.js test/evidence-labels.test.js
+.venv-alphagenome/bin/python -m unittest discover -s tools/alphagenome -p 'test_*.py' -v
+```
+
+The Python tests exercise the real SDK data types with **mock predictions and
+mock reference retrieval**. Passing them does not establish live API access,
+biological accuracy, or wet-lab calibration.
+
+Sources: [SDK](https://github.com/google-deepmind/alphagenome),
+[documentation](https://google-deepmind-alphagenome.readthedocs-hosted.com/).

@@ -68,6 +68,14 @@ Known open items are listed in `docs/AUDIT_2026-10.md`.
 
 ## Getting Started
 
+### Optional local Co-Scientist / AlphaGenome development
+
+Evidence-source labels and the local integration checks are described in
+[local development progress](docs/local-coscientist-progress.md). The optional
+[AlphaGenome donor-review adapter](tools/alphagenome/README.md) runs locally with
+Python; API keys never enter the browser. Live predictions require separately
+configured API access and are not part of offline tests.
+
 ### Prerequisites
 - Node.js (v18 or higher recommended)
 - npm (v9 or higher)

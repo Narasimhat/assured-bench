@@ -210,8 +210,9 @@ export async function resolveBiomniGeneReference(geneSymbol, fetchFn = globalThi
             transcriptId: bundled.transcriptId,
             chr: bundled.chr,
             source: bundled.source,
+            evidenceType: "bundled",
             genbankText: text,
-            sequenceLength: text.length,
+            sequenceLength: parseGB(text).seq.length,
           };
         }
       }
@@ -235,18 +236,20 @@ export async function resolveBiomniGeneReference(geneSymbol, fetchFn = globalThi
         transcriptId: ncbiRes.summary?.transcriptId || "",
         chr: ncbiRes.summary?.chromosome || "",
         source: `NCBI Datasets & E-utilities (${ncbiRes.summary?.transcriptId || sym})`,
+        evidenceType: "live",
         genbankText: ncbiRes.genbank,
-        sequenceLength: ncbiRes.genbank.length,
+        sequenceLength: parseGB(ncbiRes.genbank).seq.length,
       };
     }
   } catch {
     // Fall through to fetchGeneGenbank
   }
 
-  return fetchGeneGenbank(sym);
+  const result = await fetchGeneGenbank(sym);
+  return { ...result, evidenceType: /bundled/i.test(result.source || "") ? "bundled" : "live" };
 }
 
-export const BIOMNI_AGENT_VERSION = "1.1.0";
+export const BIOMNI_AGENT_VERSION = "1.2.0";
 
 export const BIOMNI_PRESET_MISSIONS = Object.freeze([
   {
@@ -456,7 +459,7 @@ export function buildBiomniPlan(intent) {
     });
   }
 
-  if (intent.wantsLindel) {
+  if (intent.wantsLindel && intent.enzyme === "spcas9") {
     plan.push({
       step: plan.length + 1,
       id: "rank_ko_guides_lindel",
@@ -479,9 +482,9 @@ export function buildBiomniPlan(intent) {
   plan.push({
     step: plan.length + 1,
     id: "compute_screening_power",
-    title: "Biomni-A1 Clonal Screening Power & Sample Size Modeling",
+    title: "Assumption-Based Clonal Screening Scenario",
     tool: "compute_screening_power",
-    rationale: "Compute 96-well clonal screening sample size for >=95% probability of recovering >=2 verified clones.",
+    rationale: "Explore sample size using the selected pair and explicit delivery and independent-allele assumptions; not a calibrated yield prediction.",
   });
 
   return plan;
@@ -493,7 +496,7 @@ export function buildBiomniPlan(intent) {
  */
 export async function queryUniprotProtein(geneSymbol, fetchFn = globalThis.fetch) {
   const sym = String(geneSymbol || "").trim().toUpperCase();
-  const noConstraint = { pLI: null, loeuf: null, depmapChronos: null, essentialityTier: "unknown", constraintSummary: null };
+  const noConstraint = { pLI: null, loeuf: null, depmapChronos: null, essentialityTier: "unknown", constraintSummary: null, evidence: { protein: { type: "missing", source: "UniProtKB annotation unavailable or no match" }, domains: { type: "missing", source: "No live domain annotation available" } } };
   if (typeof fetchFn !== "function") return { ok: false, found: false, gene: sym, error: "Fetch API unavailable", ...noConstraint };
   const url = `https://rest.uniprot.org/uniprotkb/search?query=${encodeURIComponent(`gene_exact:${sym} AND organism_id:9606 AND reviewed:true`)}&size=1`;
   try {
@@ -524,6 +527,7 @@ export async function queryUniprotProtein(geneSymbol, fetchFn = globalThis.fetch
       alphafoldUrl: acc ? `https://alphafold.ebi.ac.uk/entry/${acc}` : "",
       uniprotUrl: acc ? `https://www.uniprot.org/uniprotkb/${acc}` : "",
       ...noConstraint,
+      evidence: { protein: { type: "live", source: url }, domains: { type: domains.length ? "live" : "missing", source: domains.length ? url : "No annotated domains in the UniProt response" } },
     };
   } catch (err) {
     return { ok: false, found: false, gene: sym, error: err.message || String(err), ...noConstraint };
@@ -904,12 +908,12 @@ export async function runBiomniCoScientist(
       if (item.tool === "fetch_gene_reference") {
         if (currentProject?.genbankRaw?.trim() && currentGeneUpper === intent.gene) {
           genbankRaw = currentProject.genbankRaw;
-          geneMeta = currentProject.geneMeta || { geneSymbol: intent.gene, source: "Project GenBank Reference" };
+          geneMeta = { ...currentProject.geneMeta, geneSymbol: intent.gene, source: currentProject.geneMeta?.source || "Project GenBank Reference", evidenceType: currentProject.geneMeta?.evidenceType || "user-provided" };
           output = {
             ok: true,
             gene: intent.gene,
             source: geneMeta.source || "Current Project Reference",
-            sequenceLength: genbankRaw.length,
+            sequenceLength: parseGB(genbankRaw).seq.length,
           };
         } else {
           const fetched = await geneFetcher(intent.gene, fetchFn);
@@ -921,7 +925,7 @@ export async function runBiomniCoScientist(
             ensemblId: fetched.ensemblId,
             transcriptId: fetched.transcriptId,
             source: fetched.source,
-            sequenceLength: fetched.sequenceLength || genbankRaw.length,
+            sequenceLength: fetched.sequenceLength || parseGB(genbankRaw).seq.length,
           };
         }
       } else if (item.tool === "analyze_common_isoform_exons") {
@@ -1311,6 +1315,7 @@ export async function runBiomniCoScientist(
   return {
     schema: "assured-biomni-coscientist/1",
     agentVersion: BIOMNI_AGENT_VERSION,
+    executionMode: "rule-based",
     createdAt: new Date().toISOString(),
     prompt,
     intent,
@@ -1329,5 +1334,13 @@ export async function runBiomniCoScientist(
     screeningPower,
     variantScreen,
     genotypingAssay,
+    evidence: [
+      { topic: "Reference", type: geneMeta?.evidenceType || "unknown", source: geneMeta?.source || "Unresolved reference" },
+      { topic: "Protein annotation", ...(uniprot?.evidence?.protein || { type: "missing", source: "No live annotation available" }) },
+      { topic: "Protein domains", ...(uniprot?.evidence?.domains || { type: "missing", source: "No live domain annotation available" }) },
+      { topic: "Gene constraint / fitness", type: viability?.ok && (viability.gnomad || viability.depmap) ? "live" : "missing", source: viability?.source || "Constraint data unavailable" },
+      { topic: "Population variants", type: variantScreen?.ok ? "live" : "missing", source: variantScreen?.source || "Variant coverage not assessed" },
+      { topic: "Screening yield", type: screeningPower?.ok ? "assumption-based" : "not-modelled", source: screeningPower?.model || screeningPower?.reason || "No estimate available" },
+    ],
   };
 }

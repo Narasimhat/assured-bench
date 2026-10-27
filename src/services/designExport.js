@@ -143,6 +143,7 @@ export function appendBiomniSummary(html, biomniReport, designResult) {
   } else if (sp && sp.ok === false) {
     lines.push(`<p style="margin:4px 0"><strong>Clonal screening estimate:</strong> ${escapeHtml(sp.reason)}</p>`);
   }
+  if (biomniReport?.evidence?.length) lines.push(`<details><summary>Evidence sources and limitations</summary><ul>${biomniReport.evidence.map(e => `<li>${escapeHtml(e.topic)}: ${escapeHtml(e.type)} — ${escapeHtml(e.source)}</li>`).join("")}</ul></details>`);
   if (!lines.length) return html.replace("<!--EVIDENCE-->", "");
   const section = `<details class="fold"><summary>Co-Scientist checks: isoforms, gene constraint, variants, library, screening</summary><div class="body" style="font-size:13px">${lines.join("")}</div></details>`;
   return html.includes("<!--EVIDENCE-->") ? html.replace("<!--EVIDENCE-->", () => section) : html.replace(/<body[^>]*>/i, body => body + section);

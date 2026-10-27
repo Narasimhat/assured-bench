@@ -578,3 +578,37 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outli
 .workflow-agent .agent-summary h3 { margin: 0; font-size: 1rem; }
 .workflow-agent .agent-review-note { font-size: 0.85rem; color: var(--text-muted); }
 .workflow-agent .agent-candidate > details { margin-bottom: 12px; }
+.alphagenome-review fieldset label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 230px;
+  min-width: 0;
+}
+.alphagenome-review fieldset {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.alphagenome-review fieldset label input:not([type="checkbox"]),
+.alphagenome-review fieldset label select {
+  width: 100%;
+}
+.alphagenome-review .alpha-review-actions > label {
+  min-width: 0;
+  max-width: 100%;
+}
+.alphagenome-review fieldset label input,
+.alphagenome-review fieldset label select,
+.alphagenome-review input[type="file"] {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.alphagenome-review fieldset .alpha-review-confirmation {
+  flex-direction: row;
+  align-items: baseline;
+}
+.alphagenome-review code {
+  overflow-wrap: anywhere;
+}

@@ -165,7 +165,7 @@ export function buildQcDesignSpec(result, options = {}) {
       const genomic = String(donor.genomicDonor || donor.donorSense || "").toUpperCase();
       const refSegment = genome.slice(donor.donorStart, donor.donorEnd);
       const k = type === "it" ? donor.senseInsertStart : null;
-      const intendedPositions = new Set(result.enzyme && result.type === "pm" ? (result.ch || []).map(change => change.p)
+      const intendedPositions = new Set(type === "pm" && result.ch?.length ? result.ch.map(change => change.p)
         : (donor.desiredDiffIndexes || (Number.isFinite(result.gp) && Number.isFinite(donor.donorStart) ? [result.gp - donor.donorStart] : [])).map((i) => donor.donorStart + i));
       const placement = type === "it"
         ? { left: refSegment.slice(0, k), donorLeft: genomic.slice(0, k), right: refSegment.slice(k), donorRight: genomic.slice(k + insertBp), refStart: donor.donorStart, refEnd: donor.donorEnd, arm3: refSegment.length - k }
