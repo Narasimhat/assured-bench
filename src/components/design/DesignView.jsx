@@ -401,7 +401,7 @@ export function DesignView({
   };
 
   // Generate design (with optional customGuides override)
-  const executeDesign = async (customGuidesOverride = null) => {
+  const executeDesign = async (customGuidesOverride = null, extraOptions = null) => {
     if (!genbankRaw) {
       setError("Please fetch a gene from Ensembl/NCBI or upload a GenBank reference file first.");
       return;
@@ -440,7 +440,8 @@ export function DesignView({
         ensureGuidePair: true,
         allowNonCodingBlockers: true,
         ...(editType === "ko" ? { koLindel, ...(koOutcomesUnavailable ? { koOutcomesUnavailable } : {}) } : {}),
-        ...(customGuidesOverride?.length ? { customGuides: customGuidesOverride } : {})
+        ...(customGuidesOverride?.length ? { customGuides: customGuidesOverride } : {}),
+        ...(extraOptions || {})
       };
 
       setDesignProgress("Selecting guides and predicting repair outcomes…");
@@ -546,6 +547,11 @@ export function DesignView({
 
   const handleUsePair = (spacers) => {
     if (Array.isArray(spacers) && spacers.length === 2) executeDesign(spacers);
+  };
+
+  // A matched guide + donor pair from the point-mutation candidate picker: that guide alone, with the donor version it was built with.
+  const handleUseCandidate = (candidate) => {
+    if (candidate?.guide?.sp) executeDesign([candidate.guide.sp], { avoidBlockerPositions: candidate.avoidBlockerPositions || [], ensureGuidePair: false, coDeliveryBlocking: false });
   };
 
   const handleSelectAlternativeGuide = (spacer) => {
@@ -1048,6 +1054,7 @@ export function DesignView({
           onUsePair={handleUsePair}
           onUseRecommended={handleRunDesign}
           onSelectAlternative={handleSelectAlternativeGuide}
+          onUseCandidate={handleUseCandidate}
           onEditSettings={() => setEditingDesign(true)}
         />
       )}

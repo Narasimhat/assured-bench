@@ -6,6 +6,7 @@ import { generateReportHtml, downloadReportHtml, downloadDesignJson, downloadSch
 import { DesignResult } from "./DesignResult.jsx";
 import { KoGuidePicker } from "./KoGuidePicker.jsx";
 import { GuideAlternatives } from "./GuideAlternatives.jsx";
+import { PmCandidatePicker } from "./PmCandidatePicker.jsx";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { RegulatoryContextPanel } from "./RegulatoryContextPanel.jsx";
 import { AlphaGenomeReview } from "./AlphaGenomeReview.jsx";
@@ -46,13 +47,14 @@ function ScientificReport({ project, result }) {
   </section>;
 }
 
-export function DesignResultView({ project, reagents, busy, onProceedToOrder, onUpdateProject, onUsePair, onUseRecommended, onSelectAlternative, onEditSettings }) {
+export function DesignResultView({ project, reagents, busy, onProceedToOrder, onUpdateProject, onUsePair, onUseRecommended, onSelectAlternative, onUseCandidate, onEditSettings }) {
   const result = project.designResult;
   const [page, setPage] = useState("design");
   const [exportError, setExportError] = useState("");
   const takeHome = buildTakeHome({ designResult: result, biomniReport: project.biomniReport });
   const scheme = useMemo(() => buildDesignSchemeSvg(result, { responsive: true }), [result]);
-  const canCompare = result.type === "ko" || Boolean(result.guideAlternatives?.candidates?.length);
+  const hasPmCandidates = result.type === "pm" && (!project.options?.enzyme || project.options.enzyme === "spcas9") && Boolean(result.an && result.wA && result.mA && project.genbankRaw);
+  const canCompare = result.type === "ko" || Boolean(result.guideAlternatives?.candidates?.length) || hasPmCandidates;
   const openPage = next => { setPage(next); setExportError(""); };
   const exportOffTargets = () => {
     const exported = downloadCasOffinderInput(project, result);
@@ -72,6 +74,7 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
       {result.type === "ko" && !result.koPicker?.rows?.length && <p>Guide list not available for this design. {result.koPickerError ? `It could not be built (${result.koPickerError}).` : "Edit the design and click Generate design to list and choose guides."}</p>}
       {result.koPicker?.rows?.length > 0 && <KoGuidePicker result={result} genbankRaw={project.genbankRaw} geneSymbol={result.gene || project.gene} busy={busy} onUsePair={onUsePair} onUseRecommended={onUseRecommended} />}
       {result.guideAlternatives?.candidates?.length > 0 && <GuideAlternatives result={result} onSelectAlternative={onSelectAlternative} />}
+      {hasPmCandidates && <PmCandidatePicker project={project} result={result} busy={busy} onUseCandidate={onUseCandidate} />}
     </section>}
     {page === "evidence" && <section aria-label="Analysis and evidence"><div className="card"><h2>Analysis & evidence</h2><p className="muted">Inspect the analysis record, source evidence and optional reviews. The scientific report brings the recorded findings together.</p><button className="btn btn-secondary" onClick={() => openPage("report")}><FileText size={16} />Open scientific report</button></div><RegulatoryContextPanel project={project} onUpdateProject={onUpdateProject} /><WorkflowAgent project={project} onUpdateProject={onUpdateProject} />{["pm", "genomic-snv"].includes(result.type) && <AlphaGenomeReview key={project.id} project={project} />}</section>}
     {page !== "design" && <button className="btn btn-secondary return-to-design" onClick={() => openPage("design")}><ArrowLeft size={16} />Return to selected design</button>}
