@@ -20,7 +20,7 @@ function needsCloudUnlock(status) {
 export function DonorCandidateComparison({project,onUpdateProject,busy:designBusy,expanded=false}) {
   const [busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[error,setError]=useState(project.donorWorkflowError||'');
   const [cloudAccess,setCloudAccess]=useState(false),[accessCode,setAccessCode]=useState(''),[unlocking,setUnlocking]=useState(false);
-  const [sourceId,setSourceId]=useState(''),[report,setReport]=useState(null),[available,setAvailable]=useState(false);
+  const [sourceId,setSourceId]=useState(''),[report,setReport]=useState(null),[available,setAvailable]=useState(false),[missingConfig,setMissingConfig]=useState([]);
   const [ontology,setOntology]=useState(project.donorReviewContext||project.donorCandidatePanel?.ontology||'');
   const [protectBoth,setProtectBoth]=useState(project.donorProtectBoth??project.donorCandidatePanel?.protectBoth??project.designResult?.blocking?.coDelivery??project.options?.coDeliveryBlocking??false);
   const [picks,setPicks]=useState([]);
@@ -32,7 +32,8 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
     readReviewerStatus(abort.signal).then(d=>{
       setAvailable(d?.available===true);
       setCloudAccess(needsCloudUnlock(d));
-    }).catch(()=>{ setAvailable(false); setCloudAccess(false); });
+      setMissingConfig(Array.isArray(d?.missing) ? d.missing : []);
+    }).catch(()=>{ setAvailable(false); setCloudAccess(false); setMissingConfig([]); });
     return()=>abort.abort();
   },[]);
   const panel=project.donorCandidatePanel?.sourceId===sourceId?project.donorCandidatePanel:null;
@@ -76,6 +77,7 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
       const status=await readReviewerStatus();
       setAvailable(status?.available===true);
       setCloudAccess(needsCloudUnlock(status));
+      setMissingConfig(Array.isArray(status?.missing) ? status.missing : []);
       if(needsCloudUnlock(status))throw new Error('The access code was accepted, but the analysis session could not be confirmed. Reload and try again on HTTPS.');
       setAccessCode('');
     }catch(e){setError(e.message)}finally{setUnlocking(false)}
@@ -90,7 +92,7 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
     {showAccessForm&&<form onSubmit={unlock} className="donor-access-form"><label>Analysis access code <input type="password" autoComplete="current-password" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={unlocking}/></label><button className="btn btn-secondary" disabled={unlocking||!accessCode}>{unlocking?'Unlocking…':'Unlock online analysis'}</button><p>Enter the private analysis access code to run online AlphaGenome reviews. You can still choose the cell type above. The AlphaGenome API key stays on the server.</p></form>}
     {error&&<p role="alert" className="error">{error}</p>}
     <div className="candidate-actions"><button className={selectedMatches ? "btn btn-secondary" : "btn btn-primary"} disabled={onlineLocked||!ontology} onClick={run}>{selectedMatches?'Review designs again':'Design and review'}</button>{busy&&<button className="btn btn-secondary" onClick={cancel}>Cancel</button>}</div>
-    {!available&&!showAccessForm&&<p>Automatic review is unavailable here. Start the local reviewer (<code>npm run dev</code> with the AlphaGenome Python environment) or ask the project owner to configure the online reviewer.</p>}
+    {!available&&!showAccessForm&&<p>Automatic review is unavailable here. Start the local reviewer (<code>npm run dev</code> with the AlphaGenome Python environment) or ask the project owner to configure the online reviewer.{missingConfig.length>0&&<> Missing on this deployment: <code>{missingConfig.join(', ')}</code>. Re-add under Vercel → Settings → Environment Variables for <strong>Production</strong>, then Redeploy.</>}</p>}
     {showAccessForm&&<p className="muted">Choose a cell type, then unlock online analysis to run <strong>Design and review</strong>.</p>}
     {busy&&<p role="status" aria-live="polite">{progress||'Preparing the review…'}</p>}
     <div ref={summary} tabIndex={-1} aria-live="polite">
