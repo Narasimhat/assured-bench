@@ -25,6 +25,7 @@ export function sameOrigin(req) {
 }
 export async function readBody(req, max=MAX_BODY) {
   if (Number(req.headers['content-length']||0)>max) throw new Error('Payload too large');
+  if(req.body!==undefined){const body=typeof req.body==='string'?req.body:JSON.stringify(req.body);if(Buffer.byteLength(body)>max)throw new Error('Payload too large');return JSON.parse(body);}
   let body='';
   for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>max)throw new Error('Payload too large');}
   return JSON.parse(body);

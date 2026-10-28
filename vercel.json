@@ -24,7 +24,7 @@
   "functions": {
     "api/alphagenome/worker.py": {
       "maxDuration": 300,
-      "excludeFiles": "{local-reviews/**,.venv-alphagenome/**,output/**,test/**,public/**,node_modules/**,**/test_*.py}"
+      "excludeFiles": "{.venv/**,.vercel/**,dist/**,local-reviews/**,.venv-alphagenome/**,output/**,test/**,public/**,node_modules/**,**/__pycache__/**,**/test_*.py}"
     },
     "api/alphagenome/consume.js": {
       "maxDuration": 300,
