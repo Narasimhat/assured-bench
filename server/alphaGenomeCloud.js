@@ -5,14 +5,19 @@ export const COOKIE = '__Host-assured-review';
 export const MAX_BODY = 2_400_000;
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])) : v);
-export const mac = (value, env = process.env) => createHmac('sha256', env.ASSURED_REVIEW_SECRET).update(value).digest('hex');
+export function reviewSecret(env = process.env) {
+  if (env.ASSURED_REVIEW_SECRET?.length >= 32) return env.ASSURED_REVIEW_SECRET;
+  const apiKey = String(env.ALPHAGENOME_API_KEY || '').trim();
+  const accessHash = String(env.ASSURED_REVIEW_ACCESS_HASH || '').trim();
+  return apiKey && accessHash ? hash(`assured-review-secret:v1:${apiKey}:${accessHash}`) : '';
+}
+export const mac = (value, env = process.env) => createHmac('sha256', reviewSecret(env)).update(value).digest('hex');
 export function equal(a, b) { const x=Buffer.from(String(a||'')),y=Buffer.from(String(b||''));return x.length===y.length && timingSafeEqual(x,y); }
-export const configured = (env=process.env) => Boolean(env.ALPHAGENOME_API_KEY && env.ASSURED_REVIEW_SECRET?.length >= 32 && env.ASSURED_REVIEW_ACCESS_HASH && (env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID));
+export const configured = (env=process.env) => Boolean(env.ALPHAGENOME_API_KEY && reviewSecret(env).length >= 32 && env.ASSURED_REVIEW_ACCESS_HASH && (env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID));
 /** Names of required server env vars that are absent or too short. Values are never returned. */
 export function missingReviewerConfig(env=process.env) {
   const missing = [];
   if (!env.ALPHAGENOME_API_KEY) missing.push('ALPHAGENOME_API_KEY');
-  if (!(env.ASSURED_REVIEW_SECRET?.length >= 32)) missing.push('ASSURED_REVIEW_SECRET');
   if (!env.ASSURED_REVIEW_ACCESS_HASH) missing.push('ASSURED_REVIEW_ACCESS_HASH');
   if (!(env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID)) missing.push('BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID');
   return missing;

@@ -10,6 +10,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tools' / 'alphagenome'))
 
 
+def review_secret(env=os.environ):
+    explicit = env.get('ASSURED_REVIEW_SECRET', '')
+    if explicit and len(explicit) >= 32:
+        return explicit
+    api_key = env.get('ALPHAGENOME_API_KEY', '').strip()
+    access_hash = env.get('ASSURED_REVIEW_ACCESS_HASH', '').strip()
+    if api_key and access_hash:
+        return hashlib.sha256(f'assured-review-secret:v1:{api_key}:{access_hash}'.encode()).hexdigest()
+    return ''
+
+
 def signed(headers, body, secret, now=None):
     timestamp = headers.get('X-Assured-Timestamp', '')
     if not secret or len(secret) < 32 or not timestamp.isdigit() or abs((now or time.time()) * 1000 - int(timestamp)) > 300000:
@@ -28,7 +39,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_error(413)
             return
         body = self.rfile.read(length)
-        if not signed(self.headers, body, os.environ.get('ASSURED_REVIEW_SECRET', '')):
+        if not signed(self.headers, body, review_secret()):
             self.send_error(403)
             return
         try:

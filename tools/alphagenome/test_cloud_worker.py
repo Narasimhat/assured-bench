@@ -19,3 +19,11 @@ class CloudWorkerTests(unittest.TestCase):
         self.assertFalse(worker.signed(headers, body, secret, now=2000))
         self.assertFalse(worker.signed(headers, body, '', now=1000))
         self.assertFalse(worker.signed({}, body, secret, now=1000))
+
+    def test_review_secret_falls_back_to_derived_secret(self):
+        env = {'ALPHAGENOME_API_KEY': 'test-only', 'ASSURED_REVIEW_ACCESS_HASH': 'a' * 64}
+        derived = worker.review_secret(env)
+        self.assertEqual(len(derived), 64)
+        self.assertEqual(worker.review_secret({**env, 'ASSURED_REVIEW_SECRET': 'short'}), derived)
+        self.assertEqual(worker.review_secret({**env, 'ASSURED_REVIEW_SECRET': 'x' * 48}), 'x' * 48)
+        self.assertEqual(worker.review_secret({'ALPHAGENOME_API_KEY': 'test-only'}), '')

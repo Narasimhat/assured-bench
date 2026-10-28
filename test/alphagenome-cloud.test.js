@@ -20,15 +20,19 @@ test('cloud access uses signed, expiring HttpOnly cookies, fails closed and neve
 });
 test('status asks for an access code only when the cloud reviewer is configured',()=>{
  const empty=reviewerStatus({headers:{}},{});
- assert.deepEqual(empty,{available:false,mode:'unconfigured',authenticated:false,authenticationRequired:false,missing:['ALPHAGENOME_API_KEY','ASSURED_REVIEW_SECRET','ASSURED_REVIEW_ACCESS_HASH','BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID']});
+ assert.deepEqual(empty,{available:false,mode:'unconfigured',authenticated:false,authenticationRequired:false,missing:['ALPHAGENOME_API_KEY','ASSURED_REVIEW_ACCESS_HASH','BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID']});
  const partial=reviewerStatus({headers:{}},{ALPHAGENOME_API_KEY:'k',ASSURED_REVIEW_SECRET:'x'.repeat(48)});
  assert.deepEqual(partial.missing,['ASSURED_REVIEW_ACCESS_HASH','BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID']);
+ const derivedEnv={ALPHAGENOME_API_KEY:'test-only',ASSURED_REVIEW_ACCESS_HASH:hash('private-access-code'),BLOB_READ_WRITE_TOKEN:'test-only',VERCEL_URL:'assured-test.vercel.app'};
+ assert.deepEqual(reviewerStatus({headers:{}},derivedEnv),{available:true,mode:'cloud',authenticated:false,authenticationRequired:true});
  const locked=reviewerStatus({headers:{}},env);
  assert.deepEqual(locked,{available:true,mode:'cloud',authenticated:false,authenticationRequired:true});
  assert.equal(locked.missing,undefined);
  const now=100000, cookie=sessionCookie('private-access-code',env,now);
  const unlocked=reviewerStatus({headers:{cookie:cookie.split(';')[0]}},env,now);
  assert.deepEqual(unlocked,{available:true,mode:'cloud',authenticated:true,authenticationRequired:true});
+ const derivedCookie=sessionCookie('private-access-code',derivedEnv,now);
+ assert.deepEqual(reviewerStatus({headers:{cookie:derivedCookie.split(';')[0]}},derivedEnv,now),{available:true,mode:'cloud',authenticated:true,authenticationRequired:true});
 });
 test('cloud envelope hashes exactly match browser and Python canonical identities',async()=>{
  const b=await batch();assert.doesNotThrow(()=>validateEnvelope(b));assert.equal(hash(canonical({z:1,requestedOutputs:[],requestId:'x'})),await reviewRequestId({z:1,requestedOutputs:[],requestId:'x'}));
