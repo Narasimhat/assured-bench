@@ -59,3 +59,8 @@ test('reviewing again after selection retains the original baseline donor sequen
  const again=await generateDonorCandidates(p);
  assert.deepEqual(again.candidates.filter(c=>c.baseline).map(c=>c.result.os[0].od),panel.candidates.filter(c=>c.baseline).map(c=>c.result.os[0].od));
 });
+test('automatic two-guide selection prefers separated cuts before near-coincident alternatives',()=>{
+ const candidates=[100,101,113].map((cut,i)=>({id:`candidate-${i}`,eligible:true,blockers:0,result:{gs:[{sp:`guide-${i}`,cut,d:cut-100}]}}));
+ const p={candidates},r={candidates:candidates.map((c,i)=>({id:c.id,status:'complete',metrics:{exonicRnaRelativeDelta:.01*(i+1),annotatedUsageMaxDelta:.01,spliceSiteMaxDelta:.01}}))};
+ assert.deepEqual(suggestTwoDonorCandidates(p,r),['candidate-0','candidate-2']);
+});

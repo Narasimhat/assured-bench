@@ -369,3 +369,10 @@ Private jobs are retained until the project owner removes them from storage.
 The two-design selector prefers guide cuts at least 10 bp apart, consistent with
 the native pair planner, before trying near-coincident cuts. This is an engineering
 preference; both choices still require screening for dual-cut deletion products.
+
+The official SDK's scientific dependencies exceed the standard Python bundle
+limit. This deployment uses Vercel's larger-function runtime with
+`VERCEL_SUPPORT_LARGE_FUNCTIONS=1` in both Preview and Production; it retains the
+unmodified SDK. The runtime must be available for the target Vercel account.
+The access code generated for the owner is stored only in the ignored local file
+`local-reviews/online-review-access-code.local`, never in the frontend bundle.
