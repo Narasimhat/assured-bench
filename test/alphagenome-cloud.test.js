@@ -18,6 +18,14 @@ test('cloud access uses signed, expiring HttpOnly cookies, fails closed and neve
  assert.equal(authenticated({headers:{cookie:req.headers.cookie+'tampered'}},env,now),false);
  assert.equal(authenticated(req,{...env,BLOB_READ_WRITE_TOKEN:''},now),false);
 });
+test('access codes match only owner-configured hashes, tolerating pasted whitespace and a rotation list',()=>{
+ const now=100000;
+ assert.ok(sessionCookie('  private-access-code\n',env,now));
+ const rotating={...env,ASSURED_REVIEW_ACCESS_HASH:`${hash('old-code')}, ${hash('new-code').toUpperCase()}`};
+ assert.ok(sessionCookie('old-code',rotating,now));assert.ok(sessionCookie('new-code',rotating,now));
+ assert.equal(sessionCookie('private-access-code',rotating,now),null);
+ assert.equal(sessionCookie('',env,now),null);
+});
 test('status asks for an access code only when the cloud reviewer is configured',()=>{
  const empty=reviewerStatus({headers:{}},{});
  assert.deepEqual(empty,{available:false,mode:'unconfigured',authenticated:false,authenticationRequired:false,missing:['ALPHAGENOME_API_KEY','ASSURED_REVIEW_ACCESS_HASH','BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID']});

@@ -3,10 +3,6 @@ import { get, put } from '@vercel/blob';
 
 export const COOKIE = '__Host-assured-review';
 export const MAX_BODY = 2_400_000;
-const FALLBACK_ACCESS_HASHES = [
-  '0b67663b5b238beaf6bb1652415e147a00550103e7a53387b6e47cbb19ffd6e8',
-  'e303f6b3536719eab64d6aa4512f62e6f31f2d5f110465c19cb399c824d34c33',
-];
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,v[k]])) : v);
 export function reviewSecret(env = process.env) {
@@ -45,14 +41,12 @@ export function reviewerStatus(req, env=process.env, now=Date.now()) {
   if (!ready) status.missing = missingReviewerConfig(env);
   return status;
 }
+/** Only hashes the deployment owner configured are accepted; a comma-separated list allows rotating a code without locking the current one out. */
 function matchesAccessHash(code, env=process.env) {
-  const configuredHashes = String(env.ASSURED_REVIEW_ACCESS_HASH || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-  const candidates = [String(code || ''), String(code || '').trim()];
-  const candidateHashes = [...new Set(candidates.filter(Boolean).map(c => hash(c)))];
-  const allowed = configuredHashes.some(h => FALLBACK_ACCESS_HASHES.includes(h))
-    ? [...new Set([...configuredHashes, ...FALLBACK_ACCESS_HASHES])]
-    : configuredHashes;
-  return candidateHashes.some(ch => allowed.some(ah => equal(ch, ah)));
+  const allowed = String(env.ASSURED_REVIEW_ACCESS_HASH || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  // A code pasted from a password manager often carries a trailing space or newline.
+  const candidates = [...new Set([String(code || ''), String(code || '').trim()].filter(Boolean))];
+  return candidates.some(c => allowed.some(h => equal(hash(c), h)));
 }
 export function sessionCookie(code, env=process.env, now=Date.now()) {
   if (!configured(env) || !matchesAccessHash(code, env)) return null;
