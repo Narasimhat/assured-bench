@@ -19,7 +19,7 @@ const FIX = (name) => JSON.parse(fs.readFileSync(path.join(HERE, "fixtures", "al
 const OPTIONS = { deliveryMethod: "rnp", maxBlockingChanges: 3, expectedGene: "APOE" };
 const CONTEXTS = ["glutamatergic-neuron", "wtc11"];
 const NEURON = "CL:0000679"; const WTC11 = "EFO:0009747";
-// The bundled reference names its location as "chr19 44905754-44909393", which the mapping reader on main does not parse, so the user-confirmed mapping is given explicitly.
+// Bundled APOE states "Imported from genome: GRCh38 … Location: chr19 44905754-44909393"; tests still pass an explicit mapping for clarity.
 const MAPPING = { assembly: "GRCh38", chromosome: "19", referenceStart: 44905754, orientation: 1 };
 
 async function apoeSetup(extra = {}) {
@@ -63,7 +63,13 @@ test("request refuses an unconfirmed mapping, a minus-strand orientation, an unk
   await assert.rejects(buildCandidateRankingRequest(project, design.pmCandidates, { contexts: CONTEXTS, mappingConfirmed: true, mapping: { assembly: "GRCh37", chromosome: "19", referenceStart: 44905754, orientation: 1 } }), /GRCh38/);
   await assert.rejects(buildCandidateRankingRequest(project, design.pmCandidates, { contexts: ["nonexistent"], mapping: MAPPING, mappingConfirmed: true }), /Unknown model context/);
   await assert.rejects(buildCandidateRankingRequest(project, design.pmCandidates, { contexts: ["wtc11", "h1", "h9", "cardiac", "hepatic"], mapping: MAPPING, mappingConfirmed: true }), /one to four/);
-  await assert.rejects(buildCandidateRankingRequest(project, design.pmCandidates, { contexts: CONTEXTS, mappingConfirmed: true }), /GRCh38 only/); // no readable mapping on this reference: the user must supply one
+  // Bundled APOE Location is readable: confirmed mapping without an explicit override must succeed.
+  const fromRecord = await buildCandidateRankingRequest(project, design.pmCandidates, { contexts: CONTEXTS, mappingConfirmed: true });
+  assert.deepEqual(fromRecord.request.intended, [{ position: 44908822, ref: "C", alt: "T" }]);
+  // RefSeqGene TP53 has no chromosome coordinates, so ranking still requires a user-supplied mapping.
+  const tp53 = fs.readFileSync(path.join(ROOT, "public", "references", "tp53-NG_017013.2.gb"), "utf8");
+  const tp53Design = designWithCandidates(tp53, "R175H", { ...OPTIONS, expectedGene: "TP53" });
+  await assert.rejects(buildCandidateRankingRequest({ gene: "TP53", genbankRaw: tp53, designResult: tp53Design }, tp53Design.pmCandidates, { contexts: CONTEXTS, mappingConfirmed: true }), /GRCh38 only/);
   assert.equal(resolveContext("CL:0000679").id, "glutamatergic-neuron");
 });
 
