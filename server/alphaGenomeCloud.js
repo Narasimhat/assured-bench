@@ -8,6 +8,15 @@ export const canonical = value => JSON.stringify(value, (_, v) => v && typeof v 
 export const mac = (value, env = process.env) => createHmac('sha256', env.ASSURED_REVIEW_SECRET).update(value).digest('hex');
 export function equal(a, b) { const x=Buffer.from(String(a||'')),y=Buffer.from(String(b||''));return x.length===y.length && timingSafeEqual(x,y); }
 export const configured = (env=process.env) => Boolean(env.ALPHAGENOME_API_KEY && env.ASSURED_REVIEW_SECRET?.length >= 32 && env.ASSURED_REVIEW_ACCESS_HASH && (env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID));
+/** Names of required server env vars that are absent or too short. Values are never returned. */
+export function missingReviewerConfig(env=process.env) {
+  const missing = [];
+  if (!env.ALPHAGENOME_API_KEY) missing.push('ALPHAGENOME_API_KEY');
+  if (!(env.ASSURED_REVIEW_SECRET?.length >= 32)) missing.push('ASSURED_REVIEW_SECRET');
+  if (!env.ASSURED_REVIEW_ACCESS_HASH) missing.push('ASSURED_REVIEW_ACCESS_HASH');
+  if (!(env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID)) missing.push('BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID');
+  return missing;
+}
 export function authenticated(req, env=process.env, now=Date.now()) {
   if (!configured(env)) return false;
   const cookie=String(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(`${COOKIE}=`))?.slice(COOKIE.length+1);
@@ -17,12 +26,15 @@ export function authenticated(req, env=process.env, now=Date.now()) {
 /** Public status for the Design-and-review panel. Auth is required only when the cloud reviewer is actually configured. */
 export function reviewerStatus(req, env=process.env, now=Date.now()) {
   const ready = configured(env);
-  return {
+  const status = {
     available: ready,
     mode: ready ? 'cloud' : 'unconfigured',
     authenticated: ready && authenticated(req, env, now),
     authenticationRequired: ready,
   };
+  // When unconfigured, name which Production env vars are missing (never their values).
+  if (!ready) status.missing = missingReviewerConfig(env);
+  return status;
 }
 export function sessionCookie(code, env=process.env, now=Date.now()) {
   if (!configured(env) || !equal(hash(String(code||'')),env.ASSURED_REVIEW_ACCESS_HASH)) return null;

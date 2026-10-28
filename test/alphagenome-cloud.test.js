@@ -20,9 +20,12 @@ test('cloud access uses signed, expiring HttpOnly cookies, fails closed and neve
 });
 test('status asks for an access code only when the cloud reviewer is configured',()=>{
  const empty=reviewerStatus({headers:{}},{});
- assert.deepEqual(empty,{available:false,mode:'unconfigured',authenticated:false,authenticationRequired:false});
+ assert.deepEqual(empty,{available:false,mode:'unconfigured',authenticated:false,authenticationRequired:false,missing:['ALPHAGENOME_API_KEY','ASSURED_REVIEW_SECRET','ASSURED_REVIEW_ACCESS_HASH','BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID']});
+ const partial=reviewerStatus({headers:{}},{ALPHAGENOME_API_KEY:'k',ASSURED_REVIEW_SECRET:'x'.repeat(48)});
+ assert.deepEqual(partial.missing,['ASSURED_REVIEW_ACCESS_HASH','BLOB_READ_WRITE_TOKEN|BLOB_STORE_ID']);
  const locked=reviewerStatus({headers:{}},env);
  assert.deepEqual(locked,{available:true,mode:'cloud',authenticated:false,authenticationRequired:true});
+ assert.equal(locked.missing,undefined);
  const now=100000, cookie=sessionCookie('private-access-code',env,now);
  const unlocked=reviewerStatus({headers:{cookie:cookie.split(';')[0]}},env,now);
  assert.deepEqual(unlocked,{available:true,mode:'cloud',authenticated:true,authenticationRequired:true});
