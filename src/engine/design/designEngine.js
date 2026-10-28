@@ -3195,8 +3195,7 @@ function designPMCore(gb, mutationString, options = {}) {
     : rawSelectedGuides.filter((guide, index, guides) => index === 0 || guides.slice(0, index).every((existing) => Math.abs(existing.cut - guide.cut) >= minimumAlternativeCutOffset));
   const removedRedundantGuideCount = rawSelectedGuides.length - selectedGuides.length;
   const blockedPositions = new Set(codonInfo.genomicPositions);
-  // A candidate's later donor versions avoid the blocker positions of the versions before them (see pmCandidates.js).
-  for (const position of options.avoidBlockerPositions || []) if (Number.isInteger(position)) blockedPositions.add(position);
+  for (const position of [...(options.avoidBlockerPositions || []), ...(options.reservedBlockerPositions || [])]) if (Number.isInteger(position)) blockedPositions.add(position);
 
   const result = {
     type: "pm",
@@ -3934,6 +3933,38 @@ function buildTerminalGuideAlternatives(model, result) {
     });
   return { radius: 30, selectedWindow: result.guideWindow, candidates,
     note: "The primary selection is retained. Alternatives are assessed against the current donor and require review before use. Genome-wide specificity has not been checked. Selecting a different guide requires regenerating and reviewing its donor." };
+}
+
+/** Assemble one or two already validated matched donors without pooling their blocker edits. */
+export function assemblePointMutationPairs(entries) {
+  if (!Array.isArray(entries) || !entries.length || entries.length > 2) throw new Error("Choose one or two matched point-mutation pairs.");
+  const first = entries[0].result;
+  const result = { ...first, gs: [], os: [], ss: [] };
+  for (const [i, entry] of entries.entries()) {
+    const source = entry.result, donor = source.os?.[entry.donorIndex || 0];
+    const gi = donor?.gi ?? 0, guide = source.gs?.[gi];
+    if (source.type !== "pm" || !guide || !donor?.proteinValidation?.valid || source.gb?.genomicSequence !== first.gb?.genomicSequence || source.an !== first.an || source.wA !== first.wA || source.mA !== first.mA || JSON.stringify(source.ch) !== JSON.stringify(first.ch)) throw new Error("Matched pairs must preserve the same reference and intended protein change.");
+    if (result.gs.some(g => g.sp === guide.sp)) throw new Error("Choose two different guide spacers.");
+    const name = makeGuideName(source.gene, "pm", i, `${source.wA}${source.an}${source.mA}`);
+    result.gs.push({ ...guide, n: name });
+    result.os.push({ ...donor, gi: i, n: `ssODN${i + 1} (matched to ${name})`, guideName: name });
+    result.ss.push(...(donor.silentMutations || (source.ss || []).filter(x => x.gi === gi + 1)).map(x => ({ ...x, gi: i + 1 })));
+  }
+  result.os = result.os.map(donor => ({ ...donor, guideProtection: result.gs.map((guide, i) => ({ guideIndex: i + 1, guideName: guide.n,
+    ...assessGuideAgainstPointMutationDonor({ ...guide, pam: guide.pm }, donor) })) }));
+  result.coDeliverySafe = result.os.every(d => d.guideProtection.every(p => p.tier === "strong"));
+  result.coDeliveryBlockingRequested = false;
+  result.guideDonorInstruction = result.gs.length === 1 ? "Use this guide with its matched ssODN." : result.coDeliverySafe
+    ? "Both donors strongly disrupt both selected guide targets in the sequence-based assessment. Experimental re-cutting remains unverified."
+    : "Each donor is matched to its own guide. Cross-guide protection is incomplete; another active RNP may re-cut a repaired allele.";
+  result.guideSequenceQc = result.gs.map((g, i) => ({ guideIndex: i + 1, guideName: g.n, ...assessGuideSequence(g.sp, result.deliveryMethod || "rnp") }));
+  result.weakProtectionAcceptance = null;
+  if (result.gs.length === 2) {
+    const cutSites = result.gs.map(g => g.cut).sort((a,b) => a-b), span = cutSites[1] - cutSites[0];
+    result.dualCutDeletionRisk = { cutSites, spans: [span], note: `The selected RNPs can cut ${span} bp apart. Co-transfection can produce an intervening deletion; transient RNP activity does not rule out re-cutting. Include the deletion product in clone screening.` };
+  } else delete result.dualCutDeletionRisk;
+  result.procurement = summarizeProcurementReadiness(result);
+  return result;
 }
 
 export function runDesignFromTranscriptModel(projectType, model, mutation, tag, homologyArmLength, options = {}) {

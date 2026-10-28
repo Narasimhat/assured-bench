@@ -1,10 +1,11 @@
 import { resolve } from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { alphaGenomeBridge } from "./tools/alphagenome/viteBridge.js";
 
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), alphaGenomeBridge()],
   worker: { format: "es" },
   build: {
     rollupOptions: {
@@ -15,6 +16,7 @@ export default defineConfig({
     }
   },
   server: {
+    fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/local-reviews/**", "**/.venv-alphagenome/**", "**/*.local"] },
     port: 5180,
     open: false
   }

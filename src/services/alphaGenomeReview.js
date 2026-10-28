@@ -28,6 +28,21 @@ export function intendedEditIndex(project) {
   } catch { return null; }
 }
 
+/** Exact sequence identity is required before using the independently verified bundled mapping. */
+export async function resolveAlphaGenomeMapping(project) {
+  const declared = alphaGenomeMapping(project);
+  if (declared) return declared;
+  if (!/VERSION\s+NG_017013\.2\b/.test(project?.genbankRaw || "")) return null;
+  const sequence = project.designResult?.gb?.genomicSequence?.toUpperCase();
+  if (!sequence) return null;
+  const checksum = [...new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(sequence)))].map(n => n.toString(16).padStart(2, "0")).join("");
+  if (checksum !== "df9c123531fedcc39c30f4eb63c35c4ff8ad2ffb5b5c07406a385dbfc9a2b1bc") throw new Error("This TP53 RefSeqGene sequence differs from the verified bundled reference. Fetch a mapped GRCh38 reference before reviewing it.");
+  // Full 32,772 bp reverse-complement identity to Ensembl GRCh38 chr17:7659779–7692550,
+  // independently verified 2026-10-27. The Python runner still verifies overlapping bases live.
+  return { assembly: "GRCh38", chromosome: "17", referenceStart: 7659779, orientation: -1,
+    provenance: "NG_017013.2; full-sequence SHA-256 and GRCh38 reverse-complement identity verified" };
+}
+
 /** A single matched donor, not the union of blocking edits from different donor alternatives. */
 export async function buildAlphaGenomeRequest(project, {
   assembly, chromosome, referenceStart, orientation, ontologyTerm, donorIndex = 0,

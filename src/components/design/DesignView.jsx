@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   runDesign,
   summarizeProcurementReadiness,
@@ -24,6 +24,8 @@ import { fetchGeneGenbank } from "../../services/ensembl.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
 import { projectDesignReagents } from "../../services/projectReagents.js";
+import { designAndReviewDonors } from "../../services/donorWorkflow.js";
+import { DONOR_REVIEW_CONTEXTS } from "./DonorCandidateComparison.jsx";
 import { DesignResultView } from "./DesignResultView.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import {
@@ -224,10 +226,16 @@ export function DesignView({
   const enzymeConfig = getEnzyme(enzyme);
   const deliveryMethod = currentProject.options?.deliveryMethod ?? "rnp";
   const maxBlockingChanges = currentProject.options?.maxBlockingChanges ?? 3;
-  const coDelivery = currentProject.options?.coDeliveryBlocking ?? currentProject.options?.coDelivery ?? false;
+  const coDelivery = (editType === "pm" ? currentProject.donorProtectBoth : undefined) ?? currentProject.options?.coDeliveryBlocking ?? currentProject.options?.coDelivery ?? false;
   const donorFormat = currentProject.options?.donorFormat ?? "auto";
   const geneMeta = currentProject.geneMeta ?? null;
   const genbankRaw = currentProject.genbankRaw ?? "";
+
+  const reviewContext = currentProject.donorReviewContext || "";
+  const simpleDonorReview = editType === "pm" && enzyme === "spcas9";
+  const latestProject = useRef(currentProject), reviewController = useRef(null);
+  latestProject.current = currentProject;
+  useEffect(() => () => reviewController.current?.abort(), [currentProject.id, genbankRaw, mutation]);
 
   const [fetchSource, setFetchSource] = useState("ensembl");
   const [fetchSpecies, setFetchSpecies] = useState("human");
@@ -516,7 +524,7 @@ export function DesignView({
       const svgScheme = buildDesignSchemeSvg(result);
       const caption = buildDesignSchemeCaption(result);
 
-      const updated = {
+      let updated = {
         gene: resolvedGene,
         editType,
         mutation,
@@ -531,6 +539,19 @@ export function DesignView({
         ...(biomniReport ? { biomniReport } : {})
       };
 
+      if (simpleDonorReview && reviewContext && !customGuidesOverride?.length) {
+        reviewController.current = new AbortController();
+        try {
+          const reviewed = await designAndReviewDonors({ ...currentProject, ...updated }, { ontology: reviewContext, protectBoth: coDelivery },
+            { signal: reviewController.current.signal, onProgress: setDesignProgress });
+          updated = { ...updated, ...reviewed, donorWorkflowError: null };
+        } catch (reviewError) {
+          if (reviewError.name === "AbortError") throw reviewError;
+          updated.donorWorkflowError = reviewError.message;
+          updated.donorReviewContext = reviewContext;
+        }
+      }
+      if (latestProject.current.id !== currentProject.id || latestProject.current.genbankRaw !== genbankRaw || latestProject.current.mutation !== mutation) throw new Error("Design inputs changed; this result was not applied.");
       onUpdateProject(updated);
       setEditingDesign(false);
       // Result mode: product first (take-home + reagents); process stays collapsed below
@@ -948,6 +969,12 @@ export function DesignView({
             {editType === "pm" && <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>SNP donors are 127 nt: nominally 91 nt toward the PAM and 36 nt on the opposite side of the target-strand cut, ordered opposite the guide. Cas12a/Mad7 mirror the Cas9 layout because their PAM is 5′. Prefer silent PAM disruption, with synonymous seed changes as a review-required fallback.</p>}
 
             {/* Advanced Options Bar */}
+            {simpleDonorReview && <label style={{ display: "block", marginTop: "1rem" }}>Cell type for AlphaGenome review
+              <select aria-label="Cell type for AlphaGenome review" value={reviewContext} disabled={isDesigning} onChange={e => onUpdateProject({ donorReviewContext: e.target.value })}>
+                <option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
+              </select>
+            </label>}
+            <details style={{ marginTop: "1rem" }}><summary>Advanced design settings</summary>
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
               <div className="design-option-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Max Silent Blocking Changes:</span>
@@ -1000,19 +1027,21 @@ export function DesignView({
                 <input
                   type="checkbox"
                   checked={coDelivery}
-                  onChange={(e) => setOption({ coDeliveryBlocking: e.target.checked })}
+                  onChange={(e) => onUpdateProject({ options: { ...currentProject.options, coDeliveryBlocking: e.target.checked }, ...(editType === "pm" ? { donorProtectBoth: e.target.checked } : {}) })}
                 />
-                <span>Co-delivery mode (block all offered guides)</span>
+                <span>{simpleDonorReview ? "Protect each donor against both guides" : "Co-delivery mode (block all offered guides)"}</span>
               </label>
 
+            </div></details>
+            <div style={{ marginTop: "1rem" }}>
               <button
                 className="btn btn-primary"
                 onClick={handleRunDesign}
-                disabled={isDesigning || isLoadingGene || !genbankRaw}
+                disabled={isDesigning || isLoadingGene || !genbankRaw || (simpleDonorReview && !reviewContext)}
                 style={{ marginLeft: "auto" }}
               >
                 <Play size={16} />
-                <span>{isDesigning ? "Computing Design..." : "Generate design"}</span>
+                <span>{isDesigning ? "Designing and reviewing…" : simpleDonorReview ? "Design and review" : "Generate design"}</span>
               </button>
             </div>
 

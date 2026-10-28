@@ -188,3 +188,123 @@ into the page, holds the key (same sources as `review.py`), caches nulls in `loc
 comparison at a time. Only the allowed page origins can use it (default `https://assured-bench.vercel.app`,
 `http://localhost:5173`, `http://127.0.0.1:5173`). Routes: `GET /health`, `POST /rank`. Safeguards and browser notes are in
 `docs/PM_CANDIDATES.md` section 2. Sequence windows still go to Google; non-commercial use only.
+## Matched guide–donor comparison and bounded refinement
+
+For **SpCas9 protein substitutions**, open **Guide–donor alternatives** after
+creating a design. Generate up to six independent matched pairs, choose one
+experimental cell context, then click **Review and refine with AlphaGenome**.
+The first search uses distinct guides within 30 bp of the mutation. A second,
+final search excludes individual earlier blocker positions and reconstructs
+alternative synonymous blocking sets, giving at most twelve total pairs.
+Fewer candidates are returned if valid distinct pairs cannot be constructed.
+The intended amino-acid substitution is held fixed. Alternatives are never pooled.
+
+Automatic execution is currently **local development only** (`npm run dev`).
+The Vite adapter starts the pinned local Python environment and reads the same
+private key as the single-donor runner. It accepts only same-origin loopback
+requests, limits payload size, cancels disconnected jobs and permits one run at
+a time. It does not bundle Python, expose a key or add an inference backend to
+the static Vercel deployment. Hosted users can export a comparison request and
+import the completed comparison under **Prediction evidence and reproducibility**:
+
+```bash
+.venv-alphagenome/bin/python tools/alphagenome/compare.py \
+  local-reviews/assured-donor-comparison-request.json \
+  --output local-reviews/assured-donor-comparison.json
+```
+
+The batch runner verifies a common reference, intended edit, ontology, output
+set and prediction window before making predictions. All candidates use an
+interval anchored on the intended substitution, not their different blocker
+locations. Identical sequences reuse a prediction within each batch. Each
+candidate retains all three reference/intended/full-donor comparisons.
+
+Only **intended → full-donor** differences inform the comparative axes:
+
+* Sum of absolute RNA signal differences in annotated exons divided by summed
+  absolute intended-allele signal, on matching-strand tracks. This is a model
+  signal ratio, not a fold change in measured gene expression.
+* Maximum absolute cell-specific splice-usage difference within ±2 bp of internal
+  annotated exon boundaries.
+* Maximum absolute matching-strand splice-site probability difference over the
+  whole context, including potential cryptic sites. These tracks are tissue-agnostic.
+
+Top changes retain 1-based genomic position, before/after signal, signed delta
+and exon/splice-boundary labels. The full transcript annotation must be covered
+for the comparison axes to be usable. Missing outputs, an absent RNA baseline,
+no usable splice boundaries or a failed prediction cannot produce a preference.
+The report deliberately does not invent a harmful/safe threshold. Core failures
+and weak re-cut protection exclude a candidate from preference. Among the
+remaining candidates, Pareto dominance identifies those with no larger
+blocker-associated difference on any axis and a smaller difference on at least
+one. Ties and conflicting axes stay explicit. Lower disturbance does not prove
+biological safety, and these exploratory criteria are not experimentally calibrated.
+
+Use **Use pair-N** to apply one matched pair. Reagents, schematic and QC handoff
+then read that complete single-pair result; guide-specific enrichment and earlier
+clone results are invalidated. The project retains the comparison and selection;
+use header **Save** to persist on this device. The scientific report documents
+candidate metrics and model provenance. Changing source inputs invalidates the
+panel; changing cell context or window hides the old recommendation.
+
+This stage does not support candidate optimization for raw genomic SNVs,
+knockouts, insertions, other enzymes or simultaneous multi-context ranking.
+Genome-wide specificity, editing/HDR yield, protein function, disease phenotype,
+other isoforms and effects beyond the prediction window remain separate checks.
+
+The interface suggests a starting pair within the Pareto frontier using explicit
+priorities: annotated splice-usage difference, exonic RNA disturbance, then
+splice-site disturbance. Metric ties use fewer blockers, then closer cuts. This
+is an exploratory engineering preference, not a claim of regulatory superiority
+on every axis. The other frontier candidates and conflicts remain visible.
+
+The TP53 R175H preset is supported without manually entering chromosome coordinates.
+The exact bundled NG_017013.2 sequence is recognized by SHA-256 and its verified
+full-length reverse-complement mapping to GRCh38 chr17:7,659,779–7,692,550. Modified
+or different RefSeqGene sequences cannot reuse that mapping. The live runner
+still checks every reference base overlapping the prediction interval.
+Automatic reviews expand from 16,384 to 131,072 bp when needed to cover the full
+annotated transcript; the UI shows the selected window. If even the wider window
+cannot cover the annotation, no complete comparative preference is attempted.
+
+## Simplified two-design workflow (current interface)
+
+For SpCas9 point mutations, choose the mutation and **Cell type for AlphaGenome
+review**, then click **Design and review**. A loaded preset already has a basic
+design; choose its cell type and click **Design and review** on the result screen.
+Candidate generation, two review rounds, window selection and application of two
+eligible distinct guide–donor designs happen behind that one action. If model
+coverage is incomplete or fewer than two eligible distinct guides remain, the
+existing design stays in place and the incomplete comparison is reported.
+
+The initial six include the **two original exact donors**, labelled **original**,
+plus additional guide-linked alternatives. Up to six more blocker variants may
+be evaluated in one bounded refinement round. The default result shows only the
+two selected designs, their matched donor sequences through Selected reagents,
+and remaining checks. Open **Compare alternatives** to choose a different two;
+changing a checkbox does not change reagents until **Use these two designs** is
+clicked. Two variants of the same guide cannot occupy both selection slots.
+The two sequence-validated results, not the entire candidate pool, populate the
+order handoff, scheme, report and QC export. Earlier clone and guide-specific
+analysis records are invalidated on application.
+
+**Advanced → Protect each donor against both guides** is optional and defaults
+to independent matched-donor protection. Independent mode displays a cross-guide
+protection matrix and a warning if a repaired allele remains susceptible to the
+other active RNP. Transient RNP exposure does not establish absence of re-cutting.
+Both modes record the cut spacing and potential intervening-deletion product.
+
+With joint protection enabled, the automated search tests combinations from up
+to six distinct eligible guides (at most fifteen combinations) for core joint
+protection. Both final donors must preserve the intended amino-acid change and
+strongly disrupt both guide targets. The first eligible combination under the
+stated guide priorities is then reviewed using its **rebuilt final donor alleles**.
+That final two-donor request and evidence are stored separately from the earlier
+independent-candidate comparison. No final selection is applied if joint protection
+or the final model review fails. This bounded engineering search is not an
+exhaustive regulatory optimization over all possible combinations. The report
+labels independent-candidate metrics separately from final joint-donor metrics.
+
+This workflow recommends designs for experimental validation. It does not mark a
+regulatory prediction as a safety certificate or predict an increase in editing
+or HDR yield from co-transfection. Specificity and clone validation remain open.

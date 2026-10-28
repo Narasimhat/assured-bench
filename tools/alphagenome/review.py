@@ -78,8 +78,8 @@ def fetch_reference(chromosome, start, end):
         return response.read().decode().strip().upper()
 
 
-def build_sequences(request, context):
-    start, end = context_interval(request)
+def build_sequences(request, context, bounds=None):
+    start, end = bounds or context_interval(request)
     if len(context) != end - start or not re.fullmatch(r"[ACGTN]+", context):
         raise ValueError("Fetched GRCh38 context has invalid length or sequence.")
     ref = request["reference"]

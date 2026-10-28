@@ -86,11 +86,11 @@ test("the applied pair is marked in use, and a model flag shows as flagged with 
 test("the picker is offered for SpCas9 point-mutation designs only, and its entry points are wired", () => {
   const view = read("../src/components/design/DesignResultView.jsx");
   assert.match(view, /result\.type === "pm" && \(!project\.options\?\.enzyme \|\| project\.options\.enzyme === "spcas9"\)/);
-  assert.match(view, /hasPmCandidates && <PmCandidatePicker/);
+  assert.match(view, /hasPmCandidates && <details[\s\S]*?<PmCandidatePicker/);
   const design = read("../src/components/design/DesignView.jsx");
   assert.match(design, /executeDesign\(\[candidate\.guide\.sp\], \{ avoidBlockerPositions/);
   assert.match(design, /onUseCandidate=\{handleUseCandidate\}/);
-  assert.match(read("../src/services/runOptions.js"), /PER_RUN_KEYS = \["customGuides", "avoidBlockerPositions"\]/);
+  assert.match(read("../src/services/runOptions.js"), /PER_RUN_KEYS = \["customGuides", "avoidBlockerPositions", "reservedBlockerPositions"\]/);
 });
 
 test("one-click AlphaGenome: the helper controls are on the page, nothing is contacted on render, and the manual route stays available", async () => {

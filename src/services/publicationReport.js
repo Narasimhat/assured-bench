@@ -1,4 +1,5 @@
 import { validateRegulatoryContextPlan, regulatoryContextCoverage } from "./regulatoryContexts.js";
+import { donorSourceSnapshot, rankDonorCandidates } from "./donorCandidates.js";
 import { ENZYMES } from "../engine/design/enzymeConfig.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../engine/design/designScheme.js";
 import { buildTakeHome } from "./takeHome.js";
@@ -58,6 +59,27 @@ function regulatoryStudySection(plan) {
   }
 }
 
+function donorComparisonSection(project, result) {
+  const panel = project.donorCandidatePanel;
+  if (!panel) return "";
+  if (panel.sourceSnapshot !== donorSourceSnapshot(project)) return `<h3>5.2 Guide–donor comparison</h3>${paragraph("The saved comparison belongs to different design inputs and is not used to support this design.")}`;
+  const report = panel.review;
+  const ranking = rankDonorCandidates(panel, report);
+  const ids = panel.selectedIds || (panel.selectedId ? [panel.selectedId] : []);
+  const selected = ids.map(id => panel.candidates.find(c => c.id === id)).filter(Boolean);
+  const finalCandidates = panel.protectBoth && panel.finalCandidates ? panel.finalCandidates : selected;
+  const applies = selected.length > 0 && selected.length === result.gs?.length && selected.every((c,i) => c.result.gs[0].sp === result.gs[i]?.sp && finalCandidates[i]?.result.os[0].od === result.os?.[i]?.od);
+  return `<h3>5.2 Guide–donor candidate comparison</h3>${paragraph(`${panel.candidates.length} matched pairs were constructed in ${panel.rounds} bounded search round(s). Selected pair${ids.length > 1 ? "s" : ""}: ${applies ? ids.join(", ") : "none applied to the current design"}.`)}
+    ${paragraph(`${ranking.status}. ${ranking.message}`)}
+    ${ids.length === 2 ? paragraph(panel.protectBoth ? "Joint protection requested: both final donors were reconstructed and assessed against both selected guides. The final edited donor alleles were reviewed separately after rebuilding." : "Independent protection: each donor is matched to its own guide. Cross-guide re-cutting remains a concern wherever the protection matrix is not strong.") : ""}
+    ${panel.finalReview ? paragraph(`Final donor review: model ${panel.finalReview.modelVersion}; SDK ${panel.finalReview.sdkVersion}; context ${panel.finalReview.ontologyTerms.join(", ")}; request ${panel.finalReview.requestId}; completed ${panel.finalReview.createdAt}. Candidate-table metrics below describe the earlier independent alleles, not these rebuilt final donors.`) : ""}
+    ${panel.finalReview ? table("Final rebuilt donor alleles: additional blocker-associated effects", ["Final donor", "Exonic RNA Δ / baseline", "Splice usage Δ", "Splice-site Δ"], panel.finalReview.candidates.map(c=>[c.id,c.metrics?.exonicRnaRelativeDelta,c.metrics?.annotatedUsageMaxDelta,c.metrics?.spliceSiteMaxDelta])) : ""}
+    ${ranking.suggestedId ? paragraph(`Suggested starting pair: ${ranking.suggestedId}. ${ranking.preferencePolicy}`) : ""}
+    ${paragraph(report ? `Model ${report.modelVersion}; SDK ${report.sdkVersion}; cell context ${report.ontologyTerms.join(", ")}; generated ${report.createdAt}; request ${report.requestId}. Imported local model evidence; not independently authenticated by this report.` : "AlphaGenome predictions have not been completed for this candidate panel.")}
+    ${table("Candidate comparison; lower predicted additional disturbance is a comparative criterion, not a safety threshold.", ["Pair", "Guide (5′ to 3′)", "Matched protection", "Exonic RNA Δ / baseline", "Splice usage Δ", "Splice-site Δ", "Finding"], ranking.rows.map(c => [c.id, c.result.gs[0].sp, c.protection, c.metrics?.exonicRnaRelativeDelta, c.metrics?.annotatedUsageMaxDelta, c.metrics?.spliceSiteMaxDelta, c.preferred ? "Comparative frontier" : c.reviewed ? "Assessed" : "Incomplete"]))}
+    ${paragraph("Only additional blocker-associated changes relative to the intended mutation inform these axes. Splice-site predictions are tissue-agnostic. Whole-transcript exon and splice coverage is required; zero or missing baseline RNA signals prevent a complete preference. Genome-wide specificity, protein function and disease phenotype remain unassessed.")}`;
+}
+
 export function buildPublicationReport(project, result, supplementaryHtml) {
   const b = project.biomniReport || {};
   const home = buildTakeHome({ designResult: result, biomniReport: b });
@@ -106,7 +128,7 @@ export function buildPublicationReport(project, result, supplementaryHtml) {
     ["Agent version", b.agentVersion], ["Selection version", result.koSelection?.version],
   ];
   const parameters = ["ensureGuidePair", "allowNonCodingBlockers", "maxBlockingChanges", "coDeliveryBlocking", "donorFormat", "gcPenaltyScale"]
-    .filter(k => project.options?.[k] != null).map(k => [k, String(project.options[k])]);
+    .filter(k => project.options?.[k] != null).map(k => [k, String(k === "coDeliveryBlocking" && result.type === "pm" ? Boolean(result.coDeliveryBlockingRequested) : project.options[k])]);
   const references = [
     ["ASSURED Bench: design engine, selection policies and source code.", "https://github.com/Narasimhat/assured-bench"],
     ...(outcome ? [["Chen W et al. (2019). Massively parallel profiling and predictive modeling of the outcomes of CRISPR/Cas9-mediated double-strand break repair. Nucleic Acids Research 47:7989-8003. doi:10.1093/nar/gkz487.", "https://doi.org/10.1093/nar/gkz487"]] : []),
@@ -143,6 +165,7 @@ ${paragraph(outcome ? "For supported SpCas9 guides, Lindel predicts repair outco
 ${paragraph("Engine reference positions are zero-based and half-open where stated in the supplementary record. The gene-context figure uses 1-based positions within the supplied reference; chromosome coordinates are used only in the explicitly labelled coverage table. Unrecorded versions, checksums and retrieval dates are identified as missing rather than reconstructed.")}
 ${evidence.length ? table("Table 6. Evidence provenance. Source descriptions reflect the recorded run.", ["Topic", "Evidence type", "Source"], evidence.map(e => [e.topic, e.type, e.source])) : paragraph("No structured external-evidence provenance was recorded. Reference annotation alone is not treated as a live external check.")}
 ${regulatoryStudySection(project.regulatoryContextPlan)}
+${donorComparisonSection(project, result)}
 ${paragraph(`Population-variant evidence retrieval: ${b.variantScreen?.retrievedAt || "not recorded"}. AlphaGenome review remains a separate exploratory artifact and is not evidence of experimental validation or a release decision.`)}</section>
 <section id="references"><h2>6. References</h2><ol class="references">${references.map(([label, url]) => `<li>${esc(label)} <a href="${url}">${esc(url)}</a></li>`).join("")}</ol></section>
 <section id="supplement" class="supplement"><h2>Supplementary data</h2>${paragraph("The detailed computational record below retains guide, donor and primer sequences, allele annotations, review checkpoints and available source evidence. Candidate sequences remain subject to the recorded release status. No sequence is authorized for ordering solely by its presence in this report.")}
