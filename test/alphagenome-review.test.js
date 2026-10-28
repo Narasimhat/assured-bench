@@ -4,9 +4,10 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { buildAlphaGenomeRequest, reviewRequestId, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
+import { alphaGenomeMapping, buildAlphaGenomeRequest, resolveAlphaGenomeMapping, reviewRequestId, validateAlphaGenomeReport } from "../src/services/alphaGenomeReview.js";
 import { runDesign } from "../src/engine/design/designEngine.js";
 import { buildQcDesignSpec } from "../src/engine/design/qcExport.js";
+import { generateDonorCandidates, buildDonorComparisonRequest } from "../src/services/donorCandidates.js";
 
 function project() {
   const sequence = "A".repeat(250);
@@ -73,6 +74,25 @@ test("AlphaGenome request works on a real TP53 point-mutation design", async () 
   const request = await buildAlphaGenomeRequest({ gene: "TP53", designResult: result }, mapping);
   assert.ok(request.variants.some(v => v.role === "intended"));
   assert.ok(request.variants.length >= 1);
+});
+
+test("bundled APOE GenBank Location: chrN maps for Design-and-review without a chromosome:GRCh38 inject", async () => {
+  const raw = readFileSync(new URL("../public/references/apoe-ensg00000130203.gb", import.meta.url), "utf8");
+  assert.match(raw, /Location:\s*chr19\s+44905754-44909393/i);
+  assert.doesNotMatch(raw, /Location:\s*chromosome:GRCh38:/i);
+  const mapped = alphaGenomeMapping({ genbankRaw: raw });
+  assert.deepEqual(
+    { assembly: mapped.assembly, chromosome: mapped.chromosome, referenceStart: mapped.referenceStart, orientation: mapped.orientation },
+    { assembly: "GRCh38", chromosome: "19", referenceStart: 44905754, orientation: 1 },
+  );
+  const designResult = runDesign("pm", raw, "R176C", "", "", { enzyme: "spcas9" });
+  assert.ok(!designResult.err, designResult.err);
+  const project = { gene: "APOE", mutation: "R176C", genbankRaw: raw, options: { enzyme: "spcas9" }, designResult };
+  assert.deepEqual(await resolveAlphaGenomeMapping(project), mapped);
+  const panel = await generateDonorCandidates(project);
+  const batch = await buildDonorComparisonRequest(project, panel, { ontologyTerm: "EFO:0009747" });
+  assert.equal(batch.candidates[0].request.chromosome, "chr19");
+  assert.ok(batch.candidates[0].request.variants.some(v => v.role === "intended" && v.position === 44908822));
 });
 
 test("report import rejects stale donor/tissue requests, incomplete runs and invalid metrics", async () => {
