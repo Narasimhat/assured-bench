@@ -14,6 +14,16 @@ export function authenticated(req, env=process.env, now=Date.now()) {
   const [expiry,signature]=String(cookie||'').split('.');
   return /^\d+$/.test(expiry) && Number(expiry)>now && Number(expiry)<=now+8*86400000 && equal(signature,mac(`session:${expiry}`,env));
 }
+/** Public status for the Design-and-review panel. Auth is required only when the cloud reviewer is actually configured. */
+export function reviewerStatus(req, env=process.env, now=Date.now()) {
+  const ready = configured(env);
+  return {
+    available: ready,
+    mode: ready ? 'cloud' : 'unconfigured',
+    authenticated: ready && authenticated(req, env, now),
+    authenticationRequired: ready,
+  };
+}
 export function sessionCookie(code, env=process.env, now=Date.now()) {
   if (!configured(env) || !equal(hash(String(code||'')),env.ASSURED_REVIEW_ACCESS_HASH)) return null;
   const expiry=now+7*86400000;

@@ -14,7 +14,7 @@ export function alphaGenomeBridge() {
       const root = server.config.root;
       const python = resolve(root, ".venv-alphagenome/bin/python");
       const configured = existsSync(python) && Boolean(process.env.ALPHAGENOME_API_KEY || existsSync(resolve(root, "local-reviews/alphagenome-api-key.local")));
-      if (req.method === "GET" && req.url === "/status") return send(200, { available: configured, busy: running, mode: "local" });
+      if (req.method === "GET" && req.url === "/status") return send(200, { available: configured, busy: running, mode: "local", authenticated: true, authenticationRequired: false });
       if (req.method !== "POST" || req.url !== "/compare") return send(404, { error: "Unknown local reviewer endpoint." });
       if (!configured) return send(503, { error: "Configure the local AlphaGenome Python environment and key first. Your key never belongs in the browser." });
       if (running) return send(409, { error: "Another review is running. Wait for it to finish." });

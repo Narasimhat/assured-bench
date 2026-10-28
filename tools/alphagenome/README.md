@@ -345,10 +345,15 @@ server-side sensitive variables. Connect a **private** Vercel Blob store; the SD
 uses the connected `BLOB_STORE_ID` with Vercel OIDC, or a server-side
 `BLOB_READ_WRITE_TOKEN`. No secret uses a `VITE_` prefix.
 
-Unlock online analysis once with the analysis access code. It is not the provider
-API key. The server issues a Secure, HttpOnly, SameSite cookie valid for seven
-days. This first version is one private research workspace; holders of the access
-code share its reviewer and results. It is not a multi-tenant patient-data system.
+Unlock online analysis once with the analysis access code when the cloud reviewer
+is configured. It is not the provider API key. The access-code prompt appears only
+when online prediction is available and the session is locked; cell type and
+guide–donor selection stay usable beforehand. The server issues a Secure, HttpOnly,
+SameSite cookie valid for seven days (HTTPS required). This first version is one
+private research workspace; holders of the access code share its reviewer and
+results. It is not a multi-tenant patient-data system. When the cloud secrets are
+absent, the panel reports that automatic review is unavailable instead of asking
+for a code.
 
 POST `/api/alphagenome/compare` validates and stores a bounded request, then sends
 a durable queue message. The queue has one active consumer, at most two delivery

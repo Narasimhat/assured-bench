@@ -7,6 +7,16 @@ export const DONOR_REVIEW_CONTEXTS = REGULATORY_CONTEXT_CATALOG.contexts.filter(
 const number=value=>Number.isFinite(value)?value.toPrecision(3):"Not assessed";
 function download(data,name){const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 
+async function readReviewerStatus(signal) {
+  const response = await fetch('/api/alphagenome/status', { signal, credentials: 'same-origin', cache: 'no-store' });
+  if (!response.ok) return { available: false, mode: 'unconfigured', authenticated: false, authenticationRequired: false };
+  return response.json();
+}
+
+function needsCloudUnlock(status) {
+  return status?.mode === 'cloud' && status.authenticationRequired === true && status.authenticated !== true;
+}
+
 export function DonorCandidateComparison({project,onUpdateProject,busy:designBusy,expanded=false}) {
   const [busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[error,setError]=useState(project.donorWorkflowError||'');
   const [cloudAccess,setCloudAccess]=useState(false),[accessCode,setAccessCode]=useState(''),[unlocking,setUnlocking]=useState(false);
@@ -18,7 +28,13 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
   const optionsKey=JSON.stringify(project.options||{});
   useEffect(()=>{if(project.donorWorkflowError)setError(project.donorWorkflowError)},[project.donorWorkflowError]);
   useEffect(()=>{let alive=true;generation.current++;controller.current?.abort();setBusy(false);setReport(null);setSourceId('');donorSourceId(project).then(id=>{if(alive)setSourceId(id)});return()=>{alive=false;generation.current++;controller.current?.abort()};},[project.id,project.genbankRaw,project.genomicDesignInput,project.mutation,optionsKey]);
-  useEffect(()=>{const abort=new AbortController();fetch('/api/alphagenome/status',{signal:abort.signal}).then(r=>r.ok?r.json():null).then(d=>{setAvailable(d?.available===true);setCloudAccess(d?.mode==='cloud'&&d.authenticationRequired&&!d.authenticated)}).catch(()=>{});return()=>abort.abort();},[]);
+  useEffect(()=>{const abort=new AbortController();
+    readReviewerStatus(abort.signal).then(d=>{
+      setAvailable(d?.available===true);
+      setCloudAccess(needsCloudUnlock(d));
+    }).catch(()=>{ setAvailable(false); setCloudAccess(false); });
+    return()=>abort.abort();
+  },[]);
   const panel=project.donorCandidatePanel?.sourceId===sourceId?project.donorCandidatePanel:null;
   useEffect(()=>{let alive=true;setReport(null);
     if(panel?.review && panel.ontology===ontology)buildDonorComparisonRequest(project,panel,{ontologyTerm:ontology,sequenceLength:panel.sequenceLength}).then(batch=>validateDonorComparison(panel.review,batch)).then(async data=>{
@@ -29,7 +45,9 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
   },[panel,ontology,project.genbankRaw,project.mutation]);
   const ranking=panel?rankDonorCandidates(panel,report):null;
   const currentSelection=Boolean(report && panel.selectedIds?.length===2 && panel.selectionReviewed && panel.protectBoth===protectBoth && (!protectBoth||panel.finalReview));
-  const locked=busy||designBusy||!sourceId||cloudAccess;
+  // Cell type / pair selection stay usable before unlock. Only online prediction actions require the access code.
+  const settingsLocked=busy||designBusy||!sourceId;
+  const onlineLocked=settingsLocked||!available||cloudAccess;
   const contextName=DONOR_REVIEW_CONTEXTS.find(c=>c.ontology===ontology)?.label||ontology;
   const selected=currentSelection?panel.selectedIds.map(id=>panel.candidates.find(c=>c.id===id)).filter(Boolean):[];
   const expectedDonors=panel?.protectBoth?panel.finalCandidates:selected;
@@ -51,18 +69,29 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
     await operate(async()=>{if(file.size>6000000)throw new Error('Comparison JSON must be smaller than 6 MB.');const batch=await buildDonorComparisonRequest(project,panel,{ontologyTerm:ontology,sequenceLength:panel.sequenceLength||16384});const data=await validateDonorComparison(JSON.parse(await file.text()),batch);return {donorCandidatePanel:{...panel,review:data,ontology,selectionReviewed:false},donorReviewContext:ontology};});
   }
   async function unlock(event){event.preventDefault();setUnlocking(true);setError('');
-    try{const response=await fetch('/api/alphagenome/session',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({code:accessCode})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Online access was not accepted.');setCloudAccess(false);setAccessCode('');}catch(e){setError(e.message)}finally{setUnlocking(false)}
+    try{
+      const response=await fetch('/api/alphagenome/session',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({code:accessCode})});
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Online access was not accepted.');
+      const status=await readReviewerStatus();
+      setAvailable(status?.available===true);
+      setCloudAccess(needsCloudUnlock(status));
+      if(needsCloudUnlock(status))throw new Error('The access code was accepted, but the analysis session could not be confirmed. Reload and try again on HTTPS.');
+      setAccessCode('');
+    }catch(e){setError(e.message)}finally{setUnlocking(false)}
   }
   const crossWarning=selectedMatches&&!project.designResult.coDeliverySafe;
+  const showAccessForm=available&&cloudAccess;
   return <section className="card donor-candidate-comparison" aria-label="Two-design recommendation">
     <h2>{selectedMatches?'Two designs selected for validation':'Design and review two guide–donor pairs'}</h2>
     <p>{selectedMatches?`${contextName} · ${panel.candidates.length} candidates reviewed. Each guide is linked to its matched donor.`:'Choose your cell type. The tool compares and refines alternatives, then selects two different guides with their matched donors.'}</p>
-    {!selectedMatches && <fieldset disabled={locked}><legend>Experimental cells</legend><label>Cell type <select value={ontology} onChange={e=>{setOntology(e.target.value);setError('');onUpdateProject({donorReviewContext:e.target.value});}}><option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c=><option key={c.id} value={c.ontology}>{c.label}</option>)}</select></label></fieldset>}
-    <details><summary>Advanced</summary>{selectedMatches && <label>Cell type <select value={ontology} disabled={locked} onChange={e=>{setOntology(e.target.value);setError('');onUpdateProject({donorReviewContext:e.target.value});}}>{DONOR_REVIEW_CONTEXTS.map(c=><option key={c.id} value={c.ontology}>{c.label}</option>)}</select></label>}<label><input type="checkbox" checked={protectBoth} disabled={locked} onChange={e=>{setProtectBoth(e.target.checked);setError('')}}/>Protect each donor against both guides</label><p>When enabled, final donors are rebuilt and reviewed again with AlphaGenome. A complete result requires strong predicted protection against both RNPs.</p></details>
-    {cloudAccess&&<form onSubmit={unlock}><label>Analysis access code <input type="password" autoComplete="current-password" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={unlocking}/></label><button className="btn btn-secondary" disabled={unlocking||!accessCode}>{unlocking?'Unlocking…':'Unlock online analysis'}</button><p>The access code unlocks your private reviewer. Your AlphaGenome API key stays on the server.</p></form>}
+    {!selectedMatches && <fieldset disabled={settingsLocked}><legend>Experimental cells</legend><label>Cell type <select aria-label="Cell type for AlphaGenome review" value={ontology} onChange={e=>{setOntology(e.target.value);setError('');onUpdateProject({donorReviewContext:e.target.value});}}><option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c=><option key={c.id} value={c.ontology}>{c.label}</option>)}</select></label></fieldset>}
+    <details><summary>Advanced</summary>{selectedMatches && <label>Cell type <select aria-label="Cell type for AlphaGenome review" value={ontology} disabled={settingsLocked} onChange={e=>{setOntology(e.target.value);setError('');onUpdateProject({donorReviewContext:e.target.value});}}>{DONOR_REVIEW_CONTEXTS.map(c=><option key={c.id} value={c.ontology}>{c.label}</option>)}</select></label>}<label><input type="checkbox" checked={protectBoth} disabled={settingsLocked} onChange={e=>{setProtectBoth(e.target.checked);setError('')}}/>Protect each donor against both guides</label><p>When enabled, final donors are rebuilt and reviewed again with AlphaGenome. A complete result requires strong predicted protection against both RNPs.</p></details>
+    {showAccessForm&&<form onSubmit={unlock} className="donor-access-form"><label>Analysis access code <input type="password" autoComplete="current-password" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={unlocking}/></label><button className="btn btn-secondary" disabled={unlocking||!accessCode}>{unlocking?'Unlocking…':'Unlock online analysis'}</button><p>Enter the private analysis access code to run online AlphaGenome reviews. You can still choose the cell type above. The AlphaGenome API key stays on the server.</p></form>}
     {error&&<p role="alert" className="error">{error}</p>}
-    <div className="candidate-actions"><button className={selectedMatches ? "btn btn-secondary" : "btn btn-primary"} disabled={locked||!ontology||!available} onClick={run}>{selectedMatches?'Review designs again':'Design and review'}</button>{busy&&<button className="btn btn-secondary" onClick={cancel}>Cancel</button>}</div>
-    {!available&&<p>Automatic review is unavailable here. Start the configured local reviewer or ask the project owner to configure the online reviewer.</p>}
+    <div className="candidate-actions"><button className={selectedMatches ? "btn btn-secondary" : "btn btn-primary"} disabled={onlineLocked||!ontology} onClick={run}>{selectedMatches?'Review designs again':'Design and review'}</button>{busy&&<button className="btn btn-secondary" onClick={cancel}>Cancel</button>}</div>
+    {!available&&!showAccessForm&&<p>Automatic review is unavailable here. Start the local reviewer (<code>npm run dev</code> with the AlphaGenome Python environment) or ask the project owner to configure the online reviewer.</p>}
+    {showAccessForm&&<p className="muted">Choose a cell type, then unlock online analysis to run <strong>Design and review</strong>.</p>}
     {busy&&<p role="status" aria-live="polite">{progress||'Preparing the review…'}</p>}
     <div ref={summary} tabIndex={-1} aria-live="polite">
       {selectedMatches&&<><div className="two-design-cards">{selected.map((c,i)=><article key={c.id}><h3>Design {i+1}</h3><p>{c.id} · {panel.protectBoth?'Final donor reviewed with joint protection':'Matched donor reviewed'}</p><code>{project.designResult.gs[i].sp}</code><p>{project.designResult.os[i].od.length} nt donor · {panel.protectBoth?'both guides protected':'matched guide protected'}</p></article>)}</div>
@@ -75,12 +104,12 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
     </div>
     {panel&&<details open={expanded||undefined}><summary>Compare alternatives</summary>
       <p>Original designs are retained as baselines. Select two different guides; the report and order handoff use only the applied selection.</p>
-      <div className="candidate-table"><table><caption>Guide–donor alternatives</caption><thead><tr><th>Select</th><th>Design</th><th>Guide (5′–3′)</th><th>Matched protection</th><th>RNA disturbance</th><th>Splice usage Δ</th><th>Splice-site Δ</th></tr></thead><tbody>{ranking.rows.map(c=>{const duplicate=picks.some(id=>id!==c.id&&panel.candidates.find(x=>x.id===id)?.result.gs[0].sp===c.result.gs[0].sp);return <tr key={c.id}><td><input type="checkbox" aria-label={`Select ${c.id}`} checked={picks.includes(c.id)} disabled={locked||!c.eligible||(!picks.includes(c.id)&&(picks.length>=2||duplicate))} onChange={()=>toggle(c.id)}/></td><td>{c.id}{c.baseline?' · original':''}</td><td><code>{c.result.gs[0].sp}</code></td><td>{c.protection}</td><td>{number(c.metrics?.exonicRnaRelativeDelta)}</td><td>{number(c.metrics?.annotatedUsageMaxDelta)}</td><td>{number(c.metrics?.spliceSiteMaxDelta)}</td></tr>})}</tbody></table></div>
-      <button className="btn btn-secondary" disabled={locked||picks.length!==2||!report||(protectBoth&&!available)} onClick={apply}>Use these two designs</button>
+      <div className="candidate-table"><table><caption>Guide–donor alternatives</caption><thead><tr><th>Select</th><th>Design</th><th>Guide (5′–3′)</th><th>Matched protection</th><th>RNA disturbance</th><th>Splice usage Δ</th><th>Splice-site Δ</th></tr></thead><tbody>{ranking.rows.map(c=>{const duplicate=picks.some(id=>id!==c.id&&panel.candidates.find(x=>x.id===id)?.result.gs[0].sp===c.result.gs[0].sp);return <tr key={c.id}><td><input type="checkbox" aria-label={`Select ${c.id}`} checked={picks.includes(c.id)} disabled={settingsLocked||!c.eligible||(!picks.includes(c.id)&&(picks.length>=2||duplicate))} onChange={()=>toggle(c.id)}/></td><td>{c.id}{c.baseline?' · original':''}</td><td><code>{c.result.gs[0].sp}</code></td><td>{c.protection}</td><td>{number(c.metrics?.exonicRnaRelativeDelta)}</td><td>{number(c.metrics?.annotatedUsageMaxDelta)}</td><td>{number(c.metrics?.spliceSiteMaxDelta)}</td></tr>})}</tbody></table></div>
+      <button className="btn btn-secondary" disabled={settingsLocked||picks.length!==2||!report||(protectBoth&&onlineLocked)} onClick={apply}>Use these two designs</button>
       <details><summary>Prediction details and files</summary><p>{ranking.preferencePolicy} Splice-site predictions are tissue-agnostic. Model contexts may not match your differentiation or maturation state.</p>
         {report&&<p>Model {report.modelVersion} · SDK {report.sdkVersion} · {report.ontologyTerms.join(', ')} · {report.createdAt}. Window: {panel.sequenceLength.toLocaleString()} bp.</p>}
         {ranking.rows.map(c=><details key={c.id}><summary>{c.id} · {c.review?.status||'not reviewed'}</summary><p>{c.reasons.join(' ')||'Sequence checks pass; external specificity remains unchecked.'} {c.review?.error}</p><code className="candidate-donor-sequence">{c.result.os[0].od}</code>{c.review?.localizedTracks?.map((t,i)=><div key={i}><h4>{t.output} · {t.name}</h4><table><thead><tr><th>Genomic position (1-based)</th><th>Intended allele</th><th>Full donor</th><th>Signed Δ</th></tr></thead><tbody>{t.topChanges.map(x=><tr key={x.position}><td>{x.position}</td><td>{number(x.before)}</td><td>{number(x.after)}</td><td>{number(x.delta)}</td></tr>)}</tbody></table></div>)}</details>)}
-        <button className="btn btn-secondary" disabled={locked||!ontology} onClick={exportRequest}>Export comparison request</button><label>Import completed comparison <input type="file" accept=".json" disabled={locked||!ontology} onChange={importReview}/></label>
+        <button className="btn btn-secondary" disabled={settingsLocked||!ontology} onClick={exportRequest}>Export comparison request</button><label>Import completed comparison <input type="file" accept=".json" disabled={settingsLocked||!ontology} onChange={importReview}/></label>
         {report&&<button className="btn btn-secondary" onClick={()=>download(report,'assured-donor-comparison.json')}>Download comparison</button>}
         {panel.finalReview&&<button className="btn btn-secondary" onClick={()=>download(panel.finalReview,'assured-final-two-donor-review.json')}>Download final donor review</button>}
       </details>

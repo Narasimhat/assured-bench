@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
-import {authenticated,sessionCookie,hash,canonical,mac,validateEnvelope,processJob,readBody} from '../server/alphaGenomeCloud.js';
+import {authenticated,sessionCookie,hash,canonical,mac,validateEnvelope,processJob,readBody,reviewerStatus} from '../server/alphaGenomeCloud.js';
 import {reviewRequestId} from '../src/services/alphaGenomeReview.js';
 import {readDonorReviewResponse} from '../src/services/alphaGenomeOnline.js';
 const env={ASSURED_REVIEW_SECRET:'x'.repeat(48),ASSURED_REVIEW_ACCESS_HASH:hash('private-access-code'),ALPHAGENOME_API_KEY:'test-only',BLOB_READ_WRITE_TOKEN:'test-only',VERCEL_URL:'assured-test.vercel.app'};
@@ -17,6 +17,15 @@ test('cloud access uses signed, expiring HttpOnly cookies, fails closed and neve
  assert.equal(authenticated(req,env,now),true);assert.equal(authenticated(req,env,now+8*86400000),false);
  assert.equal(authenticated({headers:{cookie:req.headers.cookie+'tampered'}},env,now),false);
  assert.equal(authenticated(req,{...env,BLOB_READ_WRITE_TOKEN:''},now),false);
+});
+test('status asks for an access code only when the cloud reviewer is configured',()=>{
+ const empty=reviewerStatus({headers:{}},{});
+ assert.deepEqual(empty,{available:false,mode:'unconfigured',authenticated:false,authenticationRequired:false});
+ const locked=reviewerStatus({headers:{}},env);
+ assert.deepEqual(locked,{available:true,mode:'cloud',authenticated:false,authenticationRequired:true});
+ const now=100000, cookie=sessionCookie('private-access-code',env,now);
+ const unlocked=reviewerStatus({headers:{cookie:cookie.split(';')[0]}},env,now);
+ assert.deepEqual(unlocked,{available:true,mode:'cloud',authenticated:true,authenticationRequired:true});
 });
 test('cloud envelope hashes exactly match browser and Python canonical identities',async()=>{
  const b=await batch();assert.doesNotThrow(()=>validateEnvelope(b));assert.equal(hash(canonical({z:1,requestedOutputs:[],requestId:'x'})),await reviewRequestId({z:1,requestedOutputs:[],requestId:'x'}));
