@@ -12,10 +12,21 @@ export async function reviewRequestId(payload) {
 }
 
 export function alphaGenomeMapping(project) {
-  const meta = readGenomicReferenceMetadata(project?.genomicDesignInput?.genbankRaw || project?.genbankRaw || "");
+  const raw = project?.genomicDesignInput?.genbankRaw || project?.genbankRaw || "";
+  const meta = readGenomicReferenceMetadata(raw);
   if (meta) return { assembly: meta.assembly, chromosome: meta.chromosome, referenceStart: meta.start, orientation: meta.orientation };
   const input = project?.designResult?.type === "genomic-snv" ? project.designResult.input : null;
-  return input?.forwardConfirmed && input.orientation === 1 ? { assembly: input.assembly, chromosome: input.chromosome, referenceStart: Number(input.referenceStart), orientation: 1 } : null;
+  if (input?.forwardConfirmed && input.orientation === 1) {
+    return { assembly: input.assembly, chromosome: input.chromosome, referenceStart: Number(input.referenceStart), orientation: 1 };
+  }
+  // Bundled Ensembl-style exports (e.g. APOE) say "Imported from genome: GRCh38 … Location: chr19 start-end"
+  // without the Genomic SNP "chromosome:GRCh38:…" line. Those records are written on the plus strand.
+  const imported = String(raw).match(/Imported from genome:\s*(GRCh38)\b[\s\S]{0,240}?Location:\s*chr([0-9XYM]+)\s+(\d+)-(\d+)/i);
+  if (!imported) return null;
+  const referenceStart = Number(imported[3]), referenceEnd = Number(imported[4]);
+  if (!Number.isSafeInteger(referenceStart) || !Number.isSafeInteger(referenceEnd) || referenceEnd < referenceStart) return null;
+  return { assembly: "GRCh38", chromosome: imported[2].replace(/^chr/i, ""), referenceStart, orientation: 1,
+    provenance: "imported-genbank-location" };
 }
 
 /** Index (0-based, in the uploaded reference) of the intended substitution of the current design, or null; used to place the reference on the genome. */
