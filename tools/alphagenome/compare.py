@@ -90,7 +90,7 @@ def comparison_metrics(rows, annotation, bounds):
             "spliceSiteMaxDelta": maximum("SPLICE_SITES", "regionMaxAbsDelta")}
 
 
-def run_batch(batch, client, reference_fetcher=review.fetch_reference):
+def run_batch(batch, client, reference_fetcher=review.fetch_reference, on_progress=None):
     from alphagenome.data import genome
     from alphagenome.models import dna_client
     first, bounds = validate_batch(batch)
@@ -122,6 +122,8 @@ def run_batch(batch, client, reference_fetcher=review.fetch_reference):
         except Exception as error:
             # Provider errors may carry credential metadata; only expose the class.
             candidates.append({"id": c["id"], "requestId": c["request"]["requestId"], "status": "failed", "error": f"Prediction unavailable ({type(error).__name__}); no clean result inferred."})
+        if on_progress:
+            on_progress(len(candidates))
     return {"schema": "assured-alphagenome-comparison/1", "requestId": batch["requestId"], "sourceId": batch["sourceId"],
             "createdAt": datetime.now(timezone.utc).isoformat(), "modelVersion": "ALL_FOLDS", "sdkVersion": importlib.metadata.version("alphagenome"),
             "ontologyTerms": first["ontologyTerms"], "annotation": batch["annotation"],

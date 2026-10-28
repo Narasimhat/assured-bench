@@ -12,8 +12,10 @@ export async function reviewRequestId(payload) {
 }
 
 export function alphaGenomeMapping(project) {
-  const meta = readGenomicReferenceMetadata(project?.genbankRaw || "");
-  return meta ? { assembly: meta.assembly, chromosome: meta.chromosome, referenceStart: meta.start, orientation: meta.orientation } : null;
+  const meta = readGenomicReferenceMetadata(project?.genomicDesignInput?.genbankRaw || project?.genbankRaw || "");
+  if (meta) return { assembly: meta.assembly, chromosome: meta.chromosome, referenceStart: meta.start, orientation: meta.orientation };
+  const input = project?.designResult?.type === "genomic-snv" ? project.designResult.input : null;
+  return input?.forwardConfirmed && input.orientation === 1 ? { assembly: input.assembly, chromosome: input.chromosome, referenceStart: Number(input.referenceStart), orientation: 1 } : null;
 }
 
 /** Index (0-based, in the uploaded reference) of the intended substitution of the current design, or null; used to place the reference on the genome. */

@@ -1,3 +1,5 @@
+import { readDonorReviewResponse } from "./alphaGenomeOnline.js";
+import { assembleGenomicPairs, buildGenomicTwoPairResult } from "./genomicDonorCandidates.js";
 import { assemblePointMutationPairs, runDesignFromTranscriptModel, summarizeProcurementReadiness } from "../engine/design/designEngine.js";
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from "../engine/design/designScheme.js";
 import { generateDonorCandidates, rankDonorCandidates, buildCoveredDonorComparisonRequest, validateDonorComparison, donorSourceId } from "./donorCandidates.js";
@@ -15,10 +17,15 @@ export function orderedDonorCandidates(panel, report) {
   return rows;
 }
 
+function orderedGuidePairs(rows) {
+  const pairs=[];
+  for(let a=0;a<rows.length;a++)for(let b=a+1;b<rows.length;b++)if(rows[a].result.gs[0].sp!==rows[b].result.gs[0].sp)pairs.push([rows[a],rows[b]]);
+  // Match the native pair planner's preference for cuts at least 10 bp apart.
+  // This is an engineering preference, not a deletion-safety threshold.
+  return pairs.sort((a,b)=>Number(Math.abs(b[0].result.gs[0].cut-b[1].result.gs[0].cut)>=10)-Number(Math.abs(a[0].result.gs[0].cut-a[1].result.gs[0].cut)>=10));
+}
 export function suggestTwoDonorCandidates(panel, report) {
-  const chosen=[];
-  for (const row of orderedDonorCandidates(panel, report)) if (!chosen.some(c=>c.result.gs[0].sp===row.result.gs[0].sp)) { chosen.push(row); if(chosen.length===2)break; }
-  return chosen.length===2 ? chosen.map(c=>c.id) : [];
+  return orderedGuidePairs(orderedDonorCandidates(panel,report))[0]?.map(c=>c.id)||[];
 }
 
 function forExperimentalValidation(result) {
@@ -30,6 +37,7 @@ export function buildTwoPairResult(project, panel, ids, protectBoth = false) {
   if (!Array.isArray(ids) || ids.length!==2 || new Set(ids).size!==2) throw new Error("Choose exactly two different matched designs.");
   const selected=ids.map(id=>panel.candidates.find(c=>c.id===id));
   if(selected.some(c=>!c?.eligible))throw new Error("Both designs must pass the core sequence and matched-guide protection checks.");
+  if (project.designResult.type === "genomic-snv") return forExperimentalValidation(buildGenomicTwoPairResult(project,selected,protectBoth));
   const result=assemblePointMutationPairs(selected.map(c=>({result:c.result})));
   if(!protectBoth)return forExperimentalValidation(result);
   const rebuilt=runDesignFromTranscriptModel("pm",result.gb,project.mutation,"",null,{...project.options,enzyme:"spcas9",customGuides:result.gs.map(g=>g.sp),coDeliveryBlocking:true,ensureGuidePair:false,acceptWeakProtection:false,weakProtectionAcceptance:null});
@@ -46,8 +54,7 @@ export async function reviewCandidatePanel(project,panel,settings,{fetchFn=globa
   const length=request.candidates[0].request.sequenceLength;
   onProgress(`Reviewing ${panel.candidates.length} designs in the selected cells…`);
   const response=await fetchFn('/api/alphagenome/compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal});
-  let data;try{data=await response.json();}catch{throw new Error("The local AlphaGenome reviewer is unavailable. Start the local app with its Python environment and private key configured.");}
-  if(!response.ok)throw new Error(data.error||"AlphaGenome review did not complete.");
+  const data=await readDonorReviewResponse(response,{fetchFn,signal,onProgress});
   await validateDonorComparison(data,request);
   return {...panel,ontology:settings.ontology,sequenceLength:length,review:data};
 }
@@ -60,7 +67,7 @@ export async function selectTwoReviewedDesigns(project,panel,ids,settings,callba
   let finalReview=null,finalCandidates=null;
   if(settings.protectBoth) {
     callbacks.onProgress?.("Checking the final donors against both RNPs and reviewing their rebuilt alleles…");
-    finalCandidates=result.os.map((_,i)=>({id:`selected-${i+1}`,result:assemblePointMutationPairs([{result,donorIndex:i}]),eligible:true,blockers:result.os[i].silentMutations?.length||0,protection:'strong',reasons:[]}));
+    finalCandidates=result.os.map((_,i)=>({id:`selected-${i+1}`,result:(result.type === "genomic-snv" ? assembleGenomicPairs : assemblePointMutationPairs)([{result,donorIndex:i}]),eligible:true,blockers:result.os[i].silentMutations?.length||0,protection:'strong',reasons:[]}));
     const finalPanel={...panel,candidates:finalCandidates};
     const reviewed=await reviewCandidatePanel(project,finalPanel,settings,callbacks);
     if(rankDonorCandidates(reviewed,reviewed.review).rows.some(c=>!c.reviewed))throw new Error("The rebuilt joint-protection donors do not have complete AlphaGenome evidence. The previous selection was retained.");
@@ -86,9 +93,10 @@ export async function designAndReviewDonors(project,settings,callbacks={}) {
     const distinct=[];
     for(const c of orderedDonorCandidates(panel,panel.review))if(!distinct.some(x=>x.result.gs[0].sp===c.result.gs[0].sp)&&distinct.length<6)distinct.push(c);
     ids=[];const attempts=[];
-    for(let a=0;a<distinct.length&&!ids.length;a++)for(let b=a+1;b<distinct.length&&!ids.length;b++) {
+    for(const candidates of orderedGuidePairs(distinct)) {
+      if(ids.length)break;
       await new Promise(resolve=>setTimeout(resolve,0));
-      const pair=[distinct[a].id,distinct[b].id];
+      const pair=candidates.map(c=>c.id);
       try{buildTwoPairResult(project,panel,pair,true);ids=pair;}
       catch(error){attempts.push({ids:pair,reason:error.message});}
     }

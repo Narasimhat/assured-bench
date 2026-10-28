@@ -308,3 +308,64 @@ labels independent-candidate metrics separately from final joint-donor metrics.
 This workflow recommends designs for experimental validation. It does not mark a
 regulatory prediction as a safety certificate or predict an increase in editing
 or HDR yield from co-transfection. Specificity and clone validation remain open.
+
+## Genomic SNP comparison
+
+The local **Genomic SNP** result now offers the same **Design and review** panel
+as protein substitutions, for human GRCh38 / SpCas9 designs. Generate the genomic
+SNP design, choose the experimental cell context, then run the review. Under
+**Advanced**, **Protect each donor against both guides** rebuilds a shared
+blocking set with the native genomic SNP engine and reviews the final alleles
+again. The original two donors remain labelled baselines. Up to six initial
+matched pairs and up to twelve total native PAM/seed donor versions are compared.
+No blocking substitutions are introduced when the original policy is exact edit
+only; joint protection must then come from the intended edit itself.
+
+The comparison keeps forward-genome coordinates and REF/ALT alleles even when
+the reference is written along a reverse-strand transcript. It separates
+reference-to-intended, reference-to-final-donor, and intended-to-final-donor
+predictions. Only the last comparison informs blocker-associated ranking. A
+splice-altering disease SNP is therefore not optimized away.
+
+Intronic and UTR SNPs can be reviewed against the annotated gene's RNA and
+splicing tracks. The current automatic recommendation requires exon/splice
+annotation, sufficient window coverage and usable RNA signal; intergenic or
+annotation-free references do not receive a complete transcript-based preference.
+It does not yet optimize ATAC/DNase, enhancer activity, TF binding or contacts.
+Noncoding blockers are additional regulatory variants, not "silent" edits.
+Specificity, parental genotype, RNA/protein outcomes and dual-cut deletions
+remain experimental review requirements. Model review does not clear those gates.
+
+## Hosted reviewer
+
+The Vercel deployment includes a signed Python worker and a Node.js API. Set
+`ALPHAGENOME_API_KEY`, `ASSURED_REVIEW_SECRET` (at least 32 random characters), and
+`ASSURED_REVIEW_ACCESS_HASH` (SHA-256 of a private, random analysis access code) as
+server-side sensitive variables. Connect a **private** Vercel Blob store; the SDK
+uses the connected `BLOB_STORE_ID` with Vercel OIDC, or a server-side
+`BLOB_READ_WRITE_TOKEN`. No secret uses a `VITE_` prefix.
+
+Unlock online analysis once with the analysis access code. It is not the provider
+API key. The server issues a Secure, HttpOnly, SameSite cookie valid for seven
+days. This first version is one private research workspace; holders of the access
+code share its reviewer and results. It is not a multi-tenant patient-data system.
+
+POST `/api/alphagenome/compare` validates and stores a bounded request, then sends
+a durable queue message. The queue has one active consumer, at most two delivery
+attempts and a one-hour message lifetime. The consumer calls the Python worker
+with a short-lived body-bound HMAC; public unsigned calls cannot run predictions.
+Progress, requests and reports are stored privately. Only authenticated requests
+can retrieve them through `/api/alphagenome/jobs`. Provider diagnostics are never
+returned or persisted. Requests go to Ensembl for reference validation and Google
+for predictions; these are the same services used by the local runner.
+
+Stopping the browser wait leaves the cloud job running. Repeating an identical
+review retrieves the cached job instead of spending another set of predictions.
+The report uses the existing identity, context and evidence validators before
+applying either donor. Completed experiments are still saved in the browser;
+cloud storage holds the comparison jobs and evidence, not whole experiment data.
+Private jobs are retained until the project owner removes them from storage.
+
+The two-design selector prefers guide cuts at least 10 bp apart, consistent with
+the native pair planner, before trying near-coincident cuts. This is an engineering
+preference; both choices still require screening for dual-cut deletion products.

@@ -1,0 +1,8 @@
+local-reviews/
+output/
+.venv-alphagenome/
+.env*
+*.local
+test/
+**/__pycache__/
+**/test_*.py

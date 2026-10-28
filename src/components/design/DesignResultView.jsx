@@ -54,8 +54,8 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
   const [exportError, setExportError] = useState("");
   const takeHome = buildTakeHome({ designResult: result, biomniReport: project.biomniReport });
   const scheme = useMemo(() => buildDesignSchemeSvg(result, { responsive: true }), [result]);
-  const supportsDonorComparison = result.type === "pm" && (!project.options?.enzyme || project.options.enzyme === "spcas9");
-  const hasPmCandidates = supportsDonorComparison && Boolean(result.an && result.wA && result.mA && project.genbankRaw);
+  const supportsDonorComparison = (result.type === "pm" && (!project.options?.enzyme || project.options.enzyme === "spcas9")) || (result.type === "genomic-snv" && (!result.enzyme || result.enzyme.id === "spcas9"));
+  const hasPmCandidates = result.type === "pm" && supportsDonorComparison && Boolean(result.an && result.wA && result.mA && project.genbankRaw);
   const canCompare = supportsDonorComparison || result.type === "ko" || Boolean(result.guideAlternatives?.candidates?.length);
   const openPage = next => { setPage(next); setExportError(""); };
   const exportOffTargets = () => {

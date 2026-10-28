@@ -1,3 +1,6 @@
+import { generateGenomicCandidates, genomicReference } from "./genomicDonorCandidates.js";
+import { normalizeGenBankToTranscriptModel } from "../engine/design/transcriptModel.js";
+import { parseGB } from "../engine/design/designEngine.js";
 import { runDesignFromTranscriptModel, summarizeProcurementReadiness, assemblePointMutationPairs } from "../engine/design/designEngine.js";
 import { findSpCas9Guides } from "../engine/design/transcriptModel.js";
 import { withoutRunOverrides } from "./runOptions.js";
@@ -5,7 +8,7 @@ import { resolveAlphaGenomeMapping, buildAlphaGenomeRequest, reviewRequestId } f
 
 export const CANDIDATE_SCHEMA = "assured-donor-candidates/1";
 export function donorSourceSnapshot(project) {
-  return JSON.stringify({ generator: "matched-substitution/2", reference: project.genbankRaw, mutation: project.mutation, gene: project.gene,
+  return JSON.stringify({ generator: "matched-substitution/2", reference: project.designResult?.type === "genomic-snv" ? genomicReference(project) : project.genbankRaw, genomicInput: project.designResult?.type === "genomic-snv" ? project.genomicDesignInput?.input || project.designResult.input : undefined, mutation: project.mutation, gene: project.gene,
     options: withoutRunOverrides(project.options), type: project.designResult?.type }, (_, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v);
 }
 export async function donorSourceId(project) { return reviewRequestId(JSON.parse(donorSourceSnapshot(project))); }
@@ -13,6 +16,7 @@ export async function donorSourceId(project) { return reviewRequestId(JSON.parse
 /** Each result is built independently: blockers from another alternative are never pooled. */
 export async function generateDonorCandidates(project, previous = null) {
   const base = project.designResult;
+  if (base?.type === "genomic-snv") return { schema: CANDIDATE_SCHEMA, ...(await generateGenomicCandidates(project, previous, donorSourceId)), sourceSnapshot: donorSourceSnapshot(project) };
   if (base?.type !== "pm" || (project.options?.enzyme && project.options.enzyme !== "spcas9")) throw new Error("Matched candidate comparison currently supports SpCas9 point mutations with a coding reference.");
   const sourceId = await donorSourceId(project);
   if (previous && previous.sourceId !== sourceId) throw new Error("The reference or design settings changed. Generate a fresh candidate panel.");
@@ -84,7 +88,8 @@ export async function buildDonorComparisonRequest(project, panel, { ontologyTerm
   }
   const reference = candidates[0]?.request.reference;
   if (!reference) throw new Error("No candidate donors could be generated for this locus.");
-  const model = panel.candidates[0].result.gb;
+  const model = project.designResult.type === "genomic-snv" ? normalizeGenBankToTranscriptModel(parseGB(genomicReference(project)), { expectedGene: project.gene }) : panel.candidates[0].result.gb;
+  if (!model) throw new Error("Transcript annotation is required for a complete genomic SNP comparison. Individual allele review remains available under Analysis & evidence.");
   const toGenome = (start, end) => mapping.orientation === 1
     ? [mapping.referenceStart - 1 + start, mapping.referenceStart - 1 + end]
     : [mapping.referenceStart - 1 + reference.sequence.length - end, mapping.referenceStart - 1 + reference.sequence.length - start];

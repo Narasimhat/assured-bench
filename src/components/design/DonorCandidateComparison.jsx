@@ -9,15 +9,16 @@ function download(data,name){const url=URL.createObjectURL(new Blob([JSON.string
 
 export function DonorCandidateComparison({project,onUpdateProject,busy:designBusy,expanded=false}) {
   const [busy,setBusy]=useState(false),[progress,setProgress]=useState(''),[error,setError]=useState(project.donorWorkflowError||'');
+  const [cloudAccess,setCloudAccess]=useState(false),[accessCode,setAccessCode]=useState(''),[unlocking,setUnlocking]=useState(false);
   const [sourceId,setSourceId]=useState(''),[report,setReport]=useState(null),[available,setAvailable]=useState(false);
   const [ontology,setOntology]=useState(project.donorReviewContext||project.donorCandidatePanel?.ontology||'');
-  const [protectBoth,setProtectBoth]=useState(project.donorProtectBoth??project.donorCandidatePanel?.protectBoth??project.options?.coDeliveryBlocking??false);
+  const [protectBoth,setProtectBoth]=useState(project.donorProtectBoth??project.donorCandidatePanel?.protectBoth??project.designResult?.blocking?.coDelivery??project.options?.coDeliveryBlocking??false);
   const [picks,setPicks]=useState([]);
   const latest=useRef(project),generation=useRef(0),controller=useRef(null),summary=useRef(null);latest.current=project;
   const optionsKey=JSON.stringify(project.options||{});
   useEffect(()=>{if(project.donorWorkflowError)setError(project.donorWorkflowError)},[project.donorWorkflowError]);
-  useEffect(()=>{let alive=true;generation.current++;controller.current?.abort();setBusy(false);setReport(null);setSourceId('');donorSourceId(project).then(id=>{if(alive)setSourceId(id)});return()=>{alive=false;generation.current++;controller.current?.abort()};},[project.id,project.genbankRaw,project.mutation,optionsKey]);
-  useEffect(()=>{const abort=new AbortController();fetch('/api/alphagenome/status',{signal:abort.signal}).then(r=>r.ok?r.json():null).then(d=>setAvailable(d?.available===true)).catch(()=>{});return()=>abort.abort();},[]);
+  useEffect(()=>{let alive=true;generation.current++;controller.current?.abort();setBusy(false);setReport(null);setSourceId('');donorSourceId(project).then(id=>{if(alive)setSourceId(id)});return()=>{alive=false;generation.current++;controller.current?.abort()};},[project.id,project.genbankRaw,project.genomicDesignInput,project.mutation,optionsKey]);
+  useEffect(()=>{const abort=new AbortController();fetch('/api/alphagenome/status',{signal:abort.signal}).then(r=>r.ok?r.json():null).then(d=>{setAvailable(d?.available===true);setCloudAccess(d?.mode==='cloud'&&d.authenticationRequired&&!d.authenticated)}).catch(()=>{});return()=>abort.abort();},[]);
   const panel=project.donorCandidatePanel?.sourceId===sourceId?project.donorCandidatePanel:null;
   useEffect(()=>{let alive=true;setReport(null);
     if(panel?.review && panel.ontology===ontology)buildDonorComparisonRequest(project,panel,{ontologyTerm:ontology,sequenceLength:panel.sequenceLength}).then(batch=>validateDonorComparison(panel.review,batch)).then(async data=>{
@@ -28,7 +29,7 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
   },[panel,ontology,project.genbankRaw,project.mutation]);
   const ranking=panel?rankDonorCandidates(panel,report):null;
   const currentSelection=Boolean(report && panel.selectedIds?.length===2 && panel.selectionReviewed && panel.protectBoth===protectBoth && (!protectBoth||panel.finalReview));
-  const locked=busy||designBusy||!sourceId;
+  const locked=busy||designBusy||!sourceId||cloudAccess;
   const contextName=DONOR_REVIEW_CONTEXTS.find(c=>c.ontology===ontology)?.label||ontology;
   const selected=currentSelection?panel.selectedIds.map(id=>panel.candidates.find(c=>c.id===id)).filter(Boolean):[];
   const expectedDonors=panel?.protectBoth?panel.finalCandidates:selected;
@@ -44,10 +45,13 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
   const run=()=>operate(callbacks=>designAndReviewDonors(project,settings,callbacks));
   const apply=()=>operate(callbacks=>selectTwoReviewedDesigns(project,{...panel,review:report},picks,settings,callbacks));
   function toggle(id){setPicks(old=>old.includes(id)?old.filter(x=>x!==id):old.length<2?[...old,id]:old);}
-  function cancel(){generation.current++;controller.current?.abort();setBusy(false);setProgress('');setError('Review cancelled; the previous selection was retained.');}
+  function cancel(){generation.current++;controller.current?.abort();setBusy(false);setProgress('');setError('Stopped waiting; the previous selection was retained. Online jobs continue and can be retrieved by running the same review again.');}
   async function exportRequest(){try{download(await buildDonorComparisonRequest(project,panel,{ontologyTerm:ontology,sequenceLength:panel.sequenceLength||16384}),'assured-donor-comparison-request.json')}catch(e){setError(e.message)}}
   async function importReview(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;
     await operate(async()=>{if(file.size>6000000)throw new Error('Comparison JSON must be smaller than 6 MB.');const batch=await buildDonorComparisonRequest(project,panel,{ontologyTerm:ontology,sequenceLength:panel.sequenceLength||16384});const data=await validateDonorComparison(JSON.parse(await file.text()),batch);return {donorCandidatePanel:{...panel,review:data,ontology,selectionReviewed:false},donorReviewContext:ontology};});
+  }
+  async function unlock(event){event.preventDefault();setUnlocking(true);setError('');
+    try{const response=await fetch('/api/alphagenome/session',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({code:accessCode})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Online access was not accepted.');setCloudAccess(false);setAccessCode('');}catch(e){setError(e.message)}finally{setUnlocking(false)}
   }
   const crossWarning=selectedMatches&&!project.designResult.coDeliverySafe;
   return <section className="card donor-candidate-comparison" aria-label="Two-design recommendation">
@@ -55,9 +59,10 @@ export function DonorCandidateComparison({project,onUpdateProject,busy:designBus
     <p>{selectedMatches?`${contextName} · ${panel.candidates.length} candidates reviewed. Each guide is linked to its matched donor.`:'Choose your cell type. The tool compares and refines alternatives, then selects two different guides with their matched donors.'}</p>
     {!selectedMatches && <fieldset disabled={locked}><legend>Experimental cells</legend><label>Cell type <select value={ontology} onChange={e=>{setOntology(e.target.value);setError('');onUpdateProject({donorReviewContext:e.target.value});}}><option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c=><option key={c.id} value={c.ontology}>{c.label}</option>)}</select></label></fieldset>}
     <details><summary>Advanced</summary>{selectedMatches && <label>Cell type <select value={ontology} disabled={locked} onChange={e=>{setOntology(e.target.value);setError('');onUpdateProject({donorReviewContext:e.target.value});}}>{DONOR_REVIEW_CONTEXTS.map(c=><option key={c.id} value={c.ontology}>{c.label}</option>)}</select></label>}<label><input type="checkbox" checked={protectBoth} disabled={locked} onChange={e=>{setProtectBoth(e.target.checked);setError('')}}/>Protect each donor against both guides</label><p>When enabled, final donors are rebuilt and reviewed again with AlphaGenome. A complete result requires strong predicted protection against both RNPs.</p></details>
+    {cloudAccess&&<form onSubmit={unlock}><label>Analysis access code <input type="password" autoComplete="current-password" value={accessCode} onChange={e=>setAccessCode(e.target.value)} disabled={unlocking}/></label><button className="btn btn-secondary" disabled={unlocking||!accessCode}>{unlocking?'Unlocking…':'Unlock online analysis'}</button><p>The access code unlocks your private reviewer. Your AlphaGenome API key stays on the server.</p></form>}
     {error&&<p role="alert" className="error">{error}</p>}
     <div className="candidate-actions"><button className={selectedMatches ? "btn btn-secondary" : "btn btn-primary"} disabled={locked||!ontology||!available} onClick={run}>{selectedMatches?'Review designs again':'Design and review'}</button>{busy&&<button className="btn btn-secondary" onClick={cancel}>Cancel</button>}</div>
-    {!available&&<p>The automatic review runs in the local app with its private key configured. The hosted app requires the local comparison runner.</p>}
+    {!available&&<p>Automatic review is unavailable here. Start the configured local reviewer or ask the project owner to configure the online reviewer.</p>}
     {busy&&<p role="status" aria-live="polite">{progress||'Preparing the review…'}</p>}
     <div ref={summary} tabIndex={-1} aria-live="polite">
       {selectedMatches&&<><div className="two-design-cards">{selected.map((c,i)=><article key={c.id}><h3>Design {i+1}</h3><p>{c.id} · {panel.protectBoth?'Final donor reviewed with joint protection':'Matched donor reviewed'}</p><code>{project.designResult.gs[i].sp}</code><p>{project.designResult.os[i].od.length} nt donor · {panel.protectBoth?'both guides protected':'matched guide protected'}</p></article>)}</div>
