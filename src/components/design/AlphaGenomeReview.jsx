@@ -4,7 +4,7 @@ import { alphaGenomeMapping, buildAlphaGenomeRequest, intendedEditIndex, validat
 import { HUMAN_CHROMOSOMES, normalizeChromosome } from "../../services/candidateRanking.js";
 import { mappingNote, useMappingLookup } from "./useMappingLookup.js";
 
-export function AlphaGenomeReview({ project, lookupFetch, initialLookup = null }) {
+export function AlphaGenomeReview({ project, lookupFetch, initialLookup = null, onReviewDesigns }) {
   const declared = alphaGenomeMapping(project);
   const [chromosome, setChromosome] = useState(declared?.chromosome || "");
   const [referenceStart, setReferenceStart] = useState(declared?.referenceStart || "");
@@ -83,11 +83,19 @@ export function AlphaGenomeReview({ project, lookupFetch, initialLookup = null }
     finally { if (generation.current === current) setBusy(false); }
   }
 
-  return <details className="card alphagenome-review" style={{ marginTop: "1rem", padding: "1rem" }}>
-    <summary><strong>AlphaGenome · optional donor functional review</strong></summary>
-    <p>Compare reference, intended substitution, and intended substitution plus donor blockers for expression and splicing effects. Results are exploratory model evidence and do not change guide ranking or QC decisions.</p>
+  return <section aria-label="AlphaGenome regulatory review" className="card alphagenome-review" style={{ marginTop: "1rem", padding: "1rem" }}>
+    <h3>AlphaGenome regulatory review</h3>
+    <p>Compares your intended edit with the final donor design to assess additional predicted expression and splicing effects in your selected cell context. These predictions help compare donor designs; they do not establish safety, editing efficiency, or disease phenotype.</p>
+    <ul>
+      <li><strong>Reference → intended edit:</strong> predicted effects of the mutation you want.</li>
+      <li><strong>Intended edit → edit plus blockers:</strong> additional predicted effects of donor protection changes.</li>
+      <li><strong>Reference → final edited allele:</strong> total predicted effect of the edit and blockers together.</li>
+    </ul>
+    {onReviewDesigns && <><p>Run Design and review from Selected design to compare guide–donor pairs. Online analysis runs on the server, where your AlphaGenome API key is kept.</p><button type="button" className="btn btn-secondary" onClick={onReviewDesigns}>Open design review</button></>}
     {!supported ? <p className="muted">Generate a point-mutation or genomic SNP design to review a matched donor. Knockout and tag reviews are not supported in this first version.</p> : <>
-      <p className="muted">Exporting stays local. Running the Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome. Your API key stays in your local environment.</p>
+      <details style={{ marginTop: "1rem" }}>
+      <summary>Advanced · local export and import</summary>
+      <p className="muted">For a separate review of one donor, export a request and run the local Python tool. Exporting does not send sequences. The Python tool retrieves GRCh38 context from Ensembl and sends the three sequences to Google AlphaGenome, using the API key in your local environment.</p>
       <fieldset disabled={busy} style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "end" }}>
         <legend>Human GRCh38 reference mapping</legend>
         <label>Chromosome <select aria-label="AlphaGenome chromosome" value={HUMAN_CHROMOSOMES.includes(normalizeChromosome(chromosome)) ? normalizeChromosome(chromosome) : ""} onChange={e => { setChromosome(e.target.value); setConfirmed(false); }}><option value="">Select…</option>{HUMAN_CHROMOSOMES.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
@@ -112,6 +120,7 @@ export function AlphaGenomeReview({ project, lookupFetch, initialLookup = null }
         <label>2. Import completed review <input type="file" accept="application/json,.json" disabled={busy || !confirmed} onChange={importReport} /></label>
       </div>
       <p className="muted">Local instructions: <code>tools/alphagenome/README.md</code>. Keep the resulting JSON as a separate review artifact; it is not saved into the design or used to release a design.</p>
+      </details>
       {busy && <p role="status">Checking the current donor review…</p>}
       {error && <p role="alert" className="error">{error}</p>}
       {report && <div>
@@ -125,5 +134,5 @@ export function AlphaGenomeReview({ project, lookupFetch, initialLookup = null }
         <p className="muted">Exploratory comparison across the selected context, not a calibrated gene-level variant score, editing-efficiency estimate, or experimental confirmation. Tissue coverage and biological effects require review.</p>
       </div>}
     </>}
-  </details>;
+  </section>;
 }
