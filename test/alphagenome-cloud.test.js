@@ -5,8 +5,8 @@ import {authenticated,sessionCookie,hash,canonical,mac,validateEnvelope,processJ
 import {reviewRequestId} from '../src/services/alphaGenomeReview.js';
 import {readDonorReviewResponse} from '../src/services/alphaGenomeOnline.js';
 const env={ASSURED_REVIEW_SECRET:'x'.repeat(48),ASSURED_REVIEW_ACCESS_HASH:hash('private-access-code'),ALPHAGENOME_API_KEY:'test-only',BLOB_READ_WRITE_TOKEN:'test-only',VERCEL_URL:'assured-test.vercel.app'};
-const batch=async()=>{
- const request={schema:'assured-alphagenome-request/1',assembly:'GRCh38',reference:{start:1,sequence:'ACGT'},requestedOutputs:['RNA_SEQ','SPLICE_SITES','SPLICE_SITE_USAGE'],sequenceLength:16384};
+const batch=async(sequenceLength=16384)=>{
+ const request={schema:'assured-alphagenome-request/1',assembly:'GRCh38',reference:{start:1,sequence:'ACGT'},requestedOutputs:['RNA_SEQ','SPLICE_SITES','SPLICE_SITE_USAGE'],sequenceLength};
  const payload={schema:'assured-alphagenome-comparison-request/1',sourceId:'a'.repeat(64),annotation:{},candidates:[{id:'pair-1',request:{...request,requestId:await reviewRequestId(request)}}]};
  return {...payload,requestId:await reviewRequestId(payload)};
 };
@@ -44,6 +44,10 @@ test('status asks for an access code only when the cloud reviewer is configured'
 });
 test('cloud envelope hashes exactly match browser and Python canonical identities',async()=>{
  const b=await batch();assert.doesNotThrow(()=>validateEnvelope(b));assert.equal(hash(canonical({z:1,requestedOutputs:[],requestId:'x'})),await reviewRequestId({z:1,requestedOutputs:[],requestId:'x'}));
+ for(const sequenceLength of [16384,131072,524288,1048576]){
+  const long=await batch(sequenceLength);
+  assert.doesNotThrow(()=>validateEnvelope(long));
+ }
  assert.throws(()=>validateEnvelope({...b,sourceId:'b'.repeat(64)}),/identity/);
  const bad=structuredClone(b);bad.candidates[0].request.reference.sequence='AAAA';assert.throws(()=>validateEnvelope(bad));
 });

@@ -74,7 +74,7 @@ export function validateEnvelope(batch) {
     if(c.request?.schema==='assured-alphagenome-allele-request/1' && (batch.candidates.length!==1 || c.id!=='edited-allele'))throw new Error('Review one defined allele at a time');
     if(typeof c.id!=='string'||c.id.length>80)throw new Error('Invalid donor identity');
     const {requestId,...r}=c.request||{};
-    if(requestId!==hash(canonical(r)) || !['assured-alphagenome-request/1','assured-alphagenome-allele-request/1'].includes(r.schema) || r.assembly!=='GRCh38' || ![16384,131072].includes(r.sequenceLength) || !/^[ACGTN]{1,1000000}$/.test(r.reference?.sequence||''))throw new Error('Invalid donor request');
+    if(requestId!==hash(canonical(r)) || !['assured-alphagenome-request/1','assured-alphagenome-allele-request/1'].includes(r.schema) || r.assembly!=='GRCh38' || ![16384,131072,524288,1048576].includes(r.sequenceLength) || !/^[ACGTN]{1,1000000}$/.test(r.reference?.sequence||''))throw new Error('Invalid donor request');
   }
 }
 export async function readPrivate(path) {
