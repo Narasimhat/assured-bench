@@ -85,3 +85,12 @@ test('explicit retries recover failed cloud jobs while queued retries and comple
  stored.set(`alphagenome/v1/jobs/${id}/status.json`,{status:'complete'});
  const complete=await prepareJob(b,deps);assert.equal(complete.status.status,'complete');assert.equal(writes,4);
 });
+
+test('cloud progress distinguishes queued work from a running design awaiting its report',async()=>{
+ const jobId='c'.repeat(64),messages=[];let calls=0;
+ const response=new Response(JSON.stringify({jobId}),{status:202});
+ const states=[{status:'queued',completed:0,total:1},{status:'running',completed:0,total:1},{status:'complete',report:{requestId:'done'}}];
+ const result=await readDonorReviewResponse(response,{pollMs:0,onProgress:message=>messages.push(message),fetchFn:async()=>new Response(JSON.stringify(states[calls++]))});
+ assert.equal(result.requestId,'done');assert.match(messages[0],/queued/);
+ assert.match(messages[1],/running: 0\/1 designs completed/);assert.match(messages[1],/Waiting for the prediction report/);
+});

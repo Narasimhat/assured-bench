@@ -12,7 +12,7 @@ export async function readDonorReviewResponse(response,{fetchFn=fetch,signal,onP
   if(!status.ok)throw new Error(job.error||'The online analysis could not be retrieved.');
   if(job.status==='complete'){if(!job.report)throw new Error('The completed prediction report is missing.');return job.report;}
   if(job.status==='failed')throw new Error(job.error||'Online prediction failed.');
-  onProgress(job.status==='queued'?'Online analysis queued. You can return and run the same review to retrieve its result.':`Online AlphaGenome review: ${job.completed||0}/${job.total||'?'} designs completed…`);
+  onProgress(job.status==='queued'?'Online analysis queued. You can return and run the same review to retrieve its result.':`Online AlphaGenome review running: ${job.completed||0}/${job.total||'?'} designs completed. Waiting for the prediction report…`);
   await new Promise((resolve,reject)=>{const stop=()=>{clearTimeout(timer);reject(new DOMException('Stopped waiting','AbortError'))};const timer=setTimeout(()=>{signal?.removeEventListener('abort',stop);resolve()},pollMs);signal?.addEventListener('abort',stop,{once:true});if(signal?.aborted)stop();});
  }
  throw new Error('The online review is still pending. Run the same review again to retrieve it without submitting duplicate work.');
