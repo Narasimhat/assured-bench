@@ -61,6 +61,24 @@ function regulatoryStudySection(plan) {
   }
 }
 
+function matchedComparisonCandidate(project) {
+  const saved=project.structuralAlternatives;
+  const r=project.designResult;
+  if(!saved||!r||saved.sourceSnapshot!==structuralComparisonSnapshot(project,saved.settings))return null;
+  const spacers=(r.gs||[]).map(g=>g.sp);
+  return saved.candidates.find(c=>
+    c.review?.status==="complete" &&
+    c.review.requestId===c.requestId &&
+    JSON.stringify(c.review.comparisonContext)===JSON.stringify(saved.comparisonContext) &&
+    c.review.ontologyTerms?.[0]===saved.settings.ontology &&
+    (c.recipe?.type||c.type)===r.type &&
+    (!c.recipe?.tag||c.recipe.tag===r.tag) &&
+    Array.isArray(c.guideSpacers) &&
+    c.guideSpacers.length===spacers.length &&
+    c.guideSpacers.every((s,i)=>s===spacers[i])
+  )||null;
+}
+
 function structuralComparisonSection(project) {
   const saved=project.structuralAlternatives;
   if(!saved)return "";
@@ -70,10 +88,11 @@ function structuralComparisonSection(project) {
     const plan={...saved,candidates:saved.candidates.map(c=>({...c,result:{type:c.recipe.type}}))};
     for(const c of plan.candidates)if(c.review&&(c.review.requestId!==c.requestId||JSON.stringify(c.review.comparisonContext)!==JSON.stringify(plan.comparisonContext)||c.review.ontologyTerms?.[0]!==plan.settings.ontology))throw new Error("Unmatched comparison");
     const ranking=rankStructuralAlternatives(plan);
+    const windowEnd=plan.candidates.find(c=>c.review?.context?.end)?.review.context.end||(plan.comparisonContext.start+131072);
     return title+paragraph(`${ranking.status}. Applied alternative: ${saved.appliedId||"none"}. Mode: ${plan.mode==="ko"?"defined knockout deletions":`separate ${plan.settings.reporter} reporter through 2A`}; cell context ${plan.settings.ontology}.`)
       +list(ranking.reasons)
       +table("Bounded native alternatives, compared on a common retained-base mask.",["Design","Arrangement","Guides","Native feasibility","Target RNA axis","Splice usage delta","Splice-site delta","Local neighbour RNA max delta","Finding"],ranking.rows.map(c=>[c.id,c.recipe.type,c.guideSpacers.join(" + "),c.eligible?"Passed for comparison":c.reasons.join("; "),plan.mode==="ko"?c.metrics?.remainingRna:c.metrics?.rnaDisturbance,c.metrics?.usage,c.metrics?.sites,c.metrics?.neighbor,ranking.recommendedId===c.id?"Preferred for validation":ranking.frontier.includes(c.id)?"Comparative frontier":c.review?"Reviewed":"Incomplete"]))
-      +paragraph(`Common window: ${plan.comparisonContext.start}–${plan.comparisonContext.start+131072} (0-based half-open). All deleted/replaced spans and the common cropped tail are excluded from comparative retained-base measurements. Knockouts prioritize robust native disruption, available native LoF evidence, remaining target RNA and local neighbour effects; 2A designs prioritize host expression/splicing preservation within the stated terminal requirement (${plan.settings.terminalRequirement}). No weighted cross-assay score is used.`)
+      +paragraph(`Common window: ${plan.comparisonContext.start}–${windowEnd} (0-based half-open). All deleted/replaced spans and the common cropped tail are excluded from comparative retained-base measurements. Knockouts prioritize robust native disruption, available native LoF evidence, remaining target RNA and local neighbour effects; 2A designs prioritize host expression/splicing preservation within the stated terminal requirement (${plan.settings.terminalRequirement}). No weighted cross-assay score is used.`)
       +paragraph("For 2A reporters, C-terminal integration leaves most of the 2A peptide on the host C-terminus; N-terminal integration replaces the native start codon and places the host downstream of the 2A-derived proline. AlphaGenome does not assess skipping efficiency, protein domains or localization. Partial neighbouring-gene measurements describe local RNA proxies only. Large synthetic insertions are less established model inputs. Recommendations do not establish protein loss, reporter function, editing yield, specificity or safety.")
       +list(plan.candidates.filter(c=>c.review).map(c=>`${c.id}: model ${c.review.modelVersion}; SDK ${c.review.sdkVersion}; request ${c.review.requestId}; completed ${c.review.createdAt}.`));
   } catch {return title+paragraph("The saved alternative evidence is incomplete or unmatched and is excluded. Run a fresh comparison.");}
@@ -81,15 +100,16 @@ function structuralComparisonSection(project) {
 
 function alleleReviewSection(project) {
   if (!["ko", "ct", "nt", "it"].includes(project.designResult?.type)) return "";
-  const report=project.alleleReview;
+  const matchedCandidate=!project.alleleReview?matchedComparisonCandidate(project):null;
+  const report=project.alleleReview||matchedCandidate?.review;
   const title="<h3>5.3 Edited-allele AlphaGenome review</h3>";
   if (!report && project.structuralAppliedSource===alleleReviewSource(project))return title+paragraph("The selected allele was reviewed in the matched alternative comparison below. A separate individual-allele report was not run. Protein function and experimental performance remain unverified.");
   if (!report) return title+paragraph("Predictions have not been run for the defined edited allele. No AlphaGenome-supported protein-loss or insertion-function conclusion is available.");
-  if(project.alleleReviewSource!==alleleReviewSource(project) || report.status!=="complete" || report.ontologyTerms?.[0]!==project.alleleReviewContext) return title+paragraph("Saved edited-allele predictions do not match the current design or selected cell context and are excluded. Run a new review.");
+  if(!matchedCandidate && (project.alleleReviewSource!==alleleReviewSource(project) || report.status!=="complete" || report.ontologyTerms?.[0]!==project.alleleReviewContext)) return title+paragraph("Saved edited-allele predictions do not match the current design or selected cell context and are excluded. Run a new review.");
   const structure=report.structuralEvidence;
   const rows=tracks=>tracks.map(t=>[t.gene||project.gene,t.output,t.name,t.scope,t.referenceMean,t.editedMean,t.output!=="RNA_SEQ"?"Not applicable":Number.isFinite(t.signedRelativeChange)?`${(t.signedRelativeChange*100).toFixed(2)}%`:"Not assessed",t.maxAbsDelta]);
   const headers=["Gene","Output","Track","Region","Reference mean","Edited mean","Signed RNA change","Maximum absolute change"];
-  return title+paragraph(report.conclusion)+paragraph(`Cell context ${report.ontologyTerms.join(", ")}; model ${report.modelVersion}; SDK ${report.sdkVersion}; generated ${report.createdAt}; request ${report.requestId}. Exploratory model evidence, not experimental confirmation.`)
+  return title+paragraph(report.conclusion)+paragraph(`Cell context ${report.ontologyTerms.join(", ")}; model ${report.modelVersion}; SDK ${report.sdkVersion}; generated ${report.createdAt}; request ${report.requestId}.${matchedCandidate?` Selected design (${matchedCandidate.id}) evaluated in the matched alternative comparison window.`:""} Exploratory model evidence, not experimental confirmation.`)
     +paragraph(`Defined allele: ${structure.deletedBp} bp deleted; ${structure.insertedBp} bp inserted; ${structure.codingBasesRemoved} annotated CDS bases removed. Transcript coverage: ${report.annotationFullyCovered?"complete within this window":"incomplete"}. Protein loss is not confirmed; other transcripts and actual repair outcomes remain unassessed.`)
     +table("Edited allele versus reference: matching retained regions; deleted bases excluded.",headers,rows(report.targetTracks))
     +(report.blockerTracks?.length?table("Additional arm blocker effects: intended insertion versus final allele.",headers,rows(report.blockerTracks)):"")

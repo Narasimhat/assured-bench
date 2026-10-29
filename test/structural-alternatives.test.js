@@ -6,7 +6,7 @@ import {designAndReviewStructural,prepareStructuralAlternatives,rankStructuralAl
 const raw=fs.readFileSync(new URL('../public/references/tp53-NG_017013.2.gb',import.meta.url),'utf8');
 const settings={ontology:'EFO:0009747',reporter:'T2A-EGFP',terminalRequirement:'neither'};
 function project(type){const r=runDesign(type,raw,'','T2A-EGFP',400,{expectedGene:'TP53',deliveryMethod:'rnp',maxBlockingChanges:3});assert.ok(!r.err,r.err);return{gene:'TP53',genbankRaw:raw,designResult:r};}
-function evidence(candidate,rna=.1,usage=.01,sites=.02,neighbor=.1){const req=candidate.batch?.candidates[0].request;return {schema:'assured-alphagenome-allele-review/1',status:'complete',evidenceType:'model-prediction',annotationFullyCovered:true,requestId:candidate.batch?.requestId,sourceId:candidate.batch?.sourceId,alleleRequestId:req?.requestId,ontologyTerms:req?.ontologyTerms,comparisonContext:req?.comparisonContext,candidates:[{id:'edited-allele',status:'complete'}],modelVersion:'ALL_FOLDS',sdkVersion:'test',neighborStatus:'available',neighborTracks:[{output:'RNA_SEQ',referenceMean:1,editedMean:1,signedRelativeChange:0,maxAbsDelta:neighbor,annotationFullyCovered:false}],targetTracks:[{output:'RNA_SEQ',name:'rna',referenceMean:1,editedMean:1+rna,signedRelativeChange:rna,maxAbsDelta:Math.abs(rna)},{output:'SPLICE_SITE_USAGE',name:'usage',maxAbsDelta:usage},{output:'SPLICE_SITES',name:'site',maxAbsDelta:sites}]};}
+function evidence(candidate,rna=.1,usage=.01,sites=.02,neighbor=.1){const req=candidate.batch?.candidates[0].request;return {schema:'assured-alphagenome-allele-review/1',status:'complete',evidenceType:'model-prediction',annotationFullyCovered:true,conclusion:'Target disruption supported by sequence',structuralEvidence:{deletedBp:37,insertedBp:0,codingBasesRemoved:37},limitations:['Deleted bases are excluded from RNA comparisons.'],requestId:candidate.batch?.requestId,sourceId:candidate.batch?.sourceId,alleleRequestId:req?.requestId,ontologyTerms:req?.ontologyTerms,comparisonContext:req?.comparisonContext,candidates:[{id:'edited-allele',status:'complete'}],modelVersion:'ALL_FOLDS',sdkVersion:'test',neighborStatus:'available',neighborTracks:[{gene:'WRAP53',output:'RNA_SEQ',name:'rna',scope:'retained gene-body RNA proxy',referenceMean:1,editedMean:1,signedRelativeChange:0,maxAbsDelta:neighbor,annotationFullyCovered:false}],targetTracks:[{output:'RNA_SEQ',name:'rna',scope:'retained annotated exons',referenceMean:1,editedMean:1+rna,signedRelativeChange:rna,maxAbsDelta:Math.abs(rna)},{output:'SPLICE_SITE_USAGE',name:'usage',scope:'retained gene body',maxAbsDelta:usage},{output:'SPLICE_SITES',name:'site',scope:'retained gene body',maxAbsDelta:sites}]};}
 
 test('N/C and guide alternatives preserve the same 2A reporter purpose, context and retained mask',async()=>{
  const p=project('ct'),plan=await prepareStructuralAlternatives(p,settings);
@@ -75,6 +75,7 @@ test('2A reporter schemes describe the encoded ORF without claiming a single mat
 
 
 test('initial design-page comparison retains reviewed alternatives without inventing a terminal preference',async()=>{
+ const {generateReportHtml}=await import('../src/services/designExport.js');
  const p=project('ct');let calls=0;
  const fields=await designAndReviewStructural(p,{...settings,terminalRequirement:'unknown'},{fetchFn:async(url,init)=>{
   calls++;return new Response(JSON.stringify(evidence({batch:JSON.parse(init.body)},calls/100,calls/100,calls/100,calls/100)));
@@ -84,4 +85,7 @@ test('initial design-page comparison retains reviewed alternatives without inven
  assert.equal(fields.alleleReviewContext,settings.ontology);
  assert.ok(fields.structuralAlternatives.candidates.filter(c=>c.eligible).every(c=>c.review?.status==='complete'));
  assert.equal(fields.structuralAlternatives.settings.reporter,p.designResult.tag);
+ const html=generateReportHtml({...p,...fields},p.designResult);
+ assert.match(html,/Edited allele versus reference: matching retained regions; deleted bases excluded/);
+ assert.match(html,/WRAP53/);
 });
