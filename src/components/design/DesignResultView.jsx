@@ -68,7 +68,10 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
       {[["design", "Selected design"], ["report", "Scientific report"], ...(canCompare ? [["guides", supportsDonorComparison ? "Compare alternatives" : "Alternative guides"]] : []), ["evidence", "Analysis & evidence"]].map(([id, label]) => <button key={id} type="button" aria-current={page === id ? "page" : undefined} onClick={() => openPage(id)}>{label}</button>)}
     </nav>
     {page === "design" && <>
-      {["ko", "ct", "nt", "it"].includes(result.type) && <div className="card"><h3>AlphaGenome functional review</h3><p>Review the exact edited allele for cell-specific expression and splicing effects. Protein loss and experimental performance require validation.</p><button type="button" className="btn btn-secondary" onClick={() => openPage("evidence")}>Review edited allele with AlphaGenome</button></div>}
+      {["ko", "ct", "nt", "it"].includes(result.type) && <div className="card"><h3>AlphaGenome functional review</h3>
+        {project.alleleReview ? <p><strong>{project.alleleReview.conclusion}.</strong> {project.alleleReview.annotationFullyCovered ? "The annotated transcript fits the prediction window." : "Transcript coverage is incomplete, so no complete functional conclusion is available."} Protein loss and experimental performance require validation.</p>
+          : <p>{project.alleleReviewError ? `The allele review did not complete (${project.alleleReviewError}). The selected design is unchanged.` : "Review the exact edited allele for cell-specific expression and splicing effects. Protein loss and experimental performance require validation."}</p>}
+        <button type="button" className="btn btn-secondary" onClick={() => openPage("evidence")}>{project.alleleReview ? "Open edited allele review" : "Review edited allele with AlphaGenome"}</button></div>}
       {supportsDonorComparison && <DonorCandidateComparison project={project} onUpdateProject={onUpdateProject} busy={busy} />}
       <DesignResult currentProject={project} designResult={result} takeHome={takeHome} reagents={reagents} onProceedToOrder={onProceedToOrder} onEditDesign={onEditSettings} onDownloadReport={() => openPage("report")} onDownloadOffTarget={exportOffTargets} />
       {exportError && <p role="alert">{exportError}</p>}

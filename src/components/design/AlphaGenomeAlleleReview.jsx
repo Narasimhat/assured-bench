@@ -1,7 +1,7 @@
 import { StructuralAlternativeComparison } from './StructuralAlternativeComparison.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { buildCoveredAlleleReviewBatch, validateAlleleReview, alleleReviewSource } from '../../services/alphaGenomeAlleles.js';
-import { readDonorReviewResponse } from '../../services/alphaGenomeOnline.js';
+import { reviewEditedAllele } from '../../services/alleleWorkflow.js';
 import { REGULATORY_CONTEXT_CATALOG } from '../../services/regulatoryContexts.js';
 
 const contexts=REGULATORY_CONTEXT_CATALOG.contexts.filter(c=>c.outputTracks.RNA_SEQ&&c.outputTracks.SPLICE_SITE_USAGE);
@@ -33,8 +33,7 @@ export function AlphaGenomeAlleleReview({project,onUpdateProject}) {
     const next=await fetch('/api/alphagenome/status',{credentials:'same-origin',cache:'no-store'});if(!next.ok)throw new Error('Could not confirm the review session.');const state=await next.json();setStatus(state);if(!state.authenticated)throw new Error('The review session could not be confirmed.');setCode('');
   }catch(e){setError(e.message)}finally{setUnlocking(false)}}
   async function run(){const request=batch;controller.current=new AbortController();setBusy(true);setError('');setProgress('Reviewing the exact edited allele in the selected cells…');try{
-    const response=await fetch('/api/alphagenome/compare',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(request),signal:controller.current.signal});
-    const result=validateAlleleReview(await readDonorReviewResponse(response,{signal:controller.current.signal,onProgress:message=>{if(current.current===request.requestId)setProgress(message)}}),request);
+    const {report:result}=await reviewEditedAllele(project,{ontologyTerm:ontology,donorIndex,batch:request,signal:controller.current.signal,onProgress:message=>{if(current.current===request.requestId)setProgress(message)}});
     if(current.current!==request.requestId)return;
     setReport(result);onUpdateProject({alleleReview:result,alleleReviewContext:ontology,alleleReviewSource:alleleReviewSource(project)});
   }catch(e){if(current.current===request.requestId)setError(e.name==='AbortError'?'Stopped waiting. Online jobs continue; run the same review to retrieve the result.':e.message)}finally{if(current.current===request.requestId){setBusy(false);setProgress('')}}}
