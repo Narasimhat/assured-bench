@@ -479,7 +479,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
         </form>
 
         <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "6px", marginTop: "6px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          {import.meta.env.DEV && <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <strong style={{ color: "var(--text-muted)" }}>Try 1-click benchmark trace sets:</strong>
             <button
               type="button"
@@ -499,7 +499,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
             >
               Load MYD88 KO hiPSC Cohort (11 traces)
             </button>
-          </div>
+          </div>}
           <span>🔒 Processed 100% locally in your browser.</span>
         </div>
       </div>

@@ -68,6 +68,8 @@ Known open items are listed in `docs/AUDIT_2026-10.md`.
 
 ## Getting Started
 
+See the [collaborator test checklist](docs/COLLABORATOR_TESTING.md) and [release review](docs/RELEASE_READINESS.md) before sharing the deployment.
+
 ### Optional local design-check / AlphaGenome development
 
 Evidence-source labels and the local integration checks are described in
@@ -113,8 +115,8 @@ npm run preview
 
 ## Architecture & Privacy
 
-- **100% Client-Side**: All CRISPR guide scoring, CFD matrix calculations, Sanger ABIF parsing, and trace deconvolution run directly in the user's browser.
-- **Data Privacy**: Traces, clone identities, and proprietary genetic sequences are never sent to external servers.
+- **Local computation**: All CRISPR guide scoring, CFD matrix calculations, Sanger ABIF parsing, and trace deconvolution run directly in the user's browser.
+- **Data Privacy**: Trace analysis and saved experiments stay in your browser. Gene/variant evidence lookups contact external reference services. Optional online AlphaGenome review sends the selected sequence context and edit to the hosted reviewer and Google AlphaGenome; requests and results are retained in private Vercel Blob storage. Use only data approved for those services.
 - **Local Persistence**: Save experiments securely in browser IndexedDB/localStorage, or export portable `.assured` project bundles.
 
 ---
@@ -122,6 +124,8 @@ npm run preview
 ## License
 
 MIT License.
+
+Release review note: no root LICENSE file is present. Confirm ownership, the intended license and third-party obligations with your institution before broader distribution. This review does not change existing licensing terms.
 
 ## Enzyme configuration and validation
 

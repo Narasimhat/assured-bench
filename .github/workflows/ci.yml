@@ -18,8 +18,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r tools/alphagenome/requirements.txt
+      - run: python -m unittest discover -s tools/alphagenome -p 'test_*.py'
       - run: npm test
       - run: npm run build
+      - run: node scripts/check_release.mjs
       # Fails on any high or critical advisory in the shipped dependencies except the ones listed (with reasons) in scripts/check_audit.mjs.
       - run: npm audit --omit=dev --json > audit.json || true
       - run: node scripts/check_audit.mjs audit.json

@@ -17,3 +17,6 @@ __pycache__/
 .env.*
 !*.example
 local-reviews/
+
+# Generated local reports and export artifacts
+/output/

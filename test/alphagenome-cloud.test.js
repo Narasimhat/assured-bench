@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Readable} from 'node:stream';
-import {authenticated,sessionCookie,hash,canonical,mac,validateEnvelope,processJob,readBody,reviewerStatus} from '../server/alphaGenomeCloud.js';
+import {authenticated,sessionCookie,hash,canonical,mac,validateEnvelope,processJob,readBody,reviewerStatus,prepareJob} from '../server/alphaGenomeCloud.js';
 import {reviewRequestId} from '../src/services/alphaGenomeReview.js';
 import {readDonorReviewResponse} from '../src/services/alphaGenomeOnline.js';
 const env={ASSURED_REVIEW_SECRET:'x'.repeat(48),ASSURED_REVIEW_ACCESS_HASH:hash('private-access-code'),ALPHAGENOME_API_KEY:'test-only',BLOB_READ_WRITE_TOKEN:'test-only',VERCEL_URL:'assured-test.vercel.app'};
@@ -71,4 +71,17 @@ test('online polling returns only a completed report and handles failure, cancel
 });
 test('cloud requests enforce payload limits before parsing',async()=>{
  const req=Readable.from(['123456']);req.headers={};await assert.rejects(()=>readBody(req,3),/too large/);
+});
+
+
+test('explicit retries recover failed cloud jobs while queued retries and completed evidence are reused',async()=>{
+ const b=await batch(),id=mac(`job:${b.requestId}`,env),stored=new Map();let writes=0;
+ const deps={sign:value=>mac(value,env),read:async key=>stored.get(`alphagenome/v1/jobs/${key}/status.json`),write:async(path,data)=>{writes++;stored.set(path,data)},now:()=>new Date(100000).toISOString()};
+ const first=await prepareJob(b,deps);assert.equal(first.id,id);assert.equal(first.status.queueKey,id);
+ await prepareJob(b,deps);assert.equal(writes,2,'queued browser retry does not rewrite the request');
+ stored.set(`alphagenome/v1/jobs/${id}/status.json`,{status:'failed',updatedAt:'failure-1'});
+ const retried=await prepareJob(b,deps);assert.equal(retried.status.status,'queued');assert.notEqual(retried.status.queueKey,id);
+ const again=await prepareJob(b,deps);assert.equal(again.status.queueKey,retried.status.queueKey);assert.equal(writes,4);
+ stored.set(`alphagenome/v1/jobs/${id}/status.json`,{status:'complete'});
+ const complete=await prepareJob(b,deps);assert.equal(complete.status.status,'complete');assert.equal(writes,4);
 });

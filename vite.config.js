@@ -1,11 +1,12 @@
 import { resolve } from "path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { releaseAssets } from "./scripts/release_assets.mjs";
 import { alphaGenomeBridge } from "./tools/alphagenome/viteBridge.js";
 
 export default defineConfig({
   base: "./",
-  plugins: [react(), alphaGenomeBridge()],
+  plugins: [releaseAssets(), react(), alphaGenomeBridge()],
   worker: { format: "es" },
   build: {
     rollupOptions: {

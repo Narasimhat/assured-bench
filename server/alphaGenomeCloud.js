@@ -89,6 +89,22 @@ export async function jobStatus(id, read=readPrivate) {
   return read(`${jobPath(id)}/status.json`);
 }
 
+/** An explicit retry creates one new queue delivery group after a terminal failure.
+ * Completed evidence is reused. Concurrent retries of the same failed state share
+ * a key, so a browser retry cannot fan out duplicate model jobs.
+ */
+export async function prepareJob(batch, {read=jobStatus,write=writePrivate,sign=mac,now=()=>new Date().toISOString()}={}) {
+  const id=sign(`job:${batch.requestId}`),path=jobPath(id);
+  let status=await read(id);
+  if(!status || status.status==='failed') {
+    const queueKey=status ? sign(`retry:${id}:${status.updatedAt}`) : id;
+    await write(`${path}/request.json`,batch);
+    status={id,status:'queued',completed:0,total:batch.candidates.length,requestId:batch.requestId,queueKey,updatedAt:now()};
+    await write(`${path}/status.json`,status);
+  }
+  return {id,status};
+}
+
 /** Queue delivery is at least once. Completed reports are reused and never recomputed. */
 export async function processJob({id}, metadata, {read=readPrivate,write=writePrivate,fetchFn=fetch,env=process.env}={}) {
   if(!validJobId(id))throw new Error('Invalid queued job identity');
