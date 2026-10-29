@@ -26,6 +26,8 @@ import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/bi
 import { projectDesignReagents } from "../../services/projectReagents.js";
 import { designAndReviewDonors } from "../../services/donorWorkflow.js";
 import { DONOR_REVIEW_CONTEXTS } from "./DonorCandidateComparison.jsx";
+import { STRUCTURAL_REVIEW_TYPES } from "../../services/alphaGenomeAlleles.js";
+import { designReviewUpdate } from "../../services/alleleWorkflow.js";
 import { DesignResultView } from "./DesignResultView.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import {
@@ -233,6 +235,10 @@ export function DesignView({
 
   const reviewContext = currentProject.donorReviewContext || "";
   const simpleDonorReview = editType === "pm" && enzyme === "spcas9";
+  // Knockouts and knock-ins review the edited allele instead of competing donors, but from the same control here.
+  const structuralReview = STRUCTURAL_REVIEW_TYPES.includes(editType);
+  const alleleContext = currentProject.alleleReviewContext || "";
+  const offersReview = simpleDonorReview || structuralReview;
   const latestProject = useRef(currentProject), reviewController = useRef(null);
   latestProject.current = currentProject;
   useEffect(() => () => reviewController.current?.abort(), [currentProject.id, genbankRaw, mutation]);
@@ -539,6 +545,19 @@ export function DesignView({
         ...(biomniReport ? { biomniReport } : {})
       };
 
+      if (structuralReview && alleleContext) {
+        reviewController.current = new AbortController();
+        try {
+          const reviewed = await designReviewUpdate({ ...currentProject, ...updated }, { ontology: alleleContext },
+            { signal: reviewController.current.signal, onProgress: setDesignProgress });
+          updated = { ...updated, ...reviewed, alleleReviewError: null };
+        } catch (reviewError) {
+          if (reviewError.name === "AbortError") throw reviewError;
+          // The design stands on its own; the allele review is confirmatory evidence.
+          updated.alleleReviewError = reviewError.message;
+          updated.alleleReviewContext = alleleContext;
+        }
+      }
       if (simpleDonorReview && reviewContext && !customGuidesOverride?.length) {
         reviewController.current = new AbortController();
         try {
@@ -969,10 +988,12 @@ export function DesignView({
             {editType === "pm" && <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>SNP donors are 127 nt: nominally 91 nt toward the PAM and 36 nt on the opposite side of the target-strand cut, ordered opposite the guide. Cas12a/Mad7 mirror the Cas9 layout because their PAM is 5′. Prefer silent PAM disruption, with synonymous seed changes as a review-required fallback.</p>}
 
             {/* Advanced Options Bar */}
-            {simpleDonorReview && <label style={{ display: "block", marginTop: "1rem" }}>Cell type for AlphaGenome review
-              <select aria-label="Cell type for AlphaGenome review" value={reviewContext} disabled={isDesigning} onChange={e => onUpdateProject({ donorReviewContext: e.target.value })}>
-                <option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
+            {offersReview && <label style={{ display: "block", marginTop: "1rem" }}>Cell type for AlphaGenome review
+              <select aria-label="Cell type for AlphaGenome review" value={simpleDonorReview ? reviewContext : alleleContext} disabled={isDesigning}
+                onChange={e => onUpdateProject(simpleDonorReview ? { donorReviewContext: e.target.value } : { alleleReviewContext: e.target.value })}>
+                <option value="">{simpleDonorReview ? "Choose cell type" : "Skip review"}</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
               </select>
+              {structuralReview && <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)" }}>Reviews the edited allele after the design is built. The design itself does not depend on it.</span>}
             </label>}
             <details style={{ marginTop: "1rem" }}><summary>Advanced design settings</summary>
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
@@ -1041,7 +1062,7 @@ export function DesignView({
                 style={{ marginLeft: "auto" }}
               >
                 <Play size={16} />
-                <span>{isDesigning ? "Designing and reviewing…" : simpleDonorReview ? "Design and review" : "Generate design"}</span>
+                <span>{isDesigning ? "Designing and reviewing…" : simpleDonorReview || (structuralReview && alleleContext) ? "Design and review" : "Generate design"}</span>
               </button>
             </div>
 
