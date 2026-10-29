@@ -168,10 +168,11 @@ async function fetchEnsemblGeneGenbank(geneSymbol, species = "homo_sapiens") {
   const lookupUrl = `${ENSEMBL_REST_URL}/${lookupPath}?expand=1&content-type=application/json`;
   const geneData = await fetchJson(lookupUrl, `looking up '${symbol}'`);
 
-  // Find MANE Select or Canonical transcript
+  // Prefer the explicitly declared canonical transcript over a conflicting flag.
   const transcripts = geneData.Transcript || [];
   const canonId = (geneData.canonical_transcript || "").split(".")[0];
-  let primaryTranscript = transcripts.find(t => t.id === canonId || t.is_canonical === 1 || t.is_canonical === true);
+  let primaryTranscript = transcripts.find(t => String(t.id).split(".")[0] === canonId)
+    || transcripts.find(t => t.is_canonical === 1 || t.is_canonical === true);
   if (!primaryTranscript && transcripts.length > 0) {
     primaryTranscript = transcripts.find(t => t.Translation) || transcripts[0];
   }
@@ -188,13 +189,25 @@ async function fetchEnsemblGeneGenbank(geneSymbol, species = "homo_sapiens") {
 
   const seqUrl = `${ENSEMBL_REST_URL}/sequence/region/${species}/${chr}:${start}..${end}:1?mask_feature=0`;
   const seqData = await fetchJson(seqUrl, "loading the genomic sequence");
-  const dnaSeq = seqData.seq.toLowerCase();
+  const dnaSeq = String(seqData.seq || "").toLowerCase();
+  if (!/^[acgtn]+$/.test(dnaSeq) || dnaSeq.length !== end - start + 1) {
+    throw new Error("Ensembl returned a sequence that does not match the requested genomic interval. Retry or upload a verified GenBank reference.");
+  }
+  if (![1, -1].includes(primaryTranscript.strand)) throw new Error("Ensembl did not provide a valid transcript strand.");
+  const assembly = geneData.assembly_name || primaryTranscript.assembly_name || null;
+  const organism = { homo_sapiens: "Homo sapiens", mus_musculus: "Mus musculus", rattus_norvegicus: "Rattus norvegicus", danio_rerio: "Danio rerio" }[species] || species.replace(/_/g, " ");
+  const isCanonical = Boolean(primaryTranscript.is_canonical || String(primaryTranscript.id).split(".")[0] === canonId);
+
+  const transcriptId = /\.\d+$/.test(primaryTranscript.id) ? primaryTranscript.id
+    : primaryTranscript.version ? `${primaryTranscript.id}.${primaryTranscript.version}`
+    : primaryTranscript.id === canonId && /\.\d+$/.test(geneData.canonical_transcript || "") ? geneData.canonical_transcript : primaryTranscript.id;
 
   // Build synthetic GenBank content compatible with transcriptModel.js
   const gbContent = buildSyntheticGenbank({
     gene: geneData.display_name,
     ensemblGeneId: geneData.id,
-    transcriptId: primaryTranscript.id,
+    transcriptId,
+    assembly, organism, isCanonical,
     chr,
     genomicStart: start,
     genomicEnd: end,
@@ -207,13 +220,16 @@ async function fetchEnsemblGeneGenbank(geneSymbol, species = "homo_sapiens") {
   return {
     geneSymbol: geneData.display_name,
     ensemblId: geneData.id,
-    transcriptId: primaryTranscript.id,
-    isCanonical: primaryTranscript.is_canonical,
+    transcriptId,
+    isCanonical,
+    assembly,
     source: "Ensembl",
     chr,
     genomicStart: start,
     genomicEnd: end,
     strand: primaryTranscript.strand,
+    referenceOrientation: "gene",
+    ...(primaryTranscript.strand === -1 ? { warning: "Reverse-strand gene: the reference sequence and exon coordinates are oriented in the gene direction. Guide strands and positions are relative to this reference, not chromosome plus." } : {}),
     genbankText: gbContent,
     sequenceLength: dnaSeq.length
   };
@@ -222,31 +238,41 @@ async function fetchEnsemblGeneGenbank(geneSymbol, species = "homo_sapiens") {
 /**
  * Format data into valid GenBank format string
  */
-function buildSyntheticGenbank({ gene, ensemblGeneId, transcriptId, chr, genomicStart, genomicEnd, strand, exons, translation, sequence }) {
+function buildSyntheticGenbank({ gene, ensemblGeneId, transcriptId, assembly, organism, isCanonical, chr, genomicStart, genomicEnd, strand, exons, translation, sequence }) {
   const dateStr = new Date().toISOString().split("T")[0].toUpperCase();
   const locusName = (gene.replace(/[^A-Za-z0-9_]/g, "_") + "_REF").slice(0, 16);
   const seqLen = sequence.length;
+  // The native design model expects an increasing, gene-oriented CDS. A GenBank
+  // complement() qualifier alone is not interpreted by that model.
+  const orientedSequence = strand === -1
+    ? [...sequence].reverse().map(base => ({ a: "t", t: "a", c: "g", g: "c", n: "n" }[base.toLowerCase()] || base)).join("")
+    : sequence;
+  const relativeInterval = (start, end) => strand === -1
+    ? [genomicEnd - end + 1, genomicEnd - start + 1]
+    : [start - genomicStart + 1, end - genomicStart + 1];
 
   let gb = `LOCUS       ${locusName.padEnd(16)} ${seqLen} bp    DNA     linear   SYN ${dateStr}\n`;
-  gb += `DEFINITION  ${gene} (${transcriptId}) extracted from Ensembl GRCh38 chr${chr}:${genomicStart}..${genomicEnd}.\n`;
+  gb += `DEFINITION  ${gene} (${transcriptId}) extracted from Ensembl ${assembly || "assembly not reported"} chr${chr}:${genomicStart}..${genomicEnd}; reference oriented in the gene direction (chromosome strand ${strand}).\n`;
   gb += `ACCESSION   ${transcriptId}\n`;
-  gb += `VERSION     ${transcriptId}.1\n`;
-  gb += `KEYWORDS    MANE Select; Canonical.\n`;
-  gb += `SOURCE      Homo sapiens (human)\n`;
-  gb += `  ORGANISM  Homo sapiens\n`;
+  gb += `VERSION     ${transcriptId}\n`;
+  gb += `KEYWORDS    Ensembl ${isCanonical ? "canonical transcript" : "transcript"}.\n`;
+  gb += `SOURCE      ${organism}\n`;
+  gb += `  ORGANISM  ${organism}\n`;
+  if (assembly) gb += `COMMENT     Location: chromosome:${assembly}:${chr}:${genomicStart}:${genomicEnd}:${strand}\n`;
   gb += `FEATURES             Location/Qualifiers\n`;
   gb += `     source          1..${seqLen}\n`;
-  gb += `                     /organism="Homo sapiens"\n`;
+  gb += `                     /organism="${organism}"\n`;
   gb += `                     /chromosome="${chr}"\n`;
   gb += `                     /gene="${gene}"\n`;
-  gb += `                     /db_xref="GeneID:${ensemblGeneId}"\n`;
+  gb += `                     /db_xref="Ensembl:${ensemblGeneId}"\n`;
+  gb += `     gene            1..${seqLen}\n`;
+  gb += `                     /gene="${gene}"\n`;
 
-  // Sort exons along forward genomic strand
-  const sortedExons = [...exons].sort((a, b) => a.start - b.start);
+  // Exon 1 is the biological first exon, including on reverse-strand genes.
+  const sortedExons = [...exons].sort((a, b) => strand === -1 ? b.start - a.start : a.start - b.start);
 
   sortedExons.forEach((exon, idx) => {
-    const relStart = exon.start - genomicStart + 1;
-    const relEnd = exon.end - genomicStart + 1;
+    const [relStart, relEnd] = relativeInterval(exon.start, exon.end);
     if (relStart >= 1 && relEnd <= seqLen) {
       gb += `     exon            ${relStart}..${relEnd}\n`;
       gb += `                     /gene="${gene}"\n`;
@@ -260,13 +286,12 @@ function buildSyntheticGenbank({ gene, ensemblGeneId, transcriptId, chr, genomic
     const codingExons = sortedExons.filter(e => e.end >= translation.start && e.start <= translation.end);
     if (codingExons.length > 0) {
       const intervals = codingExons.map((e, i) => {
-        const cStart = Math.max(e.start, translation.start) - genomicStart + 1;
-        const cEnd = Math.min(e.end, translation.end) - genomicStart + 1;
+        const [cStart, cEnd] = relativeInterval(Math.max(e.start, translation.start), Math.min(e.end, translation.end));
         return `${cStart}..${cEnd}`;
       });
 
       const cdsLoc = intervals.length > 1 ? `join(${intervals.join(",")})` : intervals[0];
-      const finalLoc = strand === -1 ? `complement(${cdsLoc})` : cdsLoc;
+      const finalLoc = cdsLoc;
 
       gb += `     CDS             ${finalLoc}\n`;
       gb += `                     /gene="${gene}"\n`;
@@ -280,7 +305,7 @@ function buildSyntheticGenbank({ gene, ensemblGeneId, transcriptId, chr, genomic
   gb += `ORIGIN\n`;
   for (let i = 0; i < seqLen; i += 60) {
     const lineNum = String(i + 1).padStart(9, " ");
-    const chunk = sequence.slice(i, i + 60);
+    const chunk = orientedSequence.slice(i, i + 60);
     const blocks = [];
     for (let j = 0; j < chunk.length; j += 10) {
       blocks.push(chunk.slice(j, j + 10));
