@@ -24,11 +24,12 @@ import { fetchGeneGenbank } from "../../services/ensembl.js";
 import { uploadedReferenceGene } from "../../services/referenceGene.js";
 import { runBiomniCoScientist, buildManualBiomniPrompt } from "../../services/biomniAgent.js";
 import { projectDesignReagents } from "../../services/projectReagents.js";
-import { designAndReviewDonors } from "../../services/donorWorkflow.js";
+import { designAndReviewDonors, reviewSelectedDonors } from "../../services/donorWorkflow.js";
 import { DONOR_REVIEW_CONTEXTS } from "./DonorCandidateComparison.jsx";
 import { STRUCTURAL_REVIEW_TYPES } from "../../services/alphaGenomeAlleles.js";
 const SKIP_REVIEW = "__skip-allele-review";
 import { designReviewUpdate } from "../../services/alleleWorkflow.js";
+import { TWO_A_REPORTERS, designAndReviewStructural } from "../../services/structuralAlternatives.js";
 import { DesignResultView } from "./DesignResultView.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
 import {
@@ -235,8 +236,8 @@ export function DesignView({
   const genbankRaw = currentProject.genbankRaw ?? "";
 
   const reviewContext = currentProject.donorReviewContext || "";
-  const simpleDonorReview = editType === "pm" && enzyme === "spcas9";
-  // Knockouts and knock-ins review the edited allele instead of competing donors, but from the same control here.
+  const simpleDonorReview = editType === "pm";
+  // Every edit uses the same entry point, with edit-specific review criteria.
   const structuralReview = STRUCTURAL_REVIEW_TYPES.includes(editType);
   const alleleContext = currentProject.alleleReviewContext || "";
   const alleleSkipped = Boolean(currentProject.alleleReviewSkipped);
@@ -552,7 +553,9 @@ export function DesignView({
       if (structuralReview && alleleContext) {
         reviewController.current = new AbortController();
         try {
-          const reviewed = await designReviewUpdate({ ...currentProject, ...updated }, { ontology: alleleContext },
+          const compareAlternatives = updated.designResult.type === "ko" || TWO_A_REPORTERS.includes(updated.designResult.tag);
+          const review = compareAlternatives ? designAndReviewStructural : designReviewUpdate;
+          const reviewed = await review({ ...currentProject, ...updated }, { ontology: alleleContext, reporter: updated.designResult.tag, terminalRequirement: "unknown" },
             { signal: reviewController.current.signal, onProgress: setDesignProgress });
           updated = { ...updated, ...reviewed, alleleReviewError: null };
         } catch (reviewError) {
@@ -565,7 +568,7 @@ export function DesignView({
       if (simpleDonorReview && reviewContext && !customGuidesOverride?.length) {
         reviewController.current = new AbortController();
         try {
-          const reviewed = await designAndReviewDonors({ ...currentProject, ...updated }, { ontology: reviewContext, protectBoth: coDelivery },
+          const reviewed = await (enzyme === "spcas9" ? designAndReviewDonors : reviewSelectedDonors)({ ...currentProject, ...updated }, { ontology: reviewContext, protectBoth: coDelivery },
             { signal: reviewController.current.signal, onProgress: setDesignProgress });
           updated = { ...updated, ...reviewed, donorWorkflowError: null };
         } catch (reviewError) {
@@ -998,7 +1001,7 @@ export function DesignView({
                 <option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
                 {structuralReview && <option value={SKIP_REVIEW}>Skip review (design only)</option>}
               </select>
-              {structuralReview && <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)" }}>Reviews the edited allele after the design is built. The design itself does not depend on it.</span>}
+              {structuralReview && <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)" }}>Reviews the design in your cells. Knockouts and separate 2A reporters compare eligible alternatives; other knock-ins review the selected allele.</span>}
             </label>}
             <details style={{ marginTop: "1rem" }}><summary>Advanced design settings</summary>
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>

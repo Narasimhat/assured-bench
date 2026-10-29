@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {runDesign} from '../src/engine/design/designEngine.js';
-import {prepareStructuralAlternatives,rankStructuralAlternatives,structuralMetrics,saveStructuralAlternatives,applyStructuralAlternative} from '../src/services/structuralAlternatives.js';
+import {designAndReviewStructural,prepareStructuralAlternatives,rankStructuralAlternatives,structuralMetrics,saveStructuralAlternatives,applyStructuralAlternative} from '../src/services/structuralAlternatives.js';
 const raw=fs.readFileSync(new URL('../public/references/tp53-NG_017013.2.gb',import.meta.url),'utf8');
 const settings={ontology:'EFO:0009747',reporter:'T2A-EGFP',terminalRequirement:'neither'};
 function project(type){const r=runDesign(type,raw,'','T2A-EGFP',400,{expectedGene:'TP53',deliveryMethod:'rnp',maxBlockingChanges:3});assert.ok(!r.err,r.err);return{gene:'TP53',genbankRaw:raw,designResult:r};}
@@ -71,4 +71,17 @@ test('2A reporter schemes describe the encoded ORF without claiming a single mat
   assert.match(buildDesignSchemeSvg(result),/2A skipping expected/);assert.doesNotMatch(buildDesignSchemeSvg(result),/Tagged protein:/);
   assert.match(buildDesignSchemeCaption(result),/not a single mature fusion protein/);
  });
+});
+
+
+test('initial design-page comparison retains reviewed alternatives without inventing a terminal preference',async()=>{
+ const p=project('ct');let calls=0;
+ const fields=await designAndReviewStructural(p,{...settings,terminalRequirement:'unknown'},{fetchFn:async(url,init)=>{
+  calls++;return new Response(JSON.stringify(evidence({batch:JSON.parse(init.body)},calls/100,calls/100,calls/100,calls/100)));
+ }});
+ assert.ok(calls>=2);
+ assert.equal(fields.designResult,undefined);
+ assert.equal(fields.alleleReviewContext,settings.ontology);
+ assert.ok(fields.structuralAlternatives.candidates.filter(c=>c.eligible).every(c=>c.review?.status==='complete'));
+ assert.equal(fields.structuralAlternatives.settings.reporter,p.designResult.tag);
 });

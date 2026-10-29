@@ -23,7 +23,7 @@ export function AlphaGenomeAlleleReview({project,onUpdateProject,workflow=false,
   const controller=useRef(null),current=useRef(null);
   useEffect(()=>{const abort=new AbortController();fetch('/api/alphagenome/status',{signal:abort.signal,credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(setStatus).catch(()=>{if(!abort.signal.aborted)setStatus({available:false})});return()=>abort.abort();},[]);
   useEffect(()=>{
-    let alive=true;controller.current?.abort();setBusy(false);setBatch(null);setReport(null);setError('');current.current=null;
+    let alive=true;controller.current?.abort();setBusy(false);setBatch(null);setReport(null);setError(project.alleleReviewError||'');current.current=null;
     if(ontology)buildCoveredAlleleReviewBatch(project,{ontologyTerm:ontology,donorIndex}).then(value=>{
       if(!alive)return;setBatch(value);current.current=value.requestId;
       if(project.alleleReview?.requestId===value.requestId){try{setReport(validateAlleleReview(project.alleleReview,value))}catch(e){setError(e.message)}}
@@ -38,9 +38,9 @@ export function AlphaGenomeAlleleReview({project,onUpdateProject,workflow=false,
   async function run(){const request=batch;controller.current=new AbortController();setBusy(true);setError('');setProgress('Reviewing the exact edited allele in the selected cells…');try{
     const {report:result}=await reviewEditedAllele(project,{ontologyTerm:ontology,donorIndex,batch:request,signal:controller.current.signal,onProgress:message=>{if(current.current===request.requestId)setProgress(message)}});
     if(current.current!==request.requestId)return;
-    setReport(result);onUpdateProject({alleleReview:result,alleleReviewContext:ontology,alleleReviewSource:alleleReviewSource(project)});
+    setReport(result);onUpdateProject({alleleReview:result,alleleReviewError:null,alleleReviewContext:ontology,alleleReviewSource:alleleReviewSource(project)});
   }catch(e){if(current.current===request.requestId)setError(e.name==='AbortError'?'Stopped waiting. Online jobs continue; run the same review to retrieve the result.':e.message)}finally{if(current.current===request.requestId){setBusy(false);setProgress('')}}}
-  async function importReport(e){const file=e.target.files?.[0];e.target.value='';if(!file||!batch)return;const request=batch;setError('');try{if(file.size>6000000)throw new Error('Review JSON must be smaller than 6 MB.');const result=validateAlleleReview(JSON.parse(await file.text()),request);if(current.current!==request.requestId)return;setReport(result);onUpdateProject({alleleReview:result,alleleReviewContext:ontology,alleleReviewSource:alleleReviewSource(project)});}catch(e){setError(e.message)}}
+  async function importReport(e){const file=e.target.files?.[0];e.target.value='';if(!file||!batch)return;const request=batch;setError('');try{if(file.size>6000000)throw new Error('Review JSON must be smaller than 6 MB.');const result=validateAlleleReview(JSON.parse(await file.text()),request);if(current.current!==request.requestId)return;setReport(result);onUpdateProject({alleleReview:result,alleleReviewError:null,alleleReviewContext:ontology,alleleReviewSource:alleleReviewSource(project)});}catch(e){setError(e.message)}}
   const evidence=report?.structuralEvidence;
   const singleReview=<>
     <div className="candidate-actions"><button type="button" className="btn btn-primary" disabled={designBusy||busy||alternativesBusy||!batch||!status?.available||locked} onClick={run}>{primaryComparison?'Review selected allele only':workflow?(report?'Review designs again':'Design and review'):(report?'Review edited allele again':'Review edited allele')}</button>{busy&&<button type="button" className="btn btn-secondary" onClick={()=>controller.current?.abort()}>Stop waiting</button>}</div>

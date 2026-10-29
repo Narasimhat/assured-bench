@@ -25,7 +25,7 @@ test('every edit type offers the review on the design page and starts on "Choose
   const control = tree => tree.root.findAll(n => n.props?.['aria-label'] === 'Cell type for AlphaGenome review')[0];
   const action = tree => tree.root.findAll(n => n.type === 'button' && /Design and review|Generate design/.test(text(n)))[0];
 
-  for (const editType of ['ko', 'pm', 'ct', 'nt']) {
+  for (const editType of ['ko', 'pm', 'ct', 'nt', 'it']) {
    const tree = await render({ id: `t-${editType}`, gene: 'TP53', genbankRaw: raw, editType, mutation: editType === 'pm' ? 'R175H' : '', options: { enzyme: 'spcas9', deliveryMethod: 'rnp' } });
    const select = control(tree);
    assert.ok(select, `${editType} must offer the review control on the design page`);
@@ -35,6 +35,10 @@ test('every edit type offers the review on the design page and starts on "Choose
    assert.equal(text(action(tree)), 'Design and review', `${editType} must offer design-and-review`);
    assert.equal(action(tree).props.disabled, true, `${editType} must require a deliberate choice`);
   }
+
+  const alternateEnzyme = await render({ id: 'nonsp', gene: 'TP53', genbankRaw: raw, editType: 'pm', mutation: 'R175H', options: { enzyme: 'spcas9ng', deliveryMethod: 'rnp' } });
+  assert.ok(control(alternateEnzyme), 'non-SpCas9 substitutions offer review of existing donors');
+  assert.equal(text(action(alternateEnzyme)), 'Design and review');
 
   // Skipping stays possible for the structural types, but only as an explicit choice.
   const skipped = await render({ id: 'skip', gene: 'TP53', genbankRaw: raw, editType: 'ko', alleleReviewSkipped: true, options: { enzyme: 'spcas9', deliveryMethod: 'rnp' } });

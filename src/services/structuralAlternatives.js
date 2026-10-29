@@ -173,3 +173,13 @@ export function applyStructuralAlternative(project,plan,id) {
  if(result.procurement.status==='ready')result.procurement={...result.procurement,status:'review',warnings:[...result.procurement.warnings,'Genome-wide specificity and experimental validation remain open.']};
  return {structuralAppliedSource:alleleReviewSource({...project,designResult:result}),svgScheme:buildDesignSchemeSvg(result),caption:buildDesignSchemeCaption(result),designResult:result,editType:result.type,tag:result.tag||project.tag,structuralAlternatives:{...saveStructuralAlternatives(plan),appliedId:id},alleleReview:null,alleleReviewSource:null,biomniReport:null,workflowRecommendation:null,status:result.procurement.status};
 }
+
+
+/** Initial design-page review uses the same bounded comparison and decision as the result panel. */
+export async function designAndReviewStructural(project,settings,callbacks={}) {
+ const plan=await prepareStructuralAlternatives(project,settings);
+ await reviewStructuralAlternatives(plan,callbacks);
+ const decision=rankStructuralAlternatives(plan);
+ const fields={structuralAlternatives:saveStructuralAlternatives(plan),alleleReviewContext:settings.ontology};
+ return decision.recommendedId?{...fields,...applyStructuralAlternative(project,plan,decision.recommendedId)}:fields;
+}
