@@ -13,6 +13,9 @@ def digest(data):
 
 
 def validate_batch(batch):
+    if batch.get("candidates") and batch["candidates"][0].get("request", {}).get("schema") == "assured-alphagenome-allele-request/1":
+        import alleles
+        return alleles.validate_batch(batch)
     if batch.get("schema") != "assured-alphagenome-comparison-request/1" or batch.get("requestId") != digest({k: v for k, v in batch.items() if k != "requestId"}):
         raise ValueError("Comparison request identity is invalid.")
     candidates = batch.get("candidates", [])
@@ -91,6 +94,11 @@ def comparison_metrics(rows, annotation, bounds):
 
 
 def run_batch(batch, client, reference_fetcher=review.fetch_reference, on_progress=None):
+    if batch.get("candidates") and batch["candidates"][0].get("request", {}).get("schema") == "assured-alphagenome-allele-request/1":
+        import alleles
+        from local_cache import fetch_context
+        actual_fetcher=fetch_context if reference_fetcher is review.fetch_reference else reference_fetcher
+        return alleles.run_batch(batch, client, reference_fetcher=actual_fetcher, on_progress=on_progress)
     from alphagenome.data import genome
     from alphagenome.models import dna_client
     first, bounds = validate_batch(batch)
@@ -148,7 +156,8 @@ def main():
         raise ValueError("Choose a new output file; earlier evidence is preserved.")
     from alphagenome.models import dna_client
     client = dna_client.create(review.load_api_key(), model_version=dna_client.ModelVersion.ALL_FOLDS, timeout=90)
-    result = run_batch(batch, client)
+    from local_cache import run_cached
+    result = run_cached(batch, client, run_batch)
     data = json.dumps(result, allow_nan=False)
     if args.output:
         args.output.write_text(data + "\n")

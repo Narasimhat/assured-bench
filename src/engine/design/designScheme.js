@@ -565,7 +565,8 @@ function panelCTag(c, ctx, geo, top) {
   let y = top;
   c.text(4, y + 4, "c", { size: 13, weight: "bold" });
   y += 8;
-  rowTitle(c, y + 6, `Tagged protein: ${native} aa native + ${tagAa} aa tag = ${total} aa`);
+  const twoA=parts.some(part=>/^[PT]2A$/.test(part.label));
+  rowTitle(c, y + 6, twoA?`Encoded ORF: ${native+Math.round(result.il/3)-1} aa; 2A skipping expected, separate products require validation`:`Tagged protein: ${native} aa native + ${tagAa} aa tag = ${total} aa`);
   y += 24;
   let x = left;
   const nativeBar = (width, label) => { c.rect(x, y - 8, width, 16, { fill: COLORS.native }); c.text(x + width / 2, y, label, { size: 8, anchor: "middle", fill: "#ffffff" }); x += width; };
@@ -742,7 +743,8 @@ export function buildDesignSchemeCaption(result) {
       const wt = primers.revEnd - primers.fwStart;
       sentences.push(`Screening primers outside both arms amplify ${wt} bp from the wild-type and ${wt + geo.shift} bp from the edited allele.`);
     }
-    sentences.push(`(b) Sequence at the insertion site, with the reading frame, gRNA protospacer (purple), PAM (yellow) and cut site; changed bases are shaded. (c) Layout of the tagged protein (${result.prot} aa native + ${aa} aa tag). Scale bars: [add].`);
+    const twoA=insert.some(label=>/^[PT]2A$/.test(label));
+    sentences.push(`(b) Sequence at the insertion site, with the reading frame, gRNA protospacer (purple), PAM (yellow) and cut site; changed bases are shaded. (c) ${twoA?"Encoded ORF containing 2A; ribosomal skipping is expected to produce separate products and must be validated. This is not a single mature fusion protein.":`Layout of the tagged protein (${result.prot} aa native + ${aa} aa tag).`} Scale bars: [add].`);
   } else if (result.type === "ko") {
     const cuts = guides.map((guide) => guide.cut);
     sentences.push(`Design scheme for knockout of ${gene} in [cell line].`);

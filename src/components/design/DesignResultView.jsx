@@ -9,6 +9,7 @@ import { GuideAlternatives } from "./GuideAlternatives.jsx";
 import { PmCandidatePicker } from "./PmCandidatePicker.jsx";
 import { WorkflowAgent } from "./WorkflowAgent.jsx";
 import { RegulatoryContextPanel } from "./RegulatoryContextPanel.jsx";
+import { AlphaGenomeAlleleReview } from "./AlphaGenomeAlleleReview.jsx";
 import { AlphaGenomeReview } from "./AlphaGenomeReview.jsx";
 import "./designResult.css";
 import { DonorCandidateComparison } from "./DonorCandidateComparison.jsx";
@@ -67,6 +68,7 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
       {[["design", "Selected design"], ["report", "Scientific report"], ...(canCompare ? [["guides", supportsDonorComparison ? "Compare alternatives" : "Alternative guides"]] : []), ["evidence", "Analysis & evidence"]].map(([id, label]) => <button key={id} type="button" aria-current={page === id ? "page" : undefined} onClick={() => openPage(id)}>{label}</button>)}
     </nav>
     {page === "design" && <>
+      {["ko", "ct", "nt", "it"].includes(result.type) && <div className="card"><h3>AlphaGenome functional review</h3><p>Review the exact edited allele for cell-specific expression and splicing effects. Protein loss and experimental performance require validation.</p><button type="button" className="btn btn-secondary" onClick={() => openPage("evidence")}>Review edited allele with AlphaGenome</button></div>}
       {supportsDonorComparison && <DonorCandidateComparison project={project} onUpdateProject={onUpdateProject} busy={busy} />}
       <DesignResult currentProject={project} designResult={result} takeHome={takeHome} reagents={reagents} onProceedToOrder={onProceedToOrder} onEditDesign={onEditSettings} onDownloadReport={() => openPage("report")} onDownloadOffTarget={exportOffTargets} />
       {exportError && <p role="alert">{exportError}</p>}
@@ -82,7 +84,7 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
       {result.koPicker?.rows?.length > 0 && <KoGuidePicker result={result} genbankRaw={project.genbankRaw} geneSymbol={result.gene || project.gene} busy={busy} onUsePair={onUsePair} onUseRecommended={onUseRecommended} />}
       {result.guideAlternatives?.candidates?.length > 0 && <GuideAlternatives result={result} onSelectAlternative={onSelectAlternative} />}
     </section>}
-    {page === "evidence" && <section aria-label="Analysis and evidence"><div className="card"><h2>Analysis & evidence</h2><p className="muted">Inspect the analysis record, source evidence and optional reviews. The scientific report brings the recorded findings together.</p><button className="btn btn-secondary" onClick={() => openPage("report")}><FileText size={16} />Open scientific report</button></div><RegulatoryContextPanel project={project} onUpdateProject={onUpdateProject} /><WorkflowAgent project={project} onUpdateProject={onUpdateProject} />{["pm", "genomic-snv"].includes(result.type) && <AlphaGenomeReview key={project.id} project={project} onReviewDesigns={supportsDonorComparison ? () => openPage("design") : undefined} />}</section>}
+    {page === "evidence" && <section aria-label="Analysis and evidence"><div className="card"><h2>Analysis & evidence</h2><p className="muted">Inspect the analysis record, source evidence and optional reviews. The scientific report brings the recorded findings together.</p><button className="btn btn-secondary" onClick={() => openPage("report")}><FileText size={16} />Open scientific report</button></div>{["ko", "ct", "nt", "it"].includes(result.type) && <AlphaGenomeAlleleReview key={project.id} project={project} onUpdateProject={onUpdateProject} />}<RegulatoryContextPanel project={project} onUpdateProject={onUpdateProject} /><WorkflowAgent project={project} onUpdateProject={onUpdateProject} />{["pm", "genomic-snv"].includes(result.type) && <AlphaGenomeReview key={project.id} project={project} onReviewDesigns={supportsDonorComparison ? () => openPage("design") : undefined} />}</section>}
     {page !== "design" && <button className="btn btn-secondary return-to-design" onClick={() => openPage("design")}><ArrowLeft size={16} />Return to selected design</button>}
   </div>;
 }

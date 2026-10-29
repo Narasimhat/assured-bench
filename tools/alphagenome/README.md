@@ -1,6 +1,7 @@
-# Local AlphaGenome donor review
+# Local AlphaGenome substitution review
 
-This optional first integration reviews **human GRCh38 substitution donors**.
+This adapter reviews **human GRCh38 substitution donors**. Defined deletion and
+integrated cassette reviews use the separate allele path documented below.
 It compares reference → intended edit, reference → full donor allele, and
 intended edit → full donor allele. All blocking changes in one selected donor
 are evaluated jointly. Donor alternatives are separate requests.
@@ -27,8 +28,8 @@ an immutable model-weights checksum here.
 
 ## 2. Export from Bench
 
-Generate a point-mutation or genomic SNP design. Open **AlphaGenome · optional
-donor functional review** below Workflow Agent. Choose one donor, enter the
+Generate a point-mutation or genomic SNP design. Open **Analysis & evidence →
+AlphaGenome regulatory review → Advanced · local export and import**. Choose one donor, enter the
 chromosome, **lowest chromosome-plus coordinate of the complete uploaded
 reference**, and orientation. For a minus-strand uploaded record, use −1; the
 exporter reverses coordinates and complements alleles. No assembly or orientation
@@ -381,3 +382,107 @@ limit. This deployment uses Vercel's larger-function runtime with
 unmodified SDK. The runtime must be available for the target Vercel account.
 The access code generated for the owner is stored only in the ignored local file
 `local-reviews/online-review-access-code.local`, never in the frontend bundle.
+
+## Defined knockout and integrated knock-in reviews
+
+Selected design now offers **Knockout functional review** for a two-cut deletion,
+and **Knock-in regulatory review** for N-terminal, C-terminal and internal tag /
+reporter insertions. Choose a supported cell context and **Review edited allele**.
+The online reviewer uses the same private access-code session and durable queue;
+the local app uses the configured Python environment. Predictions do not change
+existing guide ranking, procurement or experimental QC gates.
+
+Requests use `assured-alphagenome-allele-request/1` inside the existing comparison
+envelope. This path is separate from substitution-donor candidate ranking. It
+constructs the exact reference-forward allele from native cut / QC donor geometry:
+only the inserted cassette replaces the intended reference span; homology arms
+are not inserted twice. Arm blockers are applied jointly and compared against the
+intended insertion. A mapped human GRCh38 reference and exon annotation are
+required. Supported contexts are 16,384 and 131,072 bp; each deleted / inserted
+span is limited to one quarter of the window (32,768 bp in the larger context).
+Larger edits are rejected explicitly, not silently truncated.
+
+Reference and alternate inputs have the same supported model length. Deletions
+retrieve additional downstream GRCh38 sequence; insertions crop the far-right
+flank. Predictions are aligned back onto matching retained bases. Deleted bases
+are excluded from expression and splicing deltas so their absence cannot be
+misread as predicted RNA suppression. Coverage checks include retained alternate
+coordinates. A coding-frame conclusion requires deletion confined to annotated
+CDS; intron-spanning deletions do not receive an inferred frameshift claim.
+
+Outputs remain separate: signed RNA changes on retained target exons, splice
+site / usage changes on retained target gene body, structural CDS removal,
+additional blocker effects, descriptive cassette signals, and neighbouring-gene
+body RNA proxies from Ensembl gene annotations within the context. RNA and usage
+metadata must match the selected ontology. Splice-site tracks can be tissue-
+agnostic. A neighbouring-gene lookup failure is reported as unavailable and never
+converted to zero effect. Junction counts, isoform reconstruction, alternative
+promoters, translation, NMD and protein disappearance are not established by
+this path. No universal lower/higher-is-better score or success probability is
+assigned.
+
+The review and its limitations are saved with the experiment and included in the
+publication report only while the saved allele inputs and cell context match.
+Changed designs require a fresh review. Save the experiment explicitly.
+
+For a local terminal run, export under **Advanced · local export and import**:
+
+```bash
+.venv-alphagenome/bin/python tools/alphagenome/compare.py \
+  local-reviews/assured-edited-allele-request.json \
+  --output local-reviews/assured-edited-allele-review.json
+```
+
+This command retrieves GRCh38 reference and neighbouring-gene annotations from
+Ensembl and sends the reference / intended / final sequences to Google
+AlphaGenome. The API key remains local (or server-side for hosted runs). Existing
+output files are preserved. Importing checks allele, cell-context and request
+identities; it does not cryptographically authenticate an external model report.
+
+## Comparing alternative structural designs
+
+**Analysis & evidence → Compare knockout alternatives / Compare separate 2A
+reporter designs** constructs a bounded native candidate set (up to six).
+Knockouts retain the selected pair and explore the top native guide candidates;
+only robust native transcript-disruption assessments and predicted frameshift
+pairs are eligible for a preference. Lindel is loaded from the bundled native
+weights when supported; missing outcome probabilities remain missing.
+
+For separate reporters through 2A, both N-terminal (reporter–2A–host) and
+C-terminal (host–2A–reporter) baseline designs are retained before exploring
+additional guides with regenerated donors. The same reporter and 2A peptide
+are used at both ends. Native cassette/frame validation and strong protection
+against every selected guide are required. Known terminal requirements exclude
+incompatible arrangements. Unknown requirements prevent an overall N/C winner;
+they do not suppress the regulatory comparison.
+
+Every candidate is predicted in the same genomic window and cell context. The
+union of deleted/replaced spans and the common cropped tail are excluded from
+retained-base comparisons, preventing differences in measured bases or input
+centering from being interpreted as superior designs. Full target transcript
+coverage is required. Comparisons use a Pareto frontier, not a weighted mix of
+assay units: knockout axes include remaining target RNA, local neighbouring RNA
+proxies and native LoF evidence when available across all candidates; 2A axes
+include host RNA disturbance, splice usage/site disturbance and local neighbour
+RNA proxies. Splice disruption alone never proves a successful knockout.
+Incomplete eligible reviews prevent a complete recommendation. Partial
+neighbouring-gene measurements remain explicitly local proxies, not whole-gene
+or genome-wide clearance.
+
+Completed candidate reviews can be resumed without redoing successful work.
+Saved comparisons retain native recipes and evidence instead of duplicating
+full candidate genomes. Restoring regenerates each recipe and checks its exact
+request/window identity. Applying an alternative is explicit, updates the native
+reagents, scheme and report, and retains validation gates. The publication
+report records the candidate comparison and applied design; changed inputs
+invalidate its use. An individual allele review remains separate from the
+common-window alternative comparison.
+
+A 2A peptide causes ribosomal skipping, not guaranteed proteolytic cleavage.
+The upstream protein retains most of the peptide; the downstream product begins
+at the 2A-derived proline. In these native N-terminal reporter presets, the host's
+start codon is replaced. AlphaGenome does not predict skipping efficiency,
+protein localization or domain compatibility. See the [primary 2A mechanism
+study](https://pmc.ncbi.nlm.nih.gov/articles/PMC2447138/) and [AlphaGenome's model
+limitations](https://www.alphagenomedocs.com/faqs.html), including reduced
+reliability for large synthetic sequence changes.

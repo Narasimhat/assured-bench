@@ -71,9 +71,10 @@ export function validateEnvelope(batch) {
   if(requestId!==hash(canonical(payload)))throw new Error('Request identity mismatch');
   if(!Array.isArray(batch.candidates)||batch.candidates.length<1||batch.candidates.length>12||new Set(batch.candidates.map(c=>c.id)).size!==batch.candidates.length)throw new Error('Choose 1–12 unique donors');
   for(const c of batch.candidates) {
+    if(c.request?.schema==='assured-alphagenome-allele-request/1' && (batch.candidates.length!==1 || c.id!=='edited-allele'))throw new Error('Review one defined allele at a time');
     if(typeof c.id!=='string'||c.id.length>80)throw new Error('Invalid donor identity');
     const {requestId,...r}=c.request||{};
-    if(requestId!==hash(canonical(r)) || r.schema!=='assured-alphagenome-request/1' || r.assembly!=='GRCh38' || ![16384,131072].includes(r.sequenceLength) || !/^[ACGTN]{1,1000000}$/.test(r.reference?.sequence||''))throw new Error('Invalid donor request');
+    if(requestId!==hash(canonical(r)) || !['assured-alphagenome-request/1','assured-alphagenome-allele-request/1'].includes(r.schema) || r.assembly!=='GRCh38' || ![16384,131072].includes(r.sequenceLength) || !/^[ACGTN]{1,1000000}$/.test(r.reference?.sequence||''))throw new Error('Invalid donor request');
   }
 }
 export async function readPrivate(path) {
