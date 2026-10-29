@@ -9,14 +9,27 @@ const DB_VERSION = 1;
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
-      resolve(null); // Fallback to localStorage
-      return;
-    }
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => resolve(null);
-    request.onsuccess = () => resolve(request.result);
+    let indexedDB;
+    try { indexedDB = window.indexedDB; } catch { resolve(null); return; }
+    if (!indexedDB) { resolve(null); return; }
+    let request;
+    try { request = indexedDB.open(DB_NAME, DB_VERSION); } catch { resolve(null); return; }
+    let settled = false;
+    request.onerror = () => { if (!settled) { settled = true; resolve(null); } };
+    request.onblocked = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Saved experiments are open in another tab. Close other Assured tabs and try again."));
+    };
+    request.onsuccess = () => {
+      const db = request.result;
+      if (settled) { db.close(); return; }
+      settled = true;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     request.onupgradeneeded = (e) => {
+      if (settled) { request.transaction?.abort(); return; }
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
@@ -25,86 +38,103 @@ function openDB() {
   });
 }
 
-export async function saveProject(project) {
-  const item = {
-    ...project,
-    updatedAt: new Date().toISOString()
-  };
+// A request succeeding does not mean its transaction committed. Only report
+// success on completion, and release the connection on every failure path.
+function transact(db, mode, operation, failureMessage) {
+  return new Promise((resolve, reject) => {
+    let tx, result, finished = false;
+    const finish = error => {
+      if (finished) return;
+      finished = true;
+      db.close();
+      if (error) reject(new Error(`${failureMessage} ${error.message || ""}`.trim(), { cause: error }));
+      else resolve(result);
+    };
+    try {
+      tx = db.transaction(STORE_NAME, mode);
+      tx.oncomplete = () => finish();
+      tx.onerror = tx.onabort = () => finish(tx.error || new Error("Transaction interrupted."));
+      operation(tx.objectStore(STORE_NAME), value => { result = value; });
+    } catch (error) {
+      try { tx?.abort(); } catch { /* The transaction may already be inactive. */ }
+      finish(error);
+    }
+  });
+}
 
+function writeProjectsLocal(items) {
+  try { localStorage.setItem("assured_projects", JSON.stringify(items)); }
+  catch (cause) {
+    throw new Error("Could not save browser storage. Export your experiment to keep a copy, then check available storage and browser permissions.", { cause });
+  }
+}
+
+export async function saveProject(project) {
+  if (!project || typeof project.id !== "string" || !project.id.trim()) {
+    throw new Error("An experiment must have a valid ID before saving.");
+  }
+  const item = { ...project, updatedAt: new Date().toISOString() };
   const db = await openDB();
   if (db) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(item);
-      tx.oncomplete = () => resolve(item);
-      tx.onerror = () => reject(tx.error);
-    });
-  } else {
-    // LocalStorage fallback
-    const all = listProjectsLocal();
-    const idx = all.findIndex(p => p.id === item.id);
-    if (idx >= 0) all[idx] = item;
-    else all.unshift(item);
-    localStorage.setItem("assured_projects", JSON.stringify(all));
-    return item;
+    return transact(db, "readwrite", (store, setResult) => {
+      store.put(item);
+      setResult(item);
+    }, "Saving was interrupted. Export your experiment and try again.");
   }
+  const all = listProjectsLocal();
+  const idx = all.findIndex(p => p.id === item.id);
+  if (idx >= 0) all[idx] = item;
+  else all.unshift(item);
+  writeProjectsLocal(all);
+  return item;
 }
 
 export async function getProject(id) {
   const db = await openDB();
   if (db) {
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const req = tx.objectStore(STORE_NAME).get(id);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
-    });
-  } else {
-    const all = listProjectsLocal();
-    return all.find(p => p.id === id) || null;
+    return transact(db, "readonly", (store, setResult) => {
+      const req = store.get(id);
+      req.onsuccess = () => setResult(req.result || null);
+    }, "Could not read the saved experiment. Try reopening Projects.");
   }
+  return listProjectsLocal().find(p => p.id === id) || null;
 }
 
 export async function listProjects() {
   const db = await openDB();
   if (db) {
-    return new Promise((resolve) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const req = tx.objectStore(STORE_NAME).getAll();
-      req.onsuccess = () => {
-        const sorted = (req.result || []).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        resolve(sorted);
-      };
-      req.onerror = () => resolve([]);
-    });
-  } else {
-    return listProjectsLocal();
+    const items = await transact(db, "readonly", (store, setResult) => {
+      const req = store.getAll();
+      req.onsuccess = () => setResult(req.result || []);
+    }, "Could not read saved experiments. Try reopening Projects.");
+    return items.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   }
+  return listProjectsLocal();
 }
 
 export async function deleteProject(id) {
   const db = await openDB();
   if (db) {
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).delete(id);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(tx.error);
-    });
-  } else {
-    let all = listProjectsLocal().filter(p => p.id !== id);
-    localStorage.setItem("assured_projects", JSON.stringify(all));
-    return true;
+    return transact(db, "readwrite", (store, setResult) => {
+      store.delete(id);
+      setResult(true);
+    }, "Deleting was interrupted. Try again.");
   }
+  writeProjectsLocal(listProjectsLocal().filter(p => p.id !== id));
+  return true;
 }
 
 function listProjectsLocal() {
-  try {
-    const raw = localStorage.getItem("assured_projects");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
+  let raw;
+  try { raw = localStorage.getItem("assured_projects"); }
+  catch { throw new Error("Browser storage is unavailable. Export your experiment to keep a copy."); }
+  if (raw === null) return [];
+  let items;
+  try { items = JSON.parse(raw); } catch { /* Report corruption without overwriting the stored data. */ }
+  if (!Array.isArray(items) || items.some(p => !p || typeof p !== "object" || Array.isArray(p) || typeof p.id !== "string" || !p.id)) {
+    throw new Error("Saved experiment data could not be read. Existing data has been preserved; export your current experiment before recovery.");
   }
+  return items;
 }
 
 /**
