@@ -57,7 +57,9 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
   const scheme = useMemo(() => buildDesignSchemeSvg(result, { responsive: true }), [result]);
   const supportsDonorComparison = (result.type === "pm" && (!project.options?.enzyme || project.options.enzyme === "spcas9")) || (result.type === "genomic-snv" && (!result.enzyme || result.enzyme.id === "spcas9"));
   const hasPmCandidates = result.type === "pm" && supportsDonorComparison && Boolean(result.an && result.wA && result.mA && project.genbankRaw);
-  const canCompare = supportsDonorComparison || result.type === "ko" || Boolean(result.guideAlternatives?.candidates?.length);
+  const substitution = ["pm", "genomic-snv"].includes(result.type);
+  const structural = ["ko", "ct", "nt", "it"].includes(result.type);
+  const canCompare = substitution || structural || Boolean(result.guideAlternatives?.candidates?.length);
   const openPage = next => { setPage(next); setExportError(""); };
   const exportOffTargets = () => {
     const exported = downloadCasOffinderInput(project, result);
@@ -65,29 +67,26 @@ export function DesignResultView({ project, reagents, busy, onProceedToOrder, on
   };
   return <div className="design-product">
     <nav className="design-result-nav" aria-label="Design results">
-      {[["design", "Selected design"], ["report", "Scientific report"], ...(canCompare ? [["guides", supportsDonorComparison ? "Compare alternatives" : "Alternative guides"]] : []), ["evidence", "Analysis & evidence"]].map(([id, label]) => <button key={id} type="button" aria-current={page === id ? "page" : undefined} onClick={() => openPage(id)}>{label}</button>)}
+      {[["design", "Selected design"], ["report", "Scientific report"], ...(canCompare ? [["guides", "Compare alternatives"]] : []), ["evidence", "Analysis & evidence"]].map(([id, label]) => <button key={id} type="button" aria-current={page === id ? "page" : undefined} onClick={() => openPage(id)}>{label}</button>)}
     </nav>
+    <div hidden={page !== "design" && page !== "guides"} aria-label="Design and review workflow">
+      {substitution && <DonorCandidateComparison key={project.id} project={project} onUpdateProject={onUpdateProject} busy={busy} expanded={page === "guides"} selectedOnly={!supportsDonorComparison} />}
+      {structural && <AlphaGenomeAlleleReview key={project.id} project={project} onUpdateProject={onUpdateProject} workflow busy={busy} expanded={page === "guides"} />}
+    </div>
     {page === "design" && <>
-      {["ko", "ct", "nt", "it"].includes(result.type) && <div className="card"><h3>AlphaGenome functional review</h3>
-        {project.alleleReview ? <p><strong>{project.alleleReview.conclusion}.</strong> {project.alleleReview.annotationFullyCovered ? "The annotated transcript fits the prediction window." : "Transcript coverage is incomplete, so no complete functional conclusion is available."} Protein loss and experimental performance require validation.</p>
-          : <p>{project.alleleReviewError ? `The allele review did not complete (${project.alleleReviewError}). The selected design is unchanged.` : "Review the exact edited allele for cell-specific expression and splicing effects. Protein loss and experimental performance require validation."}</p>}
-        <button type="button" className="btn btn-secondary" onClick={() => openPage("evidence")}>{project.alleleReview ? "Open edited allele review" : "Review edited allele with AlphaGenome"}</button></div>}
-      {supportsDonorComparison && <DonorCandidateComparison project={project} onUpdateProject={onUpdateProject} busy={busy} />}
       <DesignResult currentProject={project} designResult={result} takeHome={takeHome} reagents={reagents} onProceedToOrder={onProceedToOrder} onEditDesign={onEditSettings} onDownloadReport={() => openPage("report")} onDownloadOffTarget={exportOffTargets} />
       {exportError && <p role="alert">{exportError}</p>}
 
       {scheme && <figure className="card product-scheme"><div dangerouslySetInnerHTML={{ __html: scheme }} /><figcaption>Selected edit and screening scheme. Computational design; experimental validation is pending.</figcaption></figure>}
     </>}
     {page === "report" && <ScientificReport project={project} result={result} />}
-    {page === "guides" && supportsDonorComparison && <><DonorCandidateComparison project={project} onUpdateProject={onUpdateProject} busy={busy} expanded />
-      {hasPmCandidates && <details className="card"><summary>Additional comparison methods: local helper and null comparison</summary><PmCandidatePicker project={project} result={result} busy={busy} onUseCandidate={onUseCandidate} /></details>}
-    </>}
-    {page === "guides" && !supportsDonorComparison && <section className="card" aria-label="Alternative guides"><h2>Compare alternative guides</h2><p className="muted">Review alternatives before replacing the selected design. Applying a pair runs the analysis again.</p>
+    {page === "guides" && hasPmCandidates && <details className="card"><summary>Additional comparison methods: local helper and null comparison</summary><PmCandidatePicker project={project} result={result} busy={busy} onUseCandidate={onUseCandidate} /></details>}
+    {page === "guides" && !substitution && <details className="card"><summary>Manual guide alternatives</summary><section aria-label="Alternative guides"><h2>Compare alternative guides</h2><p className="muted">Review alternatives before replacing the selected design. Applying a pair runs the analysis again.</p>
       {result.type === "ko" && !result.koPicker?.rows?.length && <p>Guide list not available for this design. {result.koPickerError ? `It could not be built (${result.koPickerError}).` : "Edit the design and click Generate design to list and choose guides."}</p>}
       {result.koPicker?.rows?.length > 0 && <KoGuidePicker result={result} genbankRaw={project.genbankRaw} geneSymbol={result.gene || project.gene} busy={busy} onUsePair={onUsePair} onUseRecommended={onUseRecommended} />}
       {result.guideAlternatives?.candidates?.length > 0 && <GuideAlternatives result={result} onSelectAlternative={onSelectAlternative} />}
-    </section>}
-    {page === "evidence" && <section aria-label="Analysis and evidence"><div className="card"><h2>Analysis & evidence</h2><p className="muted">Inspect the analysis record, source evidence and optional reviews. The scientific report brings the recorded findings together.</p><button className="btn btn-secondary" onClick={() => openPage("report")}><FileText size={16} />Open scientific report</button></div>{["ko", "ct", "nt", "it"].includes(result.type) && <AlphaGenomeAlleleReview key={project.id} project={project} onUpdateProject={onUpdateProject} />}<RegulatoryContextPanel project={project} onUpdateProject={onUpdateProject} /><WorkflowAgent project={project} onUpdateProject={onUpdateProject} />{["pm", "genomic-snv"].includes(result.type) && <AlphaGenomeReview key={project.id} project={project} onReviewDesigns={supportsDonorComparison ? () => openPage("design") : undefined} />}</section>}
+    </section></details>}
+    {page === "evidence" && <section aria-label="Analysis and evidence"><div className="card"><h2>Analysis &amp; evidence</h2><p className="muted">Review runs from the selected-design page. Inspect supporting sources and study settings here.</p><button className="btn btn-primary" onClick={() => openPage("design")}>Open design and review</button><button className="btn btn-secondary" onClick={() => openPage("report")}><FileText size={16} />Open scientific report</button></div><RegulatoryContextPanel project={project} onUpdateProject={onUpdateProject} /><WorkflowAgent project={project} onUpdateProject={onUpdateProject} />{substitution && <details className="card"><summary>Advanced · individual SNP export and import</summary><AlphaGenomeReview key={project.id} project={project} onReviewDesigns={() => openPage("design")} /></details>}</section>}
     {page !== "design" && <button className="btn btn-secondary return-to-design" onClick={() => openPage("design")}><ArrowLeft size={16} />Return to selected design</button>}
   </div>;
 }

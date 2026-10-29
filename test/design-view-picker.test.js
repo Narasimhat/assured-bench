@@ -30,16 +30,16 @@ test("result mode shows the selected design and reagents, with report and altern
   assert.match(html, /id="bench-take-home"/);
   assert.match(html, /Selected reagents/);
   assert.match(html, /Open scientific report/);
-  assert.match(html, /Alternative guides/);
+  assert.match(html, /Compare alternatives/);
   assert.match(html, /Analysis &amp; evidence/);
-  assert.doesNotMatch(html, /<details|<iframe|1\. Design your edit|aria-label="Enzyme"/);
+  assert.doesNotMatch(html, /<iframe|1\. Design your edit|aria-label="Enzyme"/);
   assert.match(html, /Edit design/);
   assert.equal((html.match(/Review &amp; export order/g) || []).length, 1, "one primary continuation action");
 });
 
 test("saved knockout designs without a guide list still expose the alternative-guide view", async () => {
   const html = await render(result => ({ ...result, koPicker: null }));
-  assert.match(html, /Alternative guides/);
+  assert.match(html, /Compare alternatives/);
   assert.match(html, /Selected reagents/);
 });
 

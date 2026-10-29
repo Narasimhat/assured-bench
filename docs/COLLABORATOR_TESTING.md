@@ -23,14 +23,23 @@ sequences without your institution's approval for the relevant services.
 6. Rename this test experiment, **Save**, reopen it from **Projects**, and verify
    the selected design and evidence survived. Export a portable `.assured` backup;
    browser saves are specific to this device/browser and are not cloud backups.
-7. Repeat with **TP53 Dual-Guide KO**. In **Analysis & evidence**, review a defined
-   deletion or compare eligible knockout alternatives. Lower remaining target RNA
-   supports disruption; it does not prove protein disappearance.
-8. Repeat with **TP53 C-term FLAG**, then the separate **2A reporter** comparison.
-   N/C comparisons need the same reporter, cell context and intended purpose.
-   Supply known terminal requirements. Unknown requirements can legitimately yield
-   trade-offs rather than a preferred terminus. Large synthetic edits are less established.
-9. For trace QC, upload an approved parental control and edited trace set with the
+7. Repeat with **TP53 Dual-Guide KO**. On **Selected design**, choose the cell type
+   and use the same **Design and review** action to compare eligible knockout pairs.
+   A uniquely supported recommendation is applied; trade-offs retain your selection.
+   Lower remaining target RNA supports disruption; it does not prove protein disappearance.
+8. Repeat with a terminal **2A reporter**. The same action compares N/C arrangements
+   and guide alternatives using your selected reporter and cell context. Supply known
+   terminal requirements under the folded settings. Unknown requirements can yield
+   trade-offs rather than a preferred terminus. **Compare alternatives** shows the evidence
+   and manual selection. Large synthetic edits are less established.
+9. For **FLAG**, other terminal fusions, and internal knock-ins, the same front-page
+   action reviews the selected integrated allele. These do not automatically search
+   alternative cassettes. A separate 2A purpose can be explored explicitly under Advanced.
+   Substitutions using enzymes without an automatic candidate search review the existing
+   guide–donor pairs while preserving their sequences and enzyme.
+10. Switch to **Scientific report** or **Analysis & evidence** during a review; waiting
+   must continue. Return to **Selected design** to inspect progress and results.
+11. For trace QC, upload an approved parental control and edited trace set with the
    matching design. Imported laboratory cohorts are intentionally absent from the
    hosted build. Trace analysis runs locally; manually sending an ICE package is a
    separate disclosure to that external service.

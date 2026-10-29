@@ -105,3 +105,21 @@ export async function designAndReviewDonors(project,settings,callbacks={}) {
   }
   return selectTwoReviewedDesigns(project,panel,ids,settings,callbacks);
 }
+
+
+/** Review existing matched donors for enzymes without an automatic alternative search.
+ * Preserve their exact guide, donor, enzyme and blockers; never substitute SpCas9.
+ */
+export async function reviewSelectedDonors(project,settings,callbacks={}) {
+  const base=project.designResult;
+  if(!["pm","genomic-snv"].includes(base?.type)||!base.os?.length)throw new Error("Generate matched substitution donors before review.");
+  if(!settings.ontology)throw new Error("Choose the cell type for AlphaGenome review.");
+  const sourceId=await donorSourceId(project);
+  const candidates=base.os.map((donor,i)=>{
+    const result=(base.type==="genomic-snv"?assembleGenomicPairs:assemblePointMutationPairs)([{result:base,donorIndex:i}]);
+    const protection=result.os[0].guideProtection?.[0]?.tier||"unknown";
+    return {id:`selected-${i+1}`,baseline:true,result,eligible:!result.procurement.blockers.length&&protection==="strong",protection,blockers:result.ss?.length||0,reasons:[...result.procurement.blockers,...result.procurement.warnings]};
+  });
+  const panel=await reviewCandidatePanel(project,{schema:"assured-donor-candidates/1",sourceId,candidates,selectedOnly:true},settings,callbacks);
+  return {donorCandidatePanel:panel,donorReviewContext:settings.ontology};
+}

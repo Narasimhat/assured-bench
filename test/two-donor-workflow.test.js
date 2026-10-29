@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import {runDesign,assemblePointMutationPairs} from '../src/engine/design/designEngine.js';
 import {buildQcDesignSpec} from '../src/engine/design/qcExport.js';
 import {generateDonorCandidates,donorSourceId} from '../src/services/donorCandidates.js';
-import {suggestTwoDonorCandidates,buildTwoPairResult,selectTwoReviewedDesigns,designAndReviewDonors} from '../src/services/donorWorkflow.js';
+import {suggestTwoDonorCandidates,buildTwoPairResult,selectTwoReviewedDesigns,designAndReviewDonors,reviewSelectedDonors} from '../src/services/donorWorkflow.js';
 import {generateReportHtml} from '../src/services/designExport.js';
 const raw=fs.readFileSync(new URL('../public/references/apoe-ensg00000130203.gb',import.meta.url),'utf8').replace('FEATURES','COMMENT     Location: chromosome:GRCh38:19:44905754:44909393:1\nFEATURES');
 const project={gene:'APOE',mutation:'R176C',genbankRaw:raw,options:{enzyme:'spcas9',deliveryMethod:'rnp'},designResult:runDesign('pm',raw,'R176C','','',{enzyme:'spcas9'})};
@@ -63,4 +63,21 @@ test('automatic two-guide selection prefers separated cuts before near-coinciden
  const candidates=[100,101,113].map((cut,i)=>({id:`candidate-${i}`,eligible:true,blockers:0,result:{gs:[{sp:`guide-${i}`,cut,d:cut-100}]}}));
  const p={candidates},r={candidates:candidates.map((c,i)=>({id:c.id,status:'complete',metrics:{exonicRnaRelativeDelta:.01*(i+1),annotatedUsageMaxDelta:.01,spliceSiteMaxDelta:.01}}))};
  assert.deepEqual(suggestTwoDonorCandidates(p,r),['candidate-0','candidate-2']);
+});
+
+
+test('selected-donor review preserves a non-SpCas9 enzyme and the original donor alleles without auto-selection',async()=>{
+ const options={enzyme:'spcas9ng',deliveryMethod:'rnp',maxBlockingChanges:3,ensureGuidePair:true,allowNonCodingBlockers:true};
+ const result=runDesign('pm',raw,'R176C','',400,options);assert.ok(!result.err,result.err);
+ const current={...project,options,designResult:result};
+ const original=result.os.map(d=>d.od);const guides=result.gs.map(g=>g.sp);
+ let submitted;
+ const fields=await reviewSelectedDonors(current,{ontology:'EFO:0009747'},{fetchFn:async(...args)=>{submitted=JSON.parse(args[1].body);return mockFetch(...args)}});
+ assert.equal(fields.designResult,undefined,'review must not replace the enzyme or design');
+ assert.equal(fields.donorCandidatePanel.selectedOnly,true);
+ assert.equal(submitted.candidates.length,original.length);
+ assert.deepEqual(fields.donorCandidatePanel.candidates.map(c=>c.result.os[0].od),original);
+ assert.deepEqual(fields.donorCandidatePanel.candidates.map(c=>c.result.gs[0].sp),guides);
+ assert.ok(fields.donorCandidatePanel.candidates.every(c=>c.result.enzyme.id==='spcas9ng'));
+ assert.equal(fields.donorCandidatePanel.review.candidates.every(c=>c.status==='complete'),true);
 });
