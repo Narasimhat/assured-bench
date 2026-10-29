@@ -236,7 +236,8 @@ export function DesignView({
   const genbankRaw = currentProject.genbankRaw ?? "";
 
   const reviewContext = currentProject.donorReviewContext || "";
-  const simpleDonorReview = editType === "pm";
+  // Genomic SNPs are substitutions too, so they review competing donor candidates exactly like point mutations.
+  const simpleDonorReview = editType === "pm" || editType === "genomic-snv";
   // Every edit uses the same entry point, with edit-specific review criteria.
   const structuralReview = STRUCTURAL_REVIEW_TYPES.includes(editType);
   const alleleContext = currentProject.alleleReviewContext || "";
@@ -401,21 +402,47 @@ export function DesignView({
   };
 
   // Convert GenomicSnpTool result into a unified Bench designResult so Order, QC, GelSimulator, and Report work seamlessly
-  const handleGenomicSnpGenerated = (snpDesign) => {
+  const handleGenomicSnpGenerated = async (snpDesign, { fresh = false, request = null } = {}) => {
     if (!snpDesign || snpDesign.err) return;
     const { workflowRecommendation: ignored, ...manualDesign } = snpDesign;
     const normalizedResult = normalizeGenomicDesign(manualDesign);
     const svgScheme = buildDesignSchemeSvg(normalizedResult);
     const caption = buildDesignSchemeCaption(normalizedResult);
-    onUpdateProject({
+    let updated = {
       gene: normalizedResult.gene,
       editType: "genomic-snv",
       mutation: `chr${snpDesign.input.chromosome}:${snpDesign.input.position} ${snpDesign.input.ref}>${snpDesign.input.alt}`,
       designResult: normalizedResult,
       svgScheme,
       caption,
-      status: normalizedResult.procurement.status
-    });
+      status: normalizedResult.procurement.status,
+      // The tool reports the request alongside the design, because the saved project copy may not have been applied yet.
+      ...(request ? { genomicDesignInput: request } : {})
+    };
+
+    // Only a newly calculated design is reviewed; re-applying a saved one must not spend another review.
+    if (fresh && reviewContext) {
+      const snpEnzyme = snpDesign.enzyme?.id || snpDesign.input.enzyme || "spcas9";
+      setIsDesigning(true);
+      reviewController.current = new AbortController();
+      try {
+        const reviewed = await (snpEnzyme === "spcas9" ? designAndReviewDonors : reviewSelectedDonors)(
+          { ...currentProject, ...updated },
+          { ontology: reviewContext, protectBoth: Boolean(snpDesign.input.addBlocking && snpDesign.input.coDelivery) },
+          { signal: reviewController.current.signal, onProgress: setDesignProgress });
+        updated = { ...updated, ...reviewed, donorWorkflowError: null };
+      } catch (reviewError) {
+        if (reviewError.name === "AbortError") return;
+        // The design stands on its own; the comparison panel reports why the review could not run.
+        updated.donorWorkflowError = reviewError.message;
+        updated.donorReviewContext = reviewContext;
+      } finally {
+        setIsDesigning(false);
+        setDesignProgress("");
+      }
+    }
+
+    onUpdateProject(updated);
     setEditingDesign(false);
   };
 
@@ -611,6 +638,16 @@ export function DesignView({
     : null;
   const constructPayloads = constructSelection?.group?.payloads || [];
 
+  // One control for every edit type, rendered next to whichever primary action that edit type uses.
+  const reviewControl = offersReview && <label style={{ display: "block", marginTop: "1rem" }}>Cell type for AlphaGenome review
+    <select aria-label="Cell type for AlphaGenome review" value={simpleDonorReview ? reviewContext : alleleSkipped ? SKIP_REVIEW : alleleContext} disabled={isDesigning}
+      onChange={e => onUpdateProject(simpleDonorReview ? { donorReviewContext: e.target.value } : { alleleReviewContext: e.target.value === SKIP_REVIEW ? "" : e.target.value, alleleReviewSkipped: e.target.value === SKIP_REVIEW })}>
+      <option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
+      {structuralReview && <option value={SKIP_REVIEW}>Skip review (design only)</option>}
+    </select>
+    {structuralReview && <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)" }}>Reviews the design in your cells. Knockouts and separate 2A reporters compare eligible alternatives; other knock-ins review the selected allele.</span>}
+  </label>;
+
   return (
     <div>
       {/* Configure mode: parameter form. Hidden in Result mode so the product (reagents + continue) leads. */}
@@ -728,7 +765,15 @@ export function DesignView({
               appliedDesign={currentProject.designResult}
               onRequest={input => onUpdateProject({ genomicDesignInput: input })}
               onGenerate={handleGenomicSnpGenerated}
+              reviewControl={reviewControl}
+              reviewReady={Boolean(reviewContext)}
+              reviewing={isDesigning}
             />
+            {isDesigning && (
+              <div role="status" aria-live="polite" style={{ marginTop: "0.75rem", fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                {designProgress}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -995,14 +1040,7 @@ export function DesignView({
             {editType === "pm" && <p style={{ color: "var(--text-muted)", marginTop: "0.75rem" }}>SNP donors are 127 nt: nominally 91 nt toward the PAM and 36 nt on the opposite side of the target-strand cut, ordered opposite the guide. Cas12a/Mad7 mirror the Cas9 layout because their PAM is 5′. Prefer silent PAM disruption, with synonymous seed changes as a review-required fallback.</p>}
 
             {/* Advanced Options Bar */}
-            {offersReview && <label style={{ display: "block", marginTop: "1rem" }}>Cell type for AlphaGenome review
-              <select aria-label="Cell type for AlphaGenome review" value={simpleDonorReview ? reviewContext : alleleSkipped ? SKIP_REVIEW : alleleContext} disabled={isDesigning}
-                onChange={e => onUpdateProject(simpleDonorReview ? { donorReviewContext: e.target.value } : { alleleReviewContext: e.target.value === SKIP_REVIEW ? "" : e.target.value, alleleReviewSkipped: e.target.value === SKIP_REVIEW })}>
-                <option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
-                {structuralReview && <option value={SKIP_REVIEW}>Skip review (design only)</option>}
-              </select>
-              {structuralReview && <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)" }}>Reviews the design in your cells. Knockouts and separate 2A reporters compare eligible alternatives; other knock-ins review the selected allele.</span>}
-            </label>}
+            {reviewControl}
             <details style={{ marginTop: "1rem" }}><summary>Advanced design settings</summary>
             <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", marginTop: "1rem", alignItems: "center", borderTop: "1px solid var(--border-color)", paddingTop: "1rem" }}>
               <div className="design-option-row" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>

@@ -17,7 +17,7 @@ function download(name, text, type) {
 const MODES=[['clinvar','ClinVar variant'],['gene','Gene'],['file','GenBank file']];
 const onEnter=run=>event=>{if(event.key==='Enter'){event.preventDefault();run();}};
 
-export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, initialRequest, appliedDesign }) {
+export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, initialRequest, appliedDesign, reviewControl=null, reviewReady=false, reviewing=false }) {
   const [raw,setRaw]=useState(initialRequest?.genbankRaw || '');
   const [input,setInput]=useState({addBlocking:true,coDelivery:true,gene:'',cellLine:'',assembly:'',chromosome:'',referenceStart:'',position:'',ref:'G',alt:'A',forwardConfirmed:false,deliveryMethod:'rnp',fileName:'',...initialRequest?.input});
   const [result,setResult]=useState(null);
@@ -45,7 +45,8 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
     const designInput={...next,blockingPolicy:blockingPolicyFor(next)};
     onRequest?.({genbankRaw:text,input:designInput});
     const design=designGenomicSnp(text,designInput);
-    if(design.err){setResult(null);setError(design.err);}else {setResult(design);onGenerate?.(design);}
+    // A freshly calculated design is the one the AlphaGenome review applies to; re-applying a saved design is not.
+    if(design.err){setResult(null);setError(design.err);}else {setResult(design);onGenerate?.(design,{fresh:true,request:{genbankRaw:text,input:designInput}});}
   }
   async function findVariant() {
     if(!look.query.trim()||working)return;
@@ -105,6 +106,9 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
     runDesign(raw,input);
   }
   const field=(label,key,type='text')=><label>{label}<input type={type} value={input[key]} onChange={e=>update(key,e.target.value)} required={['assembly','chromosome','referenceStart','position'].includes(key)} min={type==='number'?1:undefined} step={type==='number'?1:undefined}/></label>;
+  // The review runs on whatever design the next action produces, so the cell type has to be chosen before designing.
+  const reviewBlocked=Boolean(reviewControl) && !reviewReady;
+  const designBlocked=reviewBlocked || reviewing;
   const showLocus=mode==='file';
   const showEdit=mode!=='clinvar';
   return <section className="genomic-snp">
@@ -112,9 +116,10 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
     <p>Design an exact nucleotide substitution in an intron, splice site, untranslated region or coding sequence. Coordinates and alleles use the forward genomic strand. A gene on the reverse strand is designed along its transcript.</p>
     <form onSubmit={generate}>
       <div className="snp-mode" role="tablist" aria-label="Reference source">{MODES.map(([key,label])=><button key={key} type="button" role="tab" aria-selected={mode===key} className={mode===key?'on':''} onClick={()=>chooseMode(key)}>{label}</button>)}</div>
+      {reviewControl}
       {mode==='clinvar' && <div className="snp-lookup">
         <label>ClinVar variant<input value={look.query} onChange={e=>setLook(prev=>({...prev,query:e.target.value}))} onKeyDown={onEnter(findVariant)} placeholder="Variation ID, VCV accession, rsID or HGVS, e.g. NM_030667.3:c.2829+1G>A"/></label>
-        <button type="button" disabled={!look.query.trim() || working} onClick={findVariant}>Find variant and design</button>
+        <button type="button" disabled={!look.query.trim() || working || designBlocked} onClick={findVariant}>{reviewControl?'Find variant, design and review':'Find variant and design'}</button>
         <p>Single-base substitutions on either strand. The reference is the gene's MANE Select transcript from Ensembl, fetched in your browser and checked against the ClinVar base.</p>
       </div>}
       {mode==='gene' && <div className="snp-lookup">
@@ -134,7 +139,7 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
       {lookup.message && <p role="alert" className="snp-alert">{lookup.message}</p>}
       {lookup.status==='found' && <div className="snp-variants" role="list">
         {lookup.variants.map(v=><div role="listitem" key={v.id}>
-          <button type="button" disabled={!v.supported || working} onClick={()=>useVariant(v)}>{v.title}</button>
+          <button type="button" disabled={!v.supported || working || designBlocked} onClick={()=>useVariant(v)}>{v.title}</button>
           <span>{v.significance}{v.conditions[0]?` · ${v.conditions[0]}`:''}{v.supported?'':` · ${v.unsupportedReason}`}</span>
         </div>)}
         {lookup.total>lookup.variants.length && <p>Showing {lookup.variants.length} of {lookup.total} records. Narrow the search to see the rest.</p>}
@@ -155,7 +160,7 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
       <label className="snp-check" style={{opacity:input.addBlocking?1:0.5}}><input type="checkbox" disabled={!input.addBlocking} checked={input.coDelivery} onChange={e=>update('coDelivery',e.target.checked)}/><span><strong>Co-transfect both guides and both ssODNs</strong><br/>On (default): each ssODN carries the blocking changes for both guides. Off: each guide gets its own ssODN carrying only its own blocking changes; deliver one pair at a time.</span></label>
       <p>{input.addBlocking?'Blocking changes are added only where the repaired allele would be re-cut. They stay outside the splice-site windows of annotated exons, and inside coding sequence they are silent. Every donor is checked against the reference.':'No additional blocking substitutions will be added. Every donor is checked for exactly the requested single-base change.'}</p>
       <p>Splice assessment is a local junction and GT/AG motif screen, not a splice-strength prediction. Additional intronic changes remain subject to review.</p>
-    <button type="submit" disabled={!raw || busy || working}>Generate genomic SNP design</button>
+    <button type="submit" disabled={!raw || busy || working || designBlocked}>{reviewing?'Designing and reviewing…':reviewControl?'Design and review':'Generate genomic SNP design'}</button>
     </form>
     {error && <p role="alert" className="snp-alert">{error}</p>}
     {result?.recommendation && <div className="snp-reco" role="status"><strong>{{blockers:'Use the blocking changes.',review:'Review before use.',exact:'Use the exact edit only.'}[result.recommendation.use] || result.recommendation.use}</strong> {result.recommendation.text}</div>}
