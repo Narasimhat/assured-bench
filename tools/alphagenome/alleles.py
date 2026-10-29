@@ -13,6 +13,10 @@ import numpy as np
 import review
 
 
+# AlphaGenome prediction contexts; large loci need the long ones to fit a whole transcript.
+CONTEXT_LENGTHS = (16384, 131072, 524288, 1048576)
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',', ':'),ensure_ascii=False).encode()).hexdigest()
 
@@ -29,7 +33,7 @@ def validate_batch(batch):
     if r.get('assembly')!='GRCh38' or not re.fullmatch(r'chr(?:[1-9]|1\d|2[0-2]|X|Y)',r.get('chromosome','')) or r.get('designKind') not in ('ko','ct','nt','it'):
         raise ValueError('Unsupported reference or design')
     ref=r.get('reference',{}); length=r.get('sequenceLength')
-    if type(ref.get('start')) is not int or ref['start']<1 or not re.fullmatch('[ACGTN]{1,1000000}',ref.get('sequence','')) or length not in (16384,131072):
+    if type(ref.get('start')) is not int or ref['start']<1 or not re.fullmatch('[ACGTN]{1,1000000}',ref.get('sequence','')) or length not in CONTEXT_LENGTHS:
         raise ValueError('Invalid reference or context')
     if r.get('requestedOutputs')!=list(review.OUTPUTS) or len(r.get('ontologyTerms',[]))!=1 or not re.fullmatch(r'(?:CL|EFO|UBERON):\d+',r['ontologyTerms'][0]):
         raise ValueError('Invalid assays or cell context')

@@ -1,6 +1,6 @@
 import { StructuralAlternativeComparison } from './StructuralAlternativeComparison.jsx';
 import React, { useEffect, useRef, useState } from 'react';
-import { buildAlleleReviewBatch, validateAlleleReview, alleleReviewSource } from '../../services/alphaGenomeAlleles.js';
+import { buildCoveredAlleleReviewBatch, validateAlleleReview, alleleReviewSource } from '../../services/alphaGenomeAlleles.js';
 import { readDonorReviewResponse } from '../../services/alphaGenomeOnline.js';
 import { REGULATORY_CONTEXT_CATALOG } from '../../services/regulatoryContexts.js';
 
@@ -21,7 +21,7 @@ export function AlphaGenomeAlleleReview({project,onUpdateProject}) {
   useEffect(()=>{const abort=new AbortController();fetch('/api/alphagenome/status',{signal:abort.signal,credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(setStatus).catch(()=>{});return()=>abort.abort();},[]);
   useEffect(()=>{
     let alive=true;controller.current?.abort();setBusy(false);setBatch(null);setReport(null);setError('');current.current=null;
-    if(ontology)buildAlleleReviewBatch(project,{ontologyTerm:ontology,donorIndex}).then(value=>{
+    if(ontology)buildCoveredAlleleReviewBatch(project,{ontologyTerm:ontology,donorIndex}).then(value=>{
       if(!alive)return;setBatch(value);current.current=value.requestId;
       if(project.alleleReview?.requestId===value.requestId){try{setReport(validateAlleleReview(project.alleleReview,value))}catch(e){setError(e.message)}}
     }).catch(e=>{if(alive)setError(e.message)});

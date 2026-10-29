@@ -1,5 +1,5 @@
 import { runDesignFromTranscriptModel, previewKoPair, summarizeProcurementReadiness } from '../engine/design/designEngine.js';
-import { buildAlleleReviewBatch, validateAlleleReview, alleleReviewSource } from './alphaGenomeAlleles.js';
+import { ALLELE_CONTEXT_LENGTHS, buildAlleleReviewBatch, validateAlleleReview, alleleReviewSource } from './alphaGenomeAlleles.js';
 import { reviewRequestId } from './alphaGenomeReview.js';
 import { readDonorReviewResponse } from './alphaGenomeOnline.js';
 import { buildDesignSchemeSvg, buildDesignSchemeCaption } from '../engine/design/designScheme.js';
@@ -78,19 +78,24 @@ export async function prepareStructuralAlternatives(project,settings,saved=null)
  }
  if(!candidates.length)throw new Error('No native alternative designs could be generated.');
  for(const candidate of candidates){candidate.batch=await buildAlleleReviewBatch({...project,designResult:candidate.result},{ontologyTerm:settings.ontology});}
- const requests=candidates.map(c=>c.batch.candidates[0].request),exons=requests[0].annotation.exons,length=requests[0].sequenceLength;
+ const requests=candidates.map(c=>c.batch.candidates[0].request),exons=requests[0].annotation.exons;
  if(requests.some(r=>JSON.stringify(r.annotation)!==JSON.stringify(requests[0].annotation)||JSON.stringify(r.reference)!==JSON.stringify(requests[0].reference)))throw new Error('Alternative designs must share reference and transcript annotation.');
  const left=Math.min(...exons.map(e=>e[0]),...requests.map(r=>r.edit.start));
  const right=Math.max(...exons.map(e=>e[1]),...requests.map(r=>r.edit.end));
- const start=Math.max(0,Math.floor((left+right)/2)-length/2),end=start+length;
  const crop=Math.max(0,...requests.map(r=>r.edit.inserted.length-(r.edit.end-r.edit.start)));
- if(left<=start||right>=end-crop)throw new Error('The full transcript and all alternative alleles do not fit the common 131 kb context. No fair preference can be calculated.');
+ // Every alternative must share one window, so widen to the smallest context holding the whole transcript.
+ const fitted=ALLELE_CONTEXT_LENGTHS.map(length=>{
+  const start=Math.max(0,Math.floor((left+right)/2)-length/2);
+  return {length,start,end:start+length};
+ }).find(({start,end})=>left>start&&right<end-crop);
+ if(!fitted)throw new Error('The full transcript and all alternative alleles do not fit the largest supported 1 Mb context. No fair preference can be calculated.');
+ const {start,end,length:sequenceLength}=fitted;
  const exclusions=requests.filter(r=>r.edit.end>r.edit.start).map(r=>[r.edit.start,r.edit.end]);
  if(crop)exclusions.push([end-crop,end]);
  exclusions.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
  const merged=[];for(const span of exclusions){const prev=merged.at(-1);if(prev&&span[0]<=prev[1])prev[1]=Math.max(prev[1],span[1]);else merged.push([...span]);}
  const comparisonContext={schema:'assured-structural-comparison-context/1',start,exclusions:merged};
- for(const c of candidates){c.batch=await buildAlleleReviewBatch({...project,designResult:c.result},{ontologyTerm:settings.ontology,comparisonContext});
+ for(const c of candidates){c.batch=await buildAlleleReviewBatch({...project,designResult:c.result},{ontologyTerm:settings.ontology,comparisonContext,sequenceLength});
   const old=saved?.candidates.find(s=>s.id===c.id);if(old){if(old.requestId!==c.batch.requestId)throw new Error('A saved allele/window cannot be reproduced. Run a new comparison.');if(old.review)c.review=validateAlleleReview(old.review,c.batch);}
  }
  return {schema:'assured-structural-alternatives/1',sourceId,sourceSnapshot:snapshot,settings:{...settings},mode:knockout?'ko':'2a',comparisonContext,candidates,attempts};

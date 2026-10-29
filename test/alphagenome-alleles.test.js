@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {runDesign} from '../src/engine/design/designEngine.js';
 import {buildQcDesignSpec} from '../src/engine/design/qcExport.js';
-import {buildAlleleReviewBatch,validateAlleleReview,alleleReviewSource} from '../src/services/alphaGenomeAlleles.js';
+import {ALLELE_CONTEXT_LENGTHS,buildAlleleReviewBatch,buildCoveredAlleleReviewBatch,alleleReviewCoversAnnotation,validateAlleleReview,alleleReviewSource} from '../src/services/alphaGenomeAlleles.js';
 import {validateEnvelope} from '../server/alphaGenomeCloud.js';
 import {generateReportHtml} from '../src/services/designExport.js';
 const raw=fs.readFileSync(new URL('../public/references/tp53-NG_017013.2.gb',import.meta.url),'utf8');
@@ -42,6 +42,29 @@ test('missing mapping, annotation and excessive edit size cannot produce review-
  const noExons={...p,designResult:{...p.designResult,gb:{...p.designResult.gb,exons:[]}}};await assert.rejects(buildAlleleReviewBatch(noExons,settings),/exon annotation/);
  const long={...p,designResult:{...p.designResult,gs:p.designResult.gs.map((g,i)=>({...g,cut:i?25000:1000}))}};
  await assert.rejects(buildAlleleReviewBatch(long,{...settings,sequenceLength:16384}),/edit size/);
+});
+
+test('a transcript larger than the default context escalates to the smallest context that still covers it',async()=>{
+ const p=make('ko');
+ const fits=await buildCoveredAlleleReviewBatch(p,settings);
+ assert.equal(fits.candidates[0].request.sequenceLength,131072,'TP53 fits the default context');
+ assert.ok(alleleReviewCoversAnnotation(fits));
+ // A transcript spanning more than 131 kb must widen rather than report incomplete coverage.
+ const wide=structuredClone(p);
+ wide.designResult.gb.exons=[{start:0,end:200},{start:300000,end:300500}];
+ const widened=await buildCoveredAlleleReviewBatch(wide,settings);
+ assert.ok(widened.candidates[0].request.sequenceLength>131072);
+ assert.ok(ALLELE_CONTEXT_LENGTHS.includes(widened.candidates[0].request.sequenceLength));
+ assert.ok(alleleReviewCoversAnnotation(widened));
+});
+
+test('an unsupported context length is still refused',async()=>{
+ const p=make('ko');
+ await assert.rejects(buildAlleleReviewBatch(p,{...settings,sequenceLength:65536}),/context length/);
+ for(const sequenceLength of ALLELE_CONTEXT_LENGTHS.filter(n=>n>=131072)) {
+  const b=await buildAlleleReviewBatch(p,{...settings,sequenceLength});
+  assert.equal(b.candidates[0].request.sequenceLength,sequenceLength);
+ }
 });
 
 test('saved manuscript evidence binds to the exact allele and rejects missing modalities and stale design',async()=>{

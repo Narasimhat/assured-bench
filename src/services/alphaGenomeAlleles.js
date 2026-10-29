@@ -2,6 +2,8 @@ import { buildQcDesignSpec } from '../engine/design/qcExport.js';
 import { resolveAlphaGenomeMapping, reviewRequestId } from './alphaGenomeReview.js';
 
 export const STRUCTURAL_REVIEW_TYPES = ['ko', 'ct', 'nt', 'it'];
+/** AlphaGenome prediction contexts, smallest first. Large loci need the long contexts to fit a whole transcript. */
+export const ALLELE_CONTEXT_LENGTHS = [16384, 131072, 524288, 1048576];
 const rc = s => [...s].reverse().map(b => ({A:'T',C:'G',G:'C',T:'A',N:'N'}[b])).join('');
 
 /** Review the integrated allele, never the donor's homology arms as an insertion. */
@@ -11,7 +13,7 @@ export async function buildAlleleReviewBatch(project, {ontologyTerm, donorIndex=
   const mapping=await resolveAlphaGenomeMapping(project);
   if (!mapping || mapping.assembly!=='GRCh38') throw new Error('Fetch a mapped human GRCh38 reference before reviewing this allele.');
   if (!/^(CL|EFO|UBERON):\d+$/.test(ontologyTerm||'')) throw new Error('Choose the experimental cell context.');
-  if (![16384,131072].includes(sequenceLength)) throw new Error('Unsupported context length.');
+  if (!ALLELE_CONTEXT_LENGTHS.includes(sequenceLength)) throw new Error('Unsupported context length.');
   const reference=result.gb?.genomicSequence?.toUpperCase();
   if (!reference || reference.length>1000000 || !/^[ACGTN]+$/.test(reference)) throw new Error('A valid genomic reference of at most 1 Mb is required.');
   const spec=buildQcDesignSpec(result,{maxWindow:1000000});
@@ -52,6 +54,35 @@ export async function buildAlleleReviewBatch(project, {ontologyTerm, donorIndex=
   const sourceId=await reviewRequestId({design:requestPayload});
   const payload={schema:'assured-alphagenome-comparison-request/1',sourceId,candidates:[{id:'edited-allele',request}]};
   return {...payload,requestId:await reviewRequestId(payload)};
+}
+
+/** The prediction window the reviewer derives from this request. */
+export function alleleContextInterval(request) {
+  const length=request.sequenceLength;
+  const start=request.comparisonContext?Number(request.comparisonContext.start):Math.max(0,Math.floor((request.edit.start+request.edit.end)/2)-length/2);
+  return [start,start+length];
+}
+
+/** Insertions crop the far-right flank, so retained exon bases must stay observable. */
+export function alleleReviewCoversAnnotation(batch) {
+  const request=batch.candidates[0].request;
+  const [start,end]=alleleContextInterval(request);
+  const crop=Math.max(0,request.edit.inserted.length-(request.edit.end-request.edit.start));
+  return request.annotation.exons.every(([a,b])=>start<=a&&b<=end-crop);
+}
+
+/** The smallest context that fits the annotated transcript. Long contexts cost more, so escalate only when needed. */
+export async function buildCoveredAlleleReviewBatch(project,options={}) {
+  const requested=options.sequenceLength||131072;
+  const lengths=ALLELE_CONTEXT_LENGTHS.filter(n=>n>=requested);
+  if(!lengths.length)return buildAlleleReviewBatch(project,options);
+  let batch=null;
+  for(const sequenceLength of lengths) {
+    batch=await buildAlleleReviewBatch(project,{...options,sequenceLength});
+    if(alleleReviewCoversAnnotation(batch))return batch;
+  }
+  // No context covers the transcript; the reviewer still reports its incomplete coverage explicitly.
+  return batch;
 }
 
 export function validateAlleleReview(report,batch) {

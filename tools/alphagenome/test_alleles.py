@@ -80,6 +80,15 @@ class AlleleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'disagrees'):alleles.build_sequences(r,'G'*(16384+4),bounds)
         with self.assertRaisesRegex(ValueError,'context'):alleles.checked_predictions({'reference':predictions(ontology='CL:9999999'),'intended':predictions(),'edited':predictions()},r,16384)
 
+    def test_long_contexts_are_accepted_and_unsupported_lengths_refused(self):
+        for length in alleles.CONTEXT_LENGTHS:
+            b=batch();b['candidates'][0]['request']['sequenceLength']=length;seal(b)
+            r,(start,end)=alleles.validate_batch(b)
+            self.assertEqual(end-start,length)
+        for length in (65536,131073,0):
+            b=batch();b['candidates'][0]['request']['sequenceLength']=length;seal(b)
+            with self.assertRaisesRegex(ValueError,'context'):alleles.validate_batch(b)
+
     def test_common_window_and_retained_mask_match_across_different_alleles(self):
         first=batch();second=batch();second['candidates'][0]['request']['edit'].update({'start':100120,'end':100127})
         common={'schema':'assured-structural-comparison-context/1','start':92000,'exclusions':[[100100,100104],[100120,100127]]}
