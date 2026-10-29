@@ -27,6 +27,7 @@ import { projectDesignReagents } from "../../services/projectReagents.js";
 import { designAndReviewDonors } from "../../services/donorWorkflow.js";
 import { DONOR_REVIEW_CONTEXTS } from "./DonorCandidateComparison.jsx";
 import { STRUCTURAL_REVIEW_TYPES } from "../../services/alphaGenomeAlleles.js";
+const SKIP_REVIEW = "__skip-allele-review";
 import { designReviewUpdate } from "../../services/alleleWorkflow.js";
 import { DesignResultView } from "./DesignResultView.jsx";
 import { withoutRunOverrides } from "../../services/runOptions.js";
@@ -238,7 +239,10 @@ export function DesignView({
   // Knockouts and knock-ins review the edited allele instead of competing donors, but from the same control here.
   const structuralReview = STRUCTURAL_REVIEW_TYPES.includes(editType);
   const alleleContext = currentProject.alleleReviewContext || "";
+  const alleleSkipped = Boolean(currentProject.alleleReviewSkipped);
   const offersReview = simpleDonorReview || structuralReview;
+  // Both edit types start on "Choose cell type"; skipping the allele review has to be chosen deliberately.
+  const reviewChosen = simpleDonorReview ? Boolean(reviewContext) : Boolean(alleleContext) || alleleSkipped;
   const latestProject = useRef(currentProject), reviewController = useRef(null);
   latestProject.current = currentProject;
   useEffect(() => () => reviewController.current?.abort(), [currentProject.id, genbankRaw, mutation]);
@@ -989,9 +993,10 @@ export function DesignView({
 
             {/* Advanced Options Bar */}
             {offersReview && <label style={{ display: "block", marginTop: "1rem" }}>Cell type for AlphaGenome review
-              <select aria-label="Cell type for AlphaGenome review" value={simpleDonorReview ? reviewContext : alleleContext} disabled={isDesigning}
-                onChange={e => onUpdateProject(simpleDonorReview ? { donorReviewContext: e.target.value } : { alleleReviewContext: e.target.value })}>
-                <option value="">{simpleDonorReview ? "Choose cell type" : "Skip review"}</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
+              <select aria-label="Cell type for AlphaGenome review" value={simpleDonorReview ? reviewContext : alleleSkipped ? SKIP_REVIEW : alleleContext} disabled={isDesigning}
+                onChange={e => onUpdateProject(simpleDonorReview ? { donorReviewContext: e.target.value } : { alleleReviewContext: e.target.value === SKIP_REVIEW ? "" : e.target.value, alleleReviewSkipped: e.target.value === SKIP_REVIEW })}>
+                <option value="">Choose cell type</option>{DONOR_REVIEW_CONTEXTS.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
+                {structuralReview && <option value={SKIP_REVIEW}>Skip review (design only)</option>}
               </select>
               {structuralReview && <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text-muted)" }}>Reviews the edited allele after the design is built. The design itself does not depend on it.</span>}
             </label>}
@@ -1058,11 +1063,11 @@ export function DesignView({
               <button
                 className="btn btn-primary"
                 onClick={handleRunDesign}
-                disabled={isDesigning || isLoadingGene || !genbankRaw || (simpleDonorReview && !reviewContext)}
+                disabled={isDesigning || isLoadingGene || !genbankRaw || (offersReview && !reviewChosen)}
                 style={{ marginLeft: "auto" }}
               >
                 <Play size={16} />
-                <span>{isDesigning ? "Designing and reviewing…" : simpleDonorReview || (structuralReview && alleleContext) ? "Design and review" : "Generate design"}</span>
+                <span>{isDesigning ? "Designing and reviewing…" : simpleDonorReview || (structuralReview && !alleleSkipped) ? "Design and review" : "Generate design"}</span>
               </button>
             </div>
 
