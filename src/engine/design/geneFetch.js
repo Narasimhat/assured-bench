@@ -474,7 +474,7 @@ export async function fetchGeneReference({ query, source = "ensembl", species = 
   }
 }
 
-// ---------------------------------------------------------------- ClinVar
+// ---------------------------------------------------------------- ClinVar / dbSNP
 
 const clinvarTerm = (raw) => {
   const text = String(raw || "").trim().replace(/\s+/g, " ");
@@ -485,8 +485,15 @@ const clinvarTerm = (raw) => {
   return text;
 };
 
+/** rs6415084 → 6415084. Common polymorphisms often live in dbSNP without a ClinVar clinical record. */
+const rsIdNumber = (raw) => {
+  const m = String(raw || "").trim().match(/^rs(\d+)$/i);
+  return m ? m[1] : "";
+};
+
 function parseSpdi(spdi) {
-  const m = String(spdi || "").match(/^(NC_\d+\.\d+):(\d+):([A-Za-z]*):([A-Za-z]*)$/);
+  const text = Array.isArray(spdi) ? spdi[0] : spdi;
+  const m = String(text || "").match(/^(NC_\d+\.\d+):(\d+):([A-Za-z]*):([A-Za-z]*)$/);
   return m ? { accession: m[1], position: Number(m[2]) + 1, deleted: m[3].toUpperCase(), inserted: m[4].toUpperCase() } : null;
 }
 
@@ -533,13 +540,74 @@ function describeClinVar(record) {
   };
 }
 
-/** Looks a variant up in ClinVar by variation ID, VCV accession, rsID, HGVS name ("NM_000492.4:c.1652G>A") or "GENE c.1652G>A". */
+/**
+ * Builds the same designable-variant shape as ClinVar for a GRCh38 single-base dbSNP record.
+ * Common polymorphisms (for example rs6415084 in LPA) often have no ClinVar clinical entry.
+ */
+function describeDbSnp(record) {
+  const rsid = `rs${record.snp_id || record.uid}`;
+  const genes = (record.genes || []).filter((g) => g?.name && !/^LOC\d+$/.test(g.name));
+  const gene = genes[0] || null;
+  const spdi = parseSpdi(record.spdi);
+  const chromosome = String(record.chr || "").replace(/^chr/i, "");
+  const position = Number(String(record.chrpos || "").split(":")[1]) || spdi?.position || 0;
+  const isSnv = record.snp_class === "snv" && Boolean(spdi && /^[ACGT]$/.test(spdi.deleted) && /^[ACGT]$/.test(spdi.inserted) && spdi.deleted !== spdi.inserted);
+  const reason = !isSnv
+    ? `${record.snp_class ? String(record.snp_class) : "This record"} is not a single-base substitution; the Genomic SNP designer handles substitutions only.`
+    : !gene ? "dbSNP names no gene for this variant."
+    : !chromosome || !position ? "dbSNP has no GRCh38 position for this variant."
+    : "";
+  const mafs = record.global_mafs || [];
+  const maf = mafs.find((m) => /GnomAD/i.test(m.study)) || mafs.find((m) => /ALFA/i.test(m.study)) || mafs.find((m) => /1000Genomes/i.test(m.study)) || mafs[0];
+  return {
+    id: String(record.uid || record.snp_id || ""),
+    accession: rsid,
+    title: `${rsid}${gene ? ` (${gene.name})` : ""}${spdi ? `: ${spdi.deleted}>${spdi.inserted}` : ""}`,
+    type: "single nucleotide variant",
+    gene: gene?.name || "",
+    geneId: gene?.gene_id || "",
+    geneStrand: 1,
+    significance: record.clinical_significance || "No ClinVar clinical assertion",
+    review: "dbSNP population variant",
+    conditions: maf ? [`${maf.study}: ${maf.freq}`] : [],
+    proteinChange: "",
+    cdnaChange: record.fxn_class || "",
+    source: "dbsnp",
+    supported: !reason,
+    unsupportedReason: reason,
+    variant: !reason ? { assembly: "GRCh38", chromosome, position, ref: spdi.deleted, alt: spdi.inserted } : null,
+  };
+}
+
+/** Looks an rsID up in NCBI dbSNP when ClinVar has no matching clinical record. */
+async function searchDbSnp(query, { fetchImpl = defaultFetch, sleep = defaultSleep } = {}) {
+  const id = rsIdNumber(query);
+  if (!id) return null;
+  const ctx = { fetchImpl, sleep };
+  const found = await request(`${EUTILS}/esearch.fcgi?${new URLSearchParams({ db: "snp", term: `rs${id}[All Fields]`, retmode: "json", retmax: "1" })}`, ctx, "dbSNP");
+  const ids = found?.esearchresult?.idlist || [];
+  if (!ids.length) return null;
+  const summary = await request(`${EUTILS}/esummary.fcgi?${new URLSearchParams({ db: "snp", id: ids[0], retmode: "json" })}`, ctx, "dbSNP");
+  const record = summary?.result?.[ids[0]];
+  return record ? describeDbSnp(record) : null;
+}
+
+/** Looks a variant up in ClinVar by variation ID, VCV accession, rsID, HGVS name ("NM_000492.4:c.1652G>A") or "GENE c.1652G>A".
+ *  rsIDs with no ClinVar clinical entry fall back to dbSNP so common polymorphisms remain designable.
+ */
 export async function searchClinVar(query, { fetchImpl = defaultFetch, sleep = defaultSleep, limit = 12 } = {}) {
   const ctx = { fetchImpl, sleep };
   const term = clinvarTerm(query);
   const found = await request(`${EUTILS}/esearch.fcgi?${new URLSearchParams({ db: "clinvar", term, retmode: "json", retmax: String(limit) })}`, ctx, "ClinVar");
   const ids = found?.esearchresult?.idlist || [];
-  if (!ids.length) throw new GeneFetchError(`ClinVar has no record matching "${String(query).trim()}". Try the variation ID, an rsID, or an HGVS name such as NM_000492.4:c.1652G>A.`);
+  if (!ids.length) {
+    const dbsnp = await searchDbSnp(query, ctx);
+    if (dbsnp) return { total: 1, variants: [dbsnp] };
+    const q = String(query).trim();
+    throw new GeneFetchError(rsIdNumber(q)
+      ? `Neither ClinVar nor dbSNP has a record matching "${q}". Check the rsID, or try a ClinVar variation ID / HGVS name.`
+      : `ClinVar has no record matching "${q}". Try the variation ID, an rsID, or an HGVS name such as NM_000492.4:c.1652G>A.`);
+  }
   const summary = await request(`${EUTILS}/esummary.fcgi?${new URLSearchParams({ db: "clinvar", id: ids.join(","), retmode: "json" })}`, ctx, "ClinVar");
   const records = (summary?.result?.uids || []).map((uid) => summary.result[uid]).filter(Boolean).map(describeClinVar).sort((a, b) => Number(b.supported) - Number(a.supported));
   return { total: Number(found.esearchresult.count) || records.length, variants: records };

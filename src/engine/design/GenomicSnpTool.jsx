@@ -14,7 +14,7 @@ function download(name, text, type) {
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
-const MODES=[['clinvar','ClinVar variant'],['gene','Gene'],['file','GenBank file']];
+const MODES=[['clinvar','ClinVar / dbSNP'],['gene','Gene'],['file','GenBank file']];
 const onEnter=run=>event=>{if(event.key==='Enter'){event.preventDefault();run();}};
 
 export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, initialRequest, appliedDesign, reviewControl=null, reviewReady=false, reviewing=false }) {
@@ -51,18 +51,19 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
   async function findVariant() {
     if(!look.query.trim()||working)return;
     onInvalidate?.();setResult(null);setError('');setLoaded(null);setRaw('');
-    setLookup({...idle,status:'loading',text:'Searching ClinVar…'});
+    setLookup({...idle,status:'loading',text:'Searching ClinVar (and dbSNP for rsIDs)…'});
     try {
       const found=await searchClinVar(look.query);
       if(found.variants.length===1 && found.variants[0].supported) await useVariant(found.variants[0]);
       else setLookup({...idle,status:'found',variants:found.variants,total:found.total});
-    } catch(e) {setLookup({...idle,status:'error',message:e.message || 'The ClinVar lookup failed.'});}
+    } catch(e) {setLookup({...idle,status:'error',message:e.message || 'The variant lookup failed.'});}
   }
   async function useVariant(variant) {
     setLookup(prev=>({...prev,status:'loading',message:'',text:`Fetching the ${variant.gene} reference from Ensembl…`}));
     try {
       const ref=await fetchVariantReference(variant);
-      const fileName=`ClinVar ${variant.accession} ${variant.title} (${variant.significance}); reference ${ref.summary.transcriptId} from Ensembl`;
+      const sourceLabel=variant.source==='dbsnp'?'dbSNP':'ClinVar';
+      const fileName=`${sourceLabel} ${variant.accession} ${variant.title} (${variant.significance}); reference ${ref.summary.transcriptId} from Ensembl`;
       const next={...input,...ref.input,fileName};
       setRaw(ref.genbank);setInput(next);
       setLoaded({fileName:ref.fileName,title:variant.title,detail:[variant.significance,...variant.conditions.slice(0,2)].join(' · '),reference:`${ref.summary.text} · ${ref.input.assembly} chr${ref.input.chromosome}:${ref.input.position.toLocaleString('en-US')} ${ref.input.ref}>${ref.input.alt}${ref.cdna?` · ${ref.cdna}`:''}`,warnings:ref.summary.warnings});
@@ -118,9 +119,9 @@ export default function GenomicSnpTool({ onGenerate, onInvalidate, onRequest, in
       <div className="snp-mode" role="tablist" aria-label="Reference source">{MODES.map(([key,label])=><button key={key} type="button" role="tab" aria-selected={mode===key} className={mode===key?'on':''} onClick={()=>chooseMode(key)}>{label}</button>)}</div>
       {reviewControl}
       {mode==='clinvar' && <div className="snp-lookup">
-        <label>ClinVar variant<input value={look.query} onChange={e=>setLook(prev=>({...prev,query:e.target.value}))} onKeyDown={onEnter(findVariant)} placeholder="Variation ID, VCV accession, rsID or HGVS, e.g. NM_030667.3:c.2829+1G>A"/></label>
+        <label>ClinVar / dbSNP variant<input value={look.query} onChange={e=>setLook(prev=>({...prev,query:e.target.value}))} onKeyDown={onEnter(findVariant)} placeholder="Variation ID, VCV accession, rsID or HGVS, e.g. rs6415084"/></label>
         <button type="button" disabled={!look.query.trim() || working || designBlocked} onClick={findVariant}>{reviewControl?'Find variant, design and review':'Find variant and design'}</button>
-        <p>Single-base substitutions on either strand. The reference is the gene's MANE Select transcript from Ensembl, fetched in your browser and checked against the ClinVar base.</p>
+        <p>Single-base substitutions on either strand. ClinVar is searched first; rsIDs with no clinical record fall back to dbSNP. The reference is the gene's MANE Select transcript from Ensembl, checked against the reported reference base.</p>
       </div>}
       {mode==='gene' && <div className="snp-lookup">
         <label>Gene symbol, Ensembl transcript (ENST…) or RefSeq accession (NM_…)<input value={look.query} onChange={e=>setLook(prev=>({...prev,query:e.target.value}))} onKeyDown={onEnter(fetchGene)} placeholder="PTPRO"/></label>
