@@ -486,3 +486,18 @@ protein localization or domain compatibility. See the [primary 2A mechanism
 study](https://pmc.ncbi.nlm.nih.gov/articles/PMC2447138/) and [AlphaGenome's model
 limitations](https://www.alphagenomedocs.com/faqs.html), including reduced
 reliability for large synthetic sequence changes.
+
+# Clone alleles (`clones.py`)
+
+`clones.py` is the clone-level counterpart of `review.py` and `alleles.py`: it predicts what a clone was found to carry (the intended edit as read, any base the design did not plan, any indel allele) against the reference and against the intended allele. Export the request from Step 4 of Bench (**Export AlphaGenome request**, after choosing the cell type and window; a mapped human GRCh38 reference is required, as for the design review).
+
+```bash
+python tools/alphagenome/clones.py request.json --validate-only
+python tools/alphagenome/clones.py request.json --run --output clone_alphagenome_report.json
+```
+
+`--validate-only` needs no SDK, key or network. A live run retrieves GRCh38 context from Ensembl and sends the reference, intended and clone-allele sequences to Google; the key stays local (`configure_key.py`). Distinct sequences are predicted once. Reports are imported in Step 4 only for the exact request they answer.
+
+Substitutions and indels are supported (up to 12 edits per allele, 24 alleles; every edit is checked against the uploaded reference and, live, against the fetched context). Deletions use extra fetched bases so that every sequence has the window length; insertions crop the far flank. The values are the same raw RNA-seq / splice-site / splice-usage track differences as above: assay-specific units, no calibrated threshold, a ranking of clones and not a verdict. A heterozygous unplanned base is assumed to sit on the allele that carries the intended edit.
+
+Tests (`test_clones.py`) mock the SDK, the model and the reference fetch; `fixtures/apoe_clone_alphagenome_request.json` is a request exported by Bench for simulated clones on the bundled APOE record.

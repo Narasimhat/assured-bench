@@ -266,6 +266,7 @@ export function App() {
           <DecisionView
             currentProject={currentProject}
             onBackToQc={() => setActiveStep("qc")}
+            onUpdateProject={handleUpdateProject}
           />
         )}
       </main>

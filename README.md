@@ -38,6 +38,8 @@ Project Setup (Header) ──► 1. Design ──► 2. Order ──► 3. Trace
    - High-confidence clone verdicts: **Accept**, **Hold**, **Sequence again**, and **Reject**.
    - Quantitative deconvolution: HDR %, Indel %, Silent Blocking %, and Wild-Type %.
    - Publication-ready vector figures (editable SVG, vector PDF, and 300-dpi PNG).
+   - **Unwanted-change flags**: every read of a clone is scanned against its control for bases the design did not plan (also far from the cut), each is mapped to the protein, and a clone that carries a protein-changing base in two reads is rejected. Flagged clones have chips, a filter and a reason; the report and CSV list them (see [clone flags](docs/CLONE_FLAGS.md)).
+   - **Splice and expression review of the clone alleles** with SpliceAI and AlphaGenome, run locally on exported requests (`tools/spliceai`, `tools/alphagenome/clones.py`) and imported only for the exact request they answer.
    - Screening decision table and CSV export.
 
 ---
@@ -60,6 +62,10 @@ After **Generate design**, ASSURED runs rule-based evidence checks (isoforms, co
 
 Known open items are listed in `docs/AUDIT_2026-10.md`.
 
+## Unwanted changes in clones
+
+Step 4 flags clones that carry something the design did not ask for. The rules, the thresholds and what they cannot see are in [docs/CLONE_FLAGS.md](docs/CLONE_FLAGS.md). In short: every read is scanned (the earlier scan skipped samples read from both ends and switched off when the fit was poor), a base seen in two reads that changes the protein rejects a knock-in clone, a base in one read asks for the other direction, and SpliceAI and AlphaGenome can be run on the alleles the clones were found to carry. All of it is read from Sanger traces: a prediction, not a measurement of the genome.
+
 ## Quality gates
 
 `npm test` runs the test suite; `npm run build` builds; CI (`.github/workflows/ci.yml`) runs both and an audit gate on every push. `vercel.json` sets a content security policy (scripts only from the app's own files).
@@ -77,6 +83,9 @@ Evidence-source labels and the local integration checks are described in
 [AlphaGenome donor-review adapter](tools/alphagenome/README.md) runs locally with
 Python; API keys never enter the browser. Live predictions require separately
 configured API access and are not part of offline tests.
+
+The clone-level counterparts, which predict what a clone was found to carry rather than the planned edit, are the
+[SpliceAI clone runner](tools/spliceai/README.md) and `tools/alphagenome/clones.py` (see [clone flags](docs/CLONE_FLAGS.md)).
 
 ### Prerequisites
 - Node.js (v18 or higher recommended)

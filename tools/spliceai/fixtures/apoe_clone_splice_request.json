@@ -1,0 +1,179 @@
+{
+ "schema": "assured-clone-splice-request/1",
+ "gene": "APOE",
+ "referenceFile": "",
+ "reference": {
+  "length": 3640,
+  "sha256": "a3c85a113bd054622244b5178ba9c15c35c8d754e08deb7da8727a1fd5946a2f",
+  "convention": "0-based half-open indices into the record as uploaded"
+ },
+ "geneStrand": 1,
+ "window": 400,
+ "thresholds": {
+  "pass": 0.05,
+  "review": 0.2
+ },
+ "intended": [
+  {
+   "id": "D1",
+   "name": "ssODN1 (matched to APOE_R176C_gRNA1)",
+   "edits": [
+    {
+     "start": 3061,
+     "end": 3062,
+     "ref": "G",
+     "inserted": "C",
+     "role": "blocking"
+    },
+    {
+     "start": 3064,
+     "end": 3065,
+     "ref": "G",
+     "inserted": "A",
+     "role": "blocking"
+    },
+    {
+     "start": 3068,
+     "end": 3069,
+     "ref": "C",
+     "inserted": "T",
+     "role": "intended"
+    },
+    {
+     "start": 3076,
+     "end": 3077,
+     "ref": "A",
+     "inserted": "T",
+     "role": "blocking"
+    }
+   ]
+  }
+ ],
+ "alleles": [
+  {
+   "id": "A1",
+   "label": "Intended edit (ssODN1) + unplanned base",
+   "intendedId": "D1",
+   "unwanted": true,
+   "edits": [
+    {
+     "start": 2569,
+     "end": 2570,
+     "ref": "A",
+     "inserted": "C",
+     "role": "unplanned"
+    },
+    {
+     "start": 3061,
+     "end": 3062,
+     "ref": "G",
+     "inserted": "C",
+     "role": "blocking"
+    },
+    {
+     "start": 3064,
+     "end": 3065,
+     "ref": "G",
+     "inserted": "A",
+     "role": "blocking"
+    },
+    {
+     "start": 3068,
+     "end": 3069,
+     "ref": "C",
+     "inserted": "T",
+     "role": "intended"
+    },
+    {
+     "start": 3076,
+     "end": 3077,
+     "ref": "A",
+     "inserted": "T",
+     "role": "blocking"
+    }
+   ],
+   "clones": [
+    {
+     "name": "sim_clone_2",
+     "label": "Intended edit (ssODN1) + unplanned base",
+     "fraction": 1,
+     "decision": "hold"
+    }
+   ]
+  },
+  {
+   "id": "A2",
+   "label": "Donor edit with -4",
+   "intendedId": null,
+   "unwanted": true,
+   "edits": [
+    {
+     "start": 2978,
+     "end": 2982,
+     "ref": "CAGA",
+     "inserted": "",
+     "role": "indel"
+    }
+   ],
+   "clones": [
+    {
+     "name": "sim_clone_3",
+     "label": "Donor edit with -4",
+     "fraction": 0.5,
+     "decision": "hold"
+    }
+   ]
+  },
+  {
+   "id": "A3",
+   "label": "Intended edit (ssODN1)",
+   "intendedId": "D1",
+   "unwanted": false,
+   "edits": [
+    {
+     "start": 3061,
+     "end": 3062,
+     "ref": "G",
+     "inserted": "C",
+     "role": "blocking"
+    },
+    {
+     "start": 3064,
+     "end": 3065,
+     "ref": "G",
+     "inserted": "A",
+     "role": "blocking"
+    },
+    {
+     "start": 3068,
+     "end": 3069,
+     "ref": "C",
+     "inserted": "T",
+     "role": "intended"
+    },
+    {
+     "start": 3076,
+     "end": 3077,
+     "ref": "A",
+     "inserted": "T",
+     "role": "blocking"
+    }
+   ],
+   "clones": [
+    {
+     "name": "sim_clone_1",
+     "label": "Intended edit (ssODN1)",
+     "fraction": 1,
+     "decision": "accept"
+    },
+    {
+     "name": "sim_clone_3",
+     "label": "Intended edit (ssODN1)",
+     "fraction": 0.5,
+     "decision": "hold"
+    }
+   ]
+  }
+ ],
+ "requestId": "b3a72b7109a4642518b8483c7fc020376d76b322a918941b9251e9b45f742fe5"
+}
