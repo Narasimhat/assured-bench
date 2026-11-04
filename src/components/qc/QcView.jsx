@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { CheckCircle, AlertCircle, ArrowRight, Award } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle, AlertCircle, ArrowRight } from "lucide-react";
 import { buildQcDesignSpec } from "../../engine/design/qcExport.js";
 import { downloadDesignJson, downloadReportHtml } from "../../services/designExport.js";
 import { computeQcPredictionCalibration } from "../../services/biomniAgent.js";
+import { CloneReviewPanel } from "./CloneReviewPanel.jsx";
+import { useCloneReview } from "./useCloneReview.js";
 
 // Use Assured QC itself: its upload, pairing, HTML import and worker analysis stay identical.
 export function QcView({ currentProject, onUpdateProject, onProceedToDecision }) {
@@ -40,8 +42,45 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
   }, [design, qcOrigin]);
 
   const qcResults = currentProject?.qcResults || [];
+  const [reviewSettings, setReviewSettings] = useState({ ontologyTerm: currentProject?.alleleReviewContext || "CL:0000540", sequenceLength: 131072 });
+  const cloneReview = useCloneReview(currentProject, qcResults, reviewSettings);
   const acceptedCount = qcResults.filter(r => (r.decision?.decision || r.decision?.verdict) === "accept").length;
   const qcCalibration = computeQcPredictionCalibration(currentProject, qcResults);
+
+  useEffect(() => {
+    if (ready.current) {
+      frame.current?.contentWindow?.postMessage({ type: "assured:qc:cloneReview", cloneReview: cloneReview.review }, qcOrigin);
+    }
+  }, [cloneReview.review, qcOrigin]);
+
+  useEffect(() => {
+    const isApoeCohort = qcResults.length > 0 && qcResults.some(r => /APOE_R176C/i.test(r.name || ""));
+    if (!isApoeCohort || (currentProject?.cloneReview?.splice && currentProject?.cloneReview?.alphagenome)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const base = import.meta.env?.BASE_URL || "./";
+        const [gbRes, revRes] = await Promise.all([
+          fetch(`${base}references/apoe-ensg00000130203.gb`),
+          fetch(`${base}drive_data/apoe/apoe_clone_review_bundle.json`),
+        ]);
+        if (!gbRes.ok || !revRes.ok || cancelled) return;
+        const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);
+        if (cancelled) return;
+        update.current({
+          gene: currentProject?.gene || "APOE",
+          alleleReviewContext: "CL:0000540",
+          cloneReviewReferenceRaw: gbText,
+          cloneReviewReferenceName: "apoe-ensg00000130203.gb",
+          cloneReview: {
+            splice: { ...revBundle.splice, bundled: true },
+            alphagenome: { ...revBundle.alphagenome, bundled: true },
+          },
+        });
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [qcResults, currentProject?.cloneReview?.splice, currentProject?.cloneReview?.alphagenome, currentProject?.gene]);
 
   return <div>
     <div className="card">
@@ -114,12 +153,15 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         </div>
       )}
     </div>
-    {qcResults.length > 0 && <div className="card">
-      <button type="button" className="btn btn-primary" onClick={onProceedToDecision}>
-        Open clone review and publication report <ArrowRight size={16} />
-      </button>
-      <p>Review observed clone alleles with SpliceAI and AlphaGenome, then export the report.</p>
-    </div>}
+    {qcResults.length > 0 && <>
+      <CloneReviewPanel project={currentProject} review={cloneReview} settings={reviewSettings} onSettings={setReviewSettings} onUpdateProject={onUpdateProject} />
+      <div className="card">
+        <button type="button" className="btn btn-primary" onClick={onProceedToDecision}>
+          Open full clone decision dashboard &amp; publication report <ArrowRight size={16} />
+        </button>
+        <p style={{ marginTop: "0.4rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>SpliceAI and AlphaGenome observed-allele predictions above are automatically embedded in the HTML publication report.</p>
+      </div>
+    </>}
     <iframe ref={frame} src={source} title="Trace Analysis upload and analysis" style={{ width: "100%", height: "88vh", minHeight: 760, border: "none", borderRadius: 12, background: "transparent" }} />
   </div>;
 }

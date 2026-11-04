@@ -5,11 +5,13 @@ import "./styles.css";
 
 function BenchEmbed() {
   const [initialDesign, setInitialDesign] = useState(null);
+  const [cloneReview, setCloneReview] = useState(null);
   const parentOrigin = window.location.origin;
   useEffect(() => {
     const receive = event => {
       if (event.source !== window.parent || event.origin !== parentOrigin) return;
       if (event.data?.type === "assured:qc:design" && (event.data.design === null || typeof event.data.design?.text === "string")) setInitialDesign(event.data.design);
+      if (event.data?.type === "assured:qc:cloneReview") setCloneReview(event.data.cloneReview || null);
     };
     window.addEventListener("message", receive);
     window.parent.postMessage({ type: "assured:qc:ready" }, parentOrigin);
@@ -20,7 +22,7 @@ function BenchEmbed() {
   }, [parentOrigin]);
   return (
     <div className="page embedded">
-      <QuickStart initialDesign={initialDesign} onResults={onResults} />
+      <QuickStart initialDesign={initialDesign} cloneReview={cloneReview} onCloneReviewChange={setCloneReview} onResults={onResults} />
     </div>
   );
 }

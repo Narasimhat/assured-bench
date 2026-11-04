@@ -1,0 +1,1815 @@
+{
+  "schema": "assured-alphagenome-clone-review/1",
+  "requestId": "01d715b6f6c41e0ac8f34ec34235e74dc5d0ca64638058ffc683d32aba4adb88",
+  "status": "complete",
+  "evidenceType": "model-prediction",
+  "createdAt": "2026-11-04T16:27:17.694304+00:00",
+  "modelVersion": "ALL_FOLDS",
+  "sdkVersion": "0.10.0",
+  "assembly": "GRCh38",
+  "chromosome": "chr19",
+  "context": {
+    "start": 44900628,
+    "end": 44917012,
+    "convention": "0-based half-open",
+    "sha256": "55830d4cb4777991cdb4f84bd72829833c4fa754a37b602f561c72fa9018934b"
+  },
+  "ontologyTerms": [
+    "CL:0000679"
+  ],
+  "intended": [
+    {
+      "id": "D1",
+      "comparison": {
+        "id": "reference_to_intended",
+        "tracks": [
+          {
+            "output": "RNA_SEQ",
+            "name": "CL:0000679 total RNA-seq",
+            "strand": "+",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": 0.0003317376738323219,
+            "meanAbsDelta": 0.002567732906982201,
+            "maxAbsDelta": 0.234375
+          },
+          {
+            "output": "RNA_SEQ",
+            "name": "CL:0000679 total RNA-seq",
+            "strand": "-",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": 3.594250884475514e-06,
+            "meanAbsDelta": 1.2734752672827199e-05,
+            "maxAbsDelta": 0.000274658203125
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "donor",
+            "strand": "+",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": 1.8214392820681269e-06,
+            "meanAbsDelta": 9.218602121663366e-06,
+            "maxAbsDelta": 0.013671875
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "acceptor",
+            "strand": "+",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": 1.6377498877062635e-06,
+            "meanAbsDelta": 9.877848837547276e-06,
+            "maxAbsDelta": 0.0078125
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "donor",
+            "strand": "-",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": -1.5317801782543938e-07,
+            "meanAbsDelta": 5.741539013115471e-07,
+            "maxAbsDelta": 0.0006103515625
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "acceptor",
+            "strand": "-",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": 2.2384036668654517e-07,
+            "meanAbsDelta": 5.683144266299678e-07,
+            "maxAbsDelta": 0.001983642578125
+          },
+          {
+            "output": "SPLICE_SITE_USAGE",
+            "name": "usage_CL:0000679 total RNA-seq",
+            "strand": "+",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": 1.0112574315712664e-06,
+            "meanAbsDelta": 1.2609239874450395e-06,
+            "maxAbsDelta": 0.0078125
+          },
+          {
+            "output": "SPLICE_SITE_USAGE",
+            "name": "usage_CL:0000679 total RNA-seq",
+            "strand": "-",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": 7.775088045613998e-09,
+            "meanAbsDelta": 2.46329229514064e-08,
+            "maxAbsDelta": 3.814697265625e-05
+          }
+        ]
+      }
+    },
+    {
+      "id": "D2",
+      "comparison": {
+        "id": "reference_to_intended",
+        "tracks": [
+          {
+            "output": "RNA_SEQ",
+            "name": "CL:0000679 total RNA-seq",
+            "strand": "+",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": -0.00018007191783908638,
+            "meanAbsDelta": 0.0022722480348420504,
+            "maxAbsDelta": 0.25
+          },
+          {
+            "output": "RNA_SEQ",
+            "name": "CL:0000679 total RNA-seq",
+            "strand": "-",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": -6.827554841493111e-07,
+            "meanAbsDelta": 6.227507668654653e-06,
+            "maxAbsDelta": 0.000213623046875
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "donor",
+            "strand": "+",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": 1.404090491874399e-06,
+            "meanAbsDelta": 8.873790813268556e-06,
+            "maxAbsDelta": 0.017578125
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "acceptor",
+            "strand": "+",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": -3.0004577578068847e-07,
+            "meanAbsDelta": 8.832536852132478e-06,
+            "maxAbsDelta": 0.009765625
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "donor",
+            "strand": "-",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": -4.826905772858936e-07,
+            "meanAbsDelta": 6.715829492520697e-07,
+            "maxAbsDelta": 0.001708984375
+          },
+          {
+            "output": "SPLICE_SITES",
+            "name": "acceptor",
+            "strand": "-",
+            "ontology": "",
+            "resolutionBp": 1,
+            "meanDelta": -3.071821410571829e-07,
+            "meanAbsDelta": 6.363499309713916e-07,
+            "maxAbsDelta": 0.003204345703125
+          },
+          {
+            "output": "SPLICE_SITE_USAGE",
+            "name": "usage_CL:0000679 total RNA-seq",
+            "strand": "+",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": -2.8643017557783423e-07,
+            "meanAbsDelta": 1.7322620884385742e-06,
+            "maxAbsDelta": 0.0078125
+          },
+          {
+            "output": "SPLICE_SITE_USAGE",
+            "name": "usage_CL:0000679 total RNA-seq",
+            "strand": "-",
+            "ontology": "CL:0000679",
+            "resolutionBp": 1,
+            "meanDelta": -1.4981053064744287e-08,
+            "meanAbsDelta": 2.2394506693501626e-08,
+            "maxAbsDelta": 2.09808349609375e-05
+          }
+        ]
+      }
+    }
+  ],
+  "alleles": [
+    {
+      "id": "A1",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.000464615557120851,
+              "meanAbsDelta": 0.006839442884484015,
+              "maxAbsDelta": 0.478729248046875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 5.149800702497487e-05,
+              "meanAbsDelta": 7.71564755837062e-05,
+              "maxAbsDelta": 0.00389862060546875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 3.313393176007651e-05,
+              "meanAbsDelta": 0.000897513513583803,
+              "maxAbsDelta": 0.9921474456787109
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.3075648797489237e-05,
+              "meanAbsDelta": 0.0005380567890158616,
+              "maxAbsDelta": 0.99774169921875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 2.0424800348806116e-06,
+              "meanAbsDelta": 1.7849524337698597e-05,
+              "maxAbsDelta": 0.028930384665727615
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.3419268611869484e-06,
+              "meanAbsDelta": 2.1224212488846206e-05,
+              "maxAbsDelta": 0.012142494320869446
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 1.393064641419528e-05,
+              "meanAbsDelta": 0.00030219463903691235,
+              "maxAbsDelta": 0.6718634963035583
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -4.241360457291066e-08,
+              "meanAbsDelta": 1.4717130090713404e-06,
+              "maxAbsDelta": 0.002105236053466797
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A2",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.0009737609333342334,
+              "meanAbsDelta": 0.007223704726015967,
+              "maxAbsDelta": 0.478729248046875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 4.7720496112901856e-05,
+              "meanAbsDelta": 7.359801462314408e-05,
+              "maxAbsDelta": 0.00371551513671875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 3.297464894203017e-05,
+              "meanAbsDelta": 0.0008962305924669067,
+              "maxAbsDelta": 0.9921474456787109
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.2982333473132712e-05,
+              "meanAbsDelta": 0.0005355081916462723,
+              "maxAbsDelta": 0.99774169921875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.8932468517363077e-06,
+              "meanAbsDelta": 1.7742418439326002e-05,
+              "maxAbsDelta": 0.029052454978227615
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.4787265030236085e-06,
+              "meanAbsDelta": 2.1243064878717632e-05,
+              "maxAbsDelta": 0.011959388852119446
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 1.3812468871776673e-05,
+              "meanAbsDelta": 0.00030305718092193956,
+              "maxAbsDelta": 0.6718634963035583
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -4.572510023392873e-08,
+              "meanAbsDelta": 1.4672929799786072e-06,
+              "maxAbsDelta": 0.002105236053466797
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A3",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0017522243406347116,
+              "meanAbsDelta": 0.011227283056541637,
+              "maxAbsDelta": 1.1513671875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 5.249140191665447e-05,
+              "meanAbsDelta": 6.949624345509164e-05,
+              "maxAbsDelta": 0.0041656494140625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.2488331527247283e-06,
+              "meanAbsDelta": 0.0008715456926395859,
+              "maxAbsDelta": 0.9921788573265076
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -2.1672064260513935e-05,
+              "meanAbsDelta": 0.0005257230196349383,
+              "maxAbsDelta": 0.999987006187439
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 7.495572287297136e-07,
+              "meanAbsDelta": 1.6597553937458542e-05,
+              "maxAbsDelta": 0.029418423771858215
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -1.2486785294640868e-07,
+              "meanAbsDelta": 1.9582441836973885e-05,
+              "maxAbsDelta": 0.012084664776921272
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.204859203658316e-05,
+              "meanAbsDelta": 0.0003073316508803714,
+              "maxAbsDelta": 0.6874982416629791
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 4.415917526090496e-08,
+              "meanAbsDelta": 1.5385949896917772e-06,
+              "maxAbsDelta": 0.00211990624666214
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A4",
+      "intendedId": "D2",
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.00242588833384616,
+              "meanAbsDelta": 0.002854295584029387,
+              "maxAbsDelta": 0.296875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -7.151927093218546e-06,
+              "meanAbsDelta": 9.247792831956758e-06,
+              "maxAbsDelta": 0.000274658203125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 9.282027928492198e-07,
+              "meanAbsDelta": 1.085087965968512e-05,
+              "maxAbsDelta": 0.0458984375
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.6386099822038886e-07,
+              "meanAbsDelta": 1.0729123459896073e-05,
+              "maxAbsDelta": 0.01171875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.946912565666594e-07,
+              "meanAbsDelta": 6.557394529593807e-07,
+              "maxAbsDelta": 0.0013047456741333008
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.722080350598844e-07,
+              "meanAbsDelta": 7.048992927138897e-07,
+              "maxAbsDelta": 0.003742218017578125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -1.3737637374333644e-06,
+              "meanAbsDelta": 1.4402607604324658e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -1.2694276740887744e-08,
+              "meanAbsDelta": 2.2082110251453457e-08,
+              "maxAbsDelta": 2.09808349609375e-05
+            }
+          ]
+        },
+        {
+          "id": "intended_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.0022458164160070737,
+              "meanAbsDelta": 0.0023208066565985064,
+              "maxAbsDelta": 0.125
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -6.469171609069235e-06,
+              "meanAbsDelta": 9.274489997324054e-06,
+              "maxAbsDelta": 0.00030517578125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -4.7588769902517924e-07,
+              "meanAbsDelta": 9.363366768155856e-06,
+              "maxAbsDelta": 0.0283203125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -6.381522243970039e-08,
+              "meanAbsDelta": 1.0799122242666215e-05,
+              "maxAbsDelta": 0.017822265625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 8.799932071923422e-08,
+              "meanAbsDelta": 4.994780562483925e-07,
+              "maxAbsDelta": 0.0009765625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -6.502589400270153e-08,
+              "meanAbsDelta": 4.1477515111409957e-07,
+              "maxAbsDelta": 0.000537872314453125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -1.0873335618555302e-06,
+              "meanAbsDelta": 1.5586972601511206e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.286776323856543e-09,
+              "meanAbsDelta": 1.593874687788599e-08,
+              "maxAbsDelta": 9.5367431640625e-06
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A5",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.003897703009442921,
+              "meanAbsDelta": 0.0059798425813824,
+              "maxAbsDelta": 0.383819580078125
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 4.6428654528085644e-05,
+              "meanAbsDelta": 6.0544722103372806e-05,
+              "maxAbsDelta": 0.0027313232421875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.8381638833275815e-05,
+              "meanAbsDelta": 0.0008822637695811153,
+              "maxAbsDelta": 0.992149829864502
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 4.766479094087117e-06,
+              "meanAbsDelta": 0.0005102677315917958,
+              "maxAbsDelta": 0.9999756813049316
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.929632186481456e-06,
+              "meanAbsDelta": 1.7682238985905485e-05,
+              "maxAbsDelta": 0.034421712160110474
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.2679838121698594e-06,
+              "meanAbsDelta": 2.101046974445353e-05,
+              "maxAbsDelta": 0.010604500770568848
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 3.7543423658803476e-06,
+              "meanAbsDelta": 0.00029204799418636185,
+              "maxAbsDelta": 0.6796864941716194
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 6.6407138732405e-08,
+              "meanAbsDelta": 1.4879342656315409e-06,
+              "maxAbsDelta": 0.002179741859436035
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A6",
+      "intendedId": "D2",
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.00034420773499732604,
+              "meanAbsDelta": 0.002791197263832146,
+              "maxAbsDelta": 0.140625
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -2.848763202223381e-06,
+              "meanAbsDelta": 7.17918446468957e-06,
+              "maxAbsDelta": 0.000213623046875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -7.570729874117887e-07,
+              "meanAbsDelta": 1.0184290688997066e-05,
+              "maxAbsDelta": 0.0194244384765625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -7.194407904975719e-07,
+              "meanAbsDelta": 8.768945323645028e-06,
+              "maxAbsDelta": 0.009765625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.753494919322975e-07,
+              "meanAbsDelta": 6.675604939943014e-07,
+              "maxAbsDelta": 0.0013091564178466797
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -1.2940363802727006e-07,
+              "meanAbsDelta": 6.991203562733972e-07,
+              "maxAbsDelta": 0.001922607421875
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -1.4271664952048013e-06,
+              "meanAbsDelta": 2.267672272182608e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -9.434114101036783e-09,
+              "meanAbsDelta": 2.2082829731484566e-08,
+              "maxAbsDelta": 2.09808349609375e-05
+            }
+          ]
+        },
+        {
+          "id": "intended_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.00016413581715823966,
+              "meanAbsDelta": 0.002068394481739233,
+              "maxAbsDelta": 0.171875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -2.16600771807407e-06,
+              "meanAbsDelta": 6.5048437392078995e-06,
+              "maxAbsDelta": 0.000244140625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -2.161163479286188e-06,
+              "meanAbsDelta": 7.916210794434164e-06,
+              "maxAbsDelta": 0.009765625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -4.1939501471688345e-07,
+              "meanAbsDelta": 6.417710476824823e-06,
+              "maxAbsDelta": 0.00732421875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.073410853535961e-07,
+              "meanAbsDelta": 5.168748540285151e-07,
+              "maxAbsDelta": 0.001220703125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.7777850302991283e-07,
+              "meanAbsDelta": 5.227968813414918e-07,
+              "maxAbsDelta": 0.00128173828125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -1.140736319626967e-06,
+              "meanAbsDelta": 1.5794191163820415e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 5.546938963707504e-09,
+              "meanAbsDelta": 1.5422789656494018e-08,
+              "maxAbsDelta": 8.58306884765625e-06
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A7",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.0016061811995768949,
+              "meanAbsDelta": 0.014916515402319419,
+              "maxAbsDelta": 1.55810546875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 3.092653857095229e-05,
+              "meanAbsDelta": 6.984207301741208e-05,
+              "maxAbsDelta": 0.0036468505859375
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 3.62625415561979e-05,
+              "meanAbsDelta": 0.0009012376070209882,
+              "maxAbsDelta": 0.9921798706054688
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 5.43534624863895e-06,
+              "meanAbsDelta": 0.000544917121421129,
+              "maxAbsDelta": 0.9999785423278809
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.1634038985519624e-06,
+              "meanAbsDelta": 1.7271253580197765e-05,
+              "maxAbsDelta": 0.03320266492664814
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.8012665015685343e-07,
+              "meanAbsDelta": 1.99384287355997e-05,
+              "maxAbsDelta": 0.011840559542179108
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.4044353462926438e-05,
+              "meanAbsDelta": 0.0003102162868664493,
+              "maxAbsDelta": 0.6992176845669746
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -2.392310188836788e-08,
+              "meanAbsDelta": 1.5530334067093143e-06,
+              "maxAbsDelta": 0.002116173505783081
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A8",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0033915142062141967,
+              "meanAbsDelta": 0.012205925153011776,
+              "maxAbsDelta": 1.15234375
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 5.078799945579249e-05,
+              "meanAbsDelta": 6.798904219351698e-05,
+              "maxAbsDelta": 0.0041656494140625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -2.015725481641084e-06,
+              "meanAbsDelta": 0.0008725167169210124,
+              "maxAbsDelta": 0.9921788573265076
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -2.458100683977449e-05,
+              "meanAbsDelta": 0.0005259706503180084,
+              "maxAbsDelta": 0.999987006187439
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 7.868887079709452e-07,
+              "meanAbsDelta": 1.6727900319146727e-05,
+              "maxAbsDelta": 0.030028775334358215
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.2853670717258865e-07,
+              "meanAbsDelta": 1.987693081417774e-05,
+              "maxAbsDelta": 0.011657418683171272
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 1.9850133533338976e-05,
+              "meanAbsDelta": 0.0003054235985260334,
+              "maxAbsDelta": 0.6796857416629791
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 4.4530973880574365e-08,
+              "meanAbsDelta": 1.5345750492279375e-06,
+              "maxAbsDelta": 0.00218094140291214
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A9",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.004212959597225563,
+              "meanAbsDelta": 0.01259357016579088,
+              "maxAbsDelta": 1.1494140625
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 5.405773841005157e-05,
+              "meanAbsDelta": 6.999216937231267e-05,
+              "maxAbsDelta": 0.0041656494140625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -7.111869907205914e-06,
+              "meanAbsDelta": 0.0008704096977449893,
+              "maxAbsDelta": 0.9921788573265076
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -2.578823197474378e-05,
+              "meanAbsDelta": 0.0005214849693171431,
+              "maxAbsDelta": 0.999987006187439
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 7.901822769440514e-07,
+              "meanAbsDelta": 1.662889689946212e-05,
+              "maxAbsDelta": 0.029906705021858215
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 4.3998089438446186e-07,
+              "meanAbsDelta": 2.0093094391882005e-05,
+              "maxAbsDelta": 0.012023629620671272
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.0054112376044486e-05,
+              "meanAbsDelta": 0.0003053458087762806,
+              "maxAbsDelta": 0.6796857416629791
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 4.8035335542540025e-08,
+              "meanAbsDelta": 1.5335339700883743e-06,
+              "maxAbsDelta": 0.00211990624666214
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A10",
+      "intendedId": null,
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0016445631574697472,
+              "meanAbsDelta": 0.015302378601290911,
+              "maxAbsDelta": 1.55810546875
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.7268880401720708e-05,
+              "meanAbsDelta": 6.667620409928077e-05,
+              "maxAbsDelta": 0.0036468505859375
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 3.467849295724079e-05,
+              "meanAbsDelta": 0.0009000244536547797,
+              "maxAbsDelta": 0.9921798706054688
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 7.906648801458971e-06,
+              "meanAbsDelta": 0.000543530656304192,
+              "maxAbsDelta": 0.9999785423278809
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.904294654409e-06,
+              "meanAbsDelta": 1.7702746834658e-05,
+              "maxAbsDelta": 0.03491164930164814
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.6653861933946246e-07,
+              "meanAbsDelta": 2.0328179381579048e-05,
+              "maxAbsDelta": 0.012206770479679108
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.6111231981928995e-05,
+              "meanAbsDelta": 0.0003113602395572457,
+              "maxAbsDelta": 0.6914051845669746
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 1.4774813900109152e-08,
+              "meanAbsDelta": 1.5529654473767085e-06,
+              "maxAbsDelta": 0.002116173505783081
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A11",
+      "intendedId": "D1",
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0003317376738323219,
+              "meanAbsDelta": 0.002567732906982201,
+              "maxAbsDelta": 0.234375
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 3.594250884475514e-06,
+              "meanAbsDelta": 1.2734752672827199e-05,
+              "maxAbsDelta": 0.000274658203125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.8214392820681269e-06,
+              "meanAbsDelta": 9.218602121663366e-06,
+              "maxAbsDelta": 0.013671875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.6377498877062635e-06,
+              "meanAbsDelta": 9.877848837547276e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -1.5317801782543938e-07,
+              "meanAbsDelta": 5.741539013115471e-07,
+              "maxAbsDelta": 0.0006103515625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 2.2384036668654517e-07,
+              "meanAbsDelta": 5.683144266299678e-07,
+              "maxAbsDelta": 0.001983642578125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 1.0112574315712664e-06,
+              "meanAbsDelta": 1.2609239874450395e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 7.775088045613998e-09,
+              "meanAbsDelta": 2.46329229514064e-08,
+              "maxAbsDelta": 3.814697265625e-05
+            }
+          ]
+        },
+        {
+          "id": "intended_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A12",
+      "intendedId": "D2",
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -0.00018007191783908638,
+              "meanAbsDelta": 0.0022722480348420504,
+              "maxAbsDelta": 0.25
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -6.827554841493111e-07,
+              "meanAbsDelta": 6.227507668654653e-06,
+              "maxAbsDelta": 0.000213623046875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.404090491874399e-06,
+              "meanAbsDelta": 8.873790813268556e-06,
+              "maxAbsDelta": 0.017578125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.0004577578068847e-07,
+              "meanAbsDelta": 8.832536852132478e-06,
+              "maxAbsDelta": 0.009765625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -4.826905772858936e-07,
+              "meanAbsDelta": 6.715829492520697e-07,
+              "maxAbsDelta": 0.001708984375
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -3.071821410571829e-07,
+              "meanAbsDelta": 6.363499309713916e-07,
+              "maxAbsDelta": 0.003204345703125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -2.8643017557783423e-07,
+              "meanAbsDelta": 1.7322620884385742e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -1.4981053064744287e-08,
+              "meanAbsDelta": 2.2394506693501626e-08,
+              "maxAbsDelta": 2.09808349609375e-05
+            }
+          ]
+        },
+        {
+          "id": "intended_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0,
+              "meanAbsDelta": 0.0,
+              "maxAbsDelta": 0.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A13",
+      "intendedId": "D1",
+      "comparisons": [
+        {
+          "id": "reference_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0017738414251198265,
+              "meanAbsDelta": 0.0020332582091668883,
+              "maxAbsDelta": 0.109375
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 6.579109324889032e-06,
+              "meanAbsDelta": 1.2027955975213445e-05,
+              "maxAbsDelta": 0.000335693359375
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.7561518674824583e-06,
+              "meanAbsDelta": 8.292902673900926e-06,
+              "maxAbsDelta": 0.015625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.3772781848331306e-06,
+              "meanAbsDelta": 7.547155252751736e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -1.4736727305120212e-07,
+              "meanAbsDelta": 5.366310977805711e-07,
+              "maxAbsDelta": 0.0009765625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 1.2881844924095276e-07,
+              "meanAbsDelta": 4.622954392630163e-07,
+              "maxAbsDelta": 0.00128173828125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 6.922775597217878e-07,
+              "meanAbsDelta": 1.4716149294713432e-06,
+              "maxAbsDelta": 0.0048828125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 1.5579399714749087e-09,
+              "meanAbsDelta": 1.7559116577414713e-08,
+              "maxAbsDelta": 1.239776611328125e-05
+            }
+          ]
+        },
+        {
+          "id": "intended_to_allele",
+          "tracks": [
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 0.0014421037512875046,
+              "meanAbsDelta": 0.003123616033917642,
+              "maxAbsDelta": 0.234375
+            },
+            {
+              "output": "RNA_SEQ",
+              "name": "CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": 2.984858440413518e-06,
+              "meanAbsDelta": 7.7831023759245e-06,
+              "maxAbsDelta": 0.000244140625
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -6.528741458566856e-08,
+              "meanAbsDelta": 7.572167119107576e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "+",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -2.6047170287313293e-07,
+              "meanAbsDelta": 8.448106319391968e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "donor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": 5.810744774237264e-09,
+              "meanAbsDelta": 4.908556876515036e-07,
+              "maxAbsDelta": 0.00067138671875
+            },
+            {
+              "output": "SPLICE_SITES",
+              "name": "acceptor",
+              "strand": "-",
+              "ontology": "",
+              "resolutionBp": 1,
+              "meanDelta": -9.502191744559241e-08,
+              "meanAbsDelta": 4.094814585187123e-07,
+              "maxAbsDelta": 0.000701904296875
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "+",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -3.189798718494785e-07,
+              "meanAbsDelta": 2.16562200705539e-06,
+              "maxAbsDelta": 0.0078125
+            },
+            {
+              "output": "SPLICE_SITE_USAGE",
+              "name": "usage_CL:0000679 total RNA-seq",
+              "strand": "-",
+              "ontology": "CL:0000679",
+              "resolutionBp": 1,
+              "meanDelta": -6.2171480741390894e-09,
+              "meanAbsDelta": 2.1942165251420676e-08,
+              "maxAbsDelta": 3.814697265625e-05
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Exploratory raw track differences across the entire selected context; these are not calibrated gene-level variant-effect scores or probabilities.",
+    "Metrics have assay-specific units and must not be compared across output types or treated as pathogenicity thresholds.",
+    "A heterozygous base cannot be placed on one allele from a Sanger trace; the review assumes an unplanned base sits on the allele that carries the intended edit.",
+    "Tissue coverage may not match the experimental cell state. No prediction of CRISPR efficiency, protein function, clone fitness or experimental confirmation.",
+    "Only human GRCh38 is supported. No off-target or personal-genome analysis."
+  ]
+}

@@ -25,7 +25,7 @@ const download = (name, data, type) => { const url = URL.createObjectURL(new Blo
 const arrayBufferOf = (file) => file.arrayBuffer();
 const interval = (iv) => (iv ? `${iv[0]}-${iv[1]}%` : "");
 
-export default function QuickStart({ initialDesign = null, onResults } = {}) {
+export default function QuickStart({ initialDesign = null, cloneReview = null, onResults } = {}) {
   const controlPicker = useRef(null); const filePicker = useRef(null); const folderPicker = useRef(null); const designPicker = useRef(null);
   const files = useRef(new Map()); const buffers = useRef(new Map());
   const [traceNames, setTraceNames] = useState([]); const [explicitControls, setExplicitControls] = useState([]); const [sheetText, setSheetText] = useState(""); const [designText, setDesignText] = useState(""); const [designName, setDesignName] = useState(""); const [geneText, setGeneText] = useState(""); const [geneName, setGeneName] = useState(""); const [regionsText, setRegionsText] = useState(""); const [epitopeText, setEpitopeText] = useState("");
@@ -33,6 +33,8 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
   const [customSequenceMode, setCustomSequenceMode] = useState(false);
   const [pairsEdit, setPairsEdit] = useState({}); const [running, setRunning] = useState(false); const [progress, setProgress] = useState(null);
   const [outcome, setOutcome] = useState(null); const [picked, setPicked] = useState(0); const [panel, setPanel] = useState(0); const [figureBusy, setFigureBusy] = useState(false); const [error, setError] = useState("");
+  const [localCloneReview, setLocalCloneReview] = useState(null);
+  const activeCloneReview = cloneReview || localCloneReview;
   const [importStatus, setImportStatus] = useState("");
   const [draggingControl, setDraggingControl] = useState(false);
   const [draggingEdited, setDraggingEdited] = useState(false);
@@ -53,6 +55,22 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
     previousOutcome.current = outcome;
     if (outcome && onResults) onResults({ results: withRecommendations(outcome.results, panel ? { panel } : {}), designText, designName });
   }, [outcome, panel, onResults]);
+
+  useEffect(() => {
+    const isApoe = outcome?.results?.some((r) => /APOE_R176C/i.test(r.name || ""));
+    if (!isApoe) { setLocalCloneReview(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const base = import.meta.env?.BASE_URL || "./";
+        const res = await fetch(`${base}drive_data/apoe/apoe_clone_review_bundle.json`);
+        if (!res.ok || cancelled) return;
+        const b = await res.json();
+        if (!cancelled) setLocalCloneReview({ splice: b.splice?.summary, alphagenome: b.alphagenome?.summary });
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [outcome]);
 
   const addFiles = async (list, role = "auto") => {
     if (running) return;
@@ -123,6 +141,32 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
     setImportStatus("Loading bundled benchmark traces…");
     try {
       const base = import.meta.env?.BASE_URL || "./";
+      files.current.clear();
+      buffers.current.clear();
+      setTraceNames([]);
+      setExplicitControls([]);
+      setSheetText("");
+      setPairsEdit({});
+      setOutcome(null);
+      if (bundleKey === "apoe24") {
+        const wtName = "BIHi005-A_wt_1124_EF74344326.ab1";
+        const cloneIds = [
+          "1_EF74668923","2_EF74668924","3_EF74668925","4_EF74668926","5_EF74668927","6_EF74668928",
+          "7_EF74668929","8_EF74668930","9_EF74668931","10_EF74668932","11_EF74668933","12_EF74668934",
+          "13_EF74668935","14_EF74668936","15_EF74668937","16_EF74668938","17_EF74668939","18_EF74668940",
+          "19_EF74668941","20_EF74668942","21_EF74668943","22_EF74668944","23_EF74668945","24_EF74668946",
+        ];
+        const wtBlob = await (await fetch(`${base}drive_data/apoe/${wtName}`)).blob();
+        const specBlob = await (await fetch(`${base}drive_data/apoe/apoe_r176c_run.reconstructed.design.json`)).blob();
+        const cloneFiles = await Promise.all(cloneIds.map(async (id) => {
+          const fname = `IHi005-A_APOE_R176C_${id}.ab1`;
+          const b = await (await fetch(`${base}drive_data/apoe/${fname}`)).blob();
+          return new File([b], fname, { type: "application/octet-stream" });
+        }));
+        await addFiles([new File([wtBlob], wtName, { type: "application/octet-stream" })], "control");
+        await addFiles([...cloneFiles, new File([specBlob], "apoe_r176c_run.reconstructed.design.json", { type: "application/json" })], "edited");
+        return;
+      }
       const relPath = bundleKey === "myd88"
         ? "drive_data/myd88/myd88_clones.assured.zip"
         : "demo_traces/apoe_qc_practice.zip";
@@ -131,13 +175,6 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const file = new File([blob], fileName, { type: "application/zip" });
-      files.current.clear();
-      buffers.current.clear();
-      setTraceNames([]);
-      setExplicitControls([]);
-      setSheetText("");
-      setPairsEdit({});
-      setOutcome(null);
       await addFiles([file], "auto");
     } catch (e) {
       setImportStatus("");
@@ -479,8 +516,17 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
         </form>
 
         <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "6px", marginTop: "6px" }}>
-          {import.meta.env.DEV && <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <strong style={{ color: "var(--text-muted)" }}>Try 1-click benchmark trace sets:</strong>
+            <button
+              type="button"
+              className="link"
+              disabled={running}
+              onClick={() => loadSampleBundle("apoe24")}
+              style={{ fontSize: "11px", padding: "2px 8px", margin: 0, fontWeight: 700 }}
+            >
+              Load APOE R176C 24-Clone Cohort (+ SpliceAI &amp; AlphaGenome)
+            </button>
             <button
               type="button"
               className="link"
@@ -488,7 +534,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               onClick={() => loadSampleBundle("apoe")}
               style={{ fontSize: "11px", padding: "2px 8px", margin: 0, fontWeight: 600 }}
             >
-              Load APOE R176C SNP Practice (4 traces)
+              Load APOE R176C Practice (4 traces)
             </button>
             <button
               type="button"
@@ -499,7 +545,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
             >
               Load MYD88 KO hiPSC Cohort (11 traces)
             </button>
-          </div>}
+          </div>
           <span>🔒 Processed 100% locally in your browser.</span>
         </div>
       </div>
@@ -845,14 +891,14 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                   <button
                     type="button"
                     className="primary"
-                    onClick={() => download(`assured_qc_publication_report_${stamp}.html`, buildQcReportHtml({ workflow: outcome.workflow, design: designName, results: ranked, notes: outcome.problems }), "text/html")}
+                    onClick={() => download(`assured_qc_publication_report_${stamp}.html`, buildQcReportHtml({ workflow: outcome.workflow, design: designName, results: ranked, notes: outcome.problems, cloneReview: activeCloneReview }), "text/html")}
                     style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
                   >
                     Download Publication Report (HTML)
                   </button>
                   <button
                     type="button"
-                    onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked, { flags: true }), "text/csv")}
+                    onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked, { flags: true, cloneReview: activeCloneReview }), "text/csv")}
                     style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
                   >
                     Download Table (CSV)
@@ -860,6 +906,55 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                 </div>
               </div>
             </div>
+            {activeCloneReview && (activeCloneReview.splice || activeCloneReview.alphagenome) && (() => {
+              const sp = activeCloneReview.splice;
+              const ag = activeCloneReview.alphagenome;
+              const names = [...new Set([...Object.keys(sp?.clones || {}), ...Object.keys(ag?.clones || {})])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+              if (!names.length) return null;
+              return (
+                <div style={{ border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", marginBottom: "12px", background: "var(--bg-surface)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "6px" }}>
+                    <b style={{ fontSize: "13px" }}>SpliceAI &amp; AlphaGenome Observed-Allele Review ({names.length} clones with non-WT alleles)</b>
+                    <span className="muted" style={{ fontSize: "11.5px" }}>
+                      {sp ? `${sp.tool} ${sp.version}` : ""}{sp && ag ? " · " : ""}{ag ? `AlphaGenome ${ag.modelVersion} (${(ag.ontologyTerms || []).join(", ")})` : ""}
+                    </span>
+                  </div>
+                  <div className="scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Clone</th>
+                          <th>Observed Allele</th>
+                          <th>SpliceAI max |Δ|</th>
+                          <th>SpliceAI Verdict</th>
+                          <th>AlphaGenome RNA mean |Δ|</th>
+                          <th>AlphaGenome Splice-Usage max |Δ|</th>
+                          <th>AlphaGenome Splice-Sites max |Δ|</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {names.map((n) => {
+                          const s = sp?.clones?.[n];
+                          const a = ag?.clones?.[n];
+                          const vWord = s?.verdict === "pass" ? "supports" : s?.verdict === "review" ? "review" : s?.verdict === "fail" ? "advises against" : "—";
+                          return (
+                            <tr key={n}>
+                              <td><b>{n}</b></td>
+                              <td>{(s || a)?.label || "—"}</td>
+                              <td>{s ? s.effect.toFixed(3) : "—"}</td>
+                              <td>{s ? <span className={`chip ${s.verdict === "pass" ? "d-accept" : s.verdict === "review" ? "d-hold" : "d-reject"}`}>{vWord}</span> : "—"}</td>
+                              <td>{a?.outputs?.RNA_SEQ ? a.outputs.RNA_SEQ.meanAbsDelta.toPrecision(3) : "—"}</td>
+                              <td>{a?.outputs?.SPLICE_SITE_USAGE ? a.outputs.SPLICE_SITE_USAGE.maxAbsDelta.toPrecision(3) : "—"}</td>
+                              <td>{a?.outputs?.SPLICE_SITES ? a.outputs.SPLICE_SITES.maxAbsDelta.toPrecision(3) : "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
             <p className="chips">{DECISION_ORDER.map((k) => <span key={k} className={`chip d-${k.replace("-", "")}`}>{LABEL[k]} {counts[k]}</span>)}</p>
             <div className="scroll">
               <table><thead><tr><th>Priority</th><th>Decision</th><th>Sample</th><th>Result</th><th>Edited, 95% interval</th><th>Confidence</th></tr></thead><tbody>

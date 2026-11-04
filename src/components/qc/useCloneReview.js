@@ -17,17 +17,17 @@ export function useCloneReview(project, results, settings) {
         if (!settings.ontologyTerm) next.alphagenome.error = "Choose the experimental cell context.";
         else next.alphagenome.request = await buildCloneAlphaGenomeRequest(project, results, settings);
       } catch (error) { next.alphagenome.error = error.message; }
-      if (next.splice.request && saved.splice) { next.splice.fresh = saved.splice.requestId === next.splice.request.requestId; next.splice.imported = true; }
-      else if (saved.splice) next.splice.imported = true;
-      if (next.alphagenome.request && saved.alphagenome) { next.alphagenome.fresh = saved.alphagenome.requestId === next.alphagenome.request.requestId; next.alphagenome.imported = true; }
-      else if (saved.alphagenome) next.alphagenome.imported = true;
+      if (next.splice.request && saved.splice) { next.splice.fresh = Boolean(saved.splice.bundled || saved.splice.requestId === next.splice.request.requestId); next.splice.imported = true; }
+      else if (saved.splice) { next.splice.fresh = Boolean(saved.splice.bundled); next.splice.imported = true; }
+      if (next.alphagenome.request && saved.alphagenome) { next.alphagenome.fresh = Boolean(saved.alphagenome.bundled || saved.alphagenome.requestId === next.alphagenome.request.requestId); next.alphagenome.imported = true; }
+      else if (saved.alphagenome) { next.alphagenome.fresh = Boolean(saved.alphagenome.bundled); next.alphagenome.imported = true; }
       if (live) setState(next);
     })();
     return () => { live = false; };
   }, [project?.designResult, project?.genbankRaw, project?.qcImportedDesignText, project?.qcDesignSpec, project?.cloneReviewReferenceRaw, project?.cloneReviewReferenceName, results, saved.splice, saved.alphagenome, settings.ontologyTerm, settings.sequenceLength]);
   const fresh = {
-    splice: state.splice.fresh ? saved.splice.summary : null,
-    alphagenome: state.alphagenome.fresh ? saved.alphagenome.summary : null,
+    splice: (state.splice.fresh || saved.splice?.bundled) ? saved.splice?.summary : null,
+    alphagenome: (state.alphagenome.fresh || saved.alphagenome?.bundled) ? saved.alphagenome?.summary : null,
   };
   return { ...state, review: fresh.splice || fresh.alphagenome ? { splice: fresh.splice, alphagenome: fresh.alphagenome } : null, saved };
 }
