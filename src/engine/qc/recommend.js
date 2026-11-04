@@ -11,6 +11,7 @@
 // Nothing here changes a decision. A protein result changes it only through applyObservations, with the reason written into the decision.
 
 import { PROTEIN_WORDS, normalise } from "./calibration.js";
+import { flagsFor } from "./unwanted.js";
 
 export const RISK_DEFAULTS = {
   lof_deleted: 0.05,        // every coding exon deleted
@@ -100,10 +101,13 @@ export function recommendClones(results, options = {}) {
     if (r.ok && !r.reads) flags.push("one read only");
     else if (r.reads && r.reads.length === 1) flags.push("one read only");
     if (r.confidence && r.confidence.tier === "low") flags.push("low confidence in the edited share");
+    // what the sequencing shows beyond the intended edit (unwanted-change flags): a flagged clone ranks behind the clean ones
+    const unwantedFlags = flagsFor(r).filter((f) => f.severity !== "info");
+    unwantedFlags.forEach((f) => flags.push(`unwanted change: ${f.text}`));
     const confirmed = confirmation === "absent"; const against = confirmation === "truncated" || confirmation === "reduced";
     // knockout clones with the same alleles share a predicted outcome (one mechanism), so the panel takes one per genotype; for a wanted edit (SNP, tag) clones of the same genotype are replicates and all count
     const knock = r.workflow === "knockout" || r.workflow === "deletion"; const unsupported = !confirmed && !against && support.tier === "unsupported";
-    return { r, support, label, flags, confirmed, against, knock, unsupported, gkey: knock ? label : `sample:${r.name}`, quality: flags.some((f) => /trace quality/.test(f)) ? 1 : 0, nAlleles: alleles.length || 9 };
+    return { r, support, label, flags, uw: unwantedFlags.length ? 1 : 0, confirmed, against, knock, unsupported, gkey: knock ? label : `sample:${r.name}`, quality: flags.some((f) => /trace quality/.test(f)) ? 1 : 0, nAlleles: alleles.length || 9 };
   });
   const panelSize = given.panel !== undefined ? given.panel : (info.some((x) => x && !x.knock) ? opt.panelEdit : opt.panel);
   // Without a gene record a knockout is ranked by its KO score (as ICE and DECODR report it: frameshift or an indel of 21 bp or more). Clones with the same deletion then tie on the score, so up to two of
@@ -126,7 +130,7 @@ export function recommendClones(results, options = {}) {
     eligible.push(i);
   });
   eligible.sort((a, b) => { const x = info[a]; const y = info[b];
-    return (y.confirmed - x.confirmed) || (x.against - y.against) || (out[b].score - out[a].score) || (x.nAlleles - y.nAlleles) || (x.quality - y.quality) || ((CONF[x.r.confidence?.tier] ?? 1) - (CONF[y.r.confidence?.tier] ?? 1)) || (koScoreRun ? lowerBound(y) - lowerBound(x) : 0) || natural(x.r.name, y.r.name); });
+    return (y.confirmed - x.confirmed) || (x.against - y.against) || (x.uw - y.uw) || (out[b].score - out[a].score) || (x.nAlleles - y.nAlleles) || (x.quality - y.quality) || ((CONF[x.r.confidence?.tier] ?? 1) - (CONF[y.r.confidence?.tier] ?? 1)) || (koScoreRun ? lowerBound(y) - lowerBound(x) : 0) || natural(x.r.name, y.r.name); });
   const seen = new Map(); let reps = 0;
   eligible.forEach((i, k) => {
     const x = info[i]; const o = out[i]; o.rank = k + 1;

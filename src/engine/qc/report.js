@@ -5,6 +5,7 @@ import { runSummaryFigure } from "./summaryFigure.js";
 import { cloneAlignedFigure, alignedGroups, clonesAlignedFigure, clonesAlignmentFigure } from "./alignedFigure.js";
 import { cloneSelectionFigure } from "./selectionFigure.js";
 import { panelOf } from "./recommend.js";
+import { flagsFor } from "./unwanted.js";
 
 export const QC_VERSION = "0.6.0";
 const esc = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -28,6 +29,7 @@ const METHOD = [
   "Detection limit is about 5% per allele; abundances are trace-derived estimates, not allele counts. Deletions or insertions larger than the readable window, large deletions on one allele, loss of heterozygosity and copy-number changes are not visible.",
   "A clone call assumes at most two alleles. Sanger traces cannot tell a homozygous clone from one with a large deletion on the other allele.",
   "Junction reads show whether the knock-in sequence is correct and reaches genomic sequence beyond the homology arm; they cannot show zygosity or copy number.",
+  "Unwanted changes (unwanted-changes/1): every read is scanned against its control for a base the design did not plan, in the fitted stretch and, where the reads can be compared, beyond it; a base is confirmed when two reads show it. A heterozygous base cannot be placed on one allele, and a change outside the sequenced stretch is not seen. Predicted protein effects follow the design's codon frame or the gene record. Splice and expression predictions, when imported, are model outputs and not measurements.",
   "Genome-wide off-target editing is not assessed.",
 ];
 
@@ -108,6 +110,7 @@ export function buildTakeHomeMessage(workflow, results = []) {
   const panelNames = panelOf(results);
   const carryNames = panelNames.length ? panelNames : accepted.slice(0, isKo ? 3 : 6).map((r) => r.name);
   const carryObjects = carryNames.map((n) => results.find((r) => r.name === n)).filter(Boolean);
+  const unwanted = unwantedNote(workflow, results);
 
   const describeClone = (r) => {
     const s = r.summary || {};
@@ -123,7 +126,7 @@ export function buildTakeHomeMessage(workflow, results = []) {
     return {
       status: "pass",
       headline: `Carry forward for expansion & banking: ${carryNames.join(", ")}`,
-      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, ${accepted.length} (${rate}%) met acceptance criteria (${held.length} held, ${reseq.length} re-sequence, ${rejected.length} rejected). Top prioritized clone${carryObjects.length === 1 ? "" : "s"}: ${carryObjects.map(describeClone).join("; ")}.`,
+      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, ${accepted.length} (${rate}%) met acceptance criteria (${held.length} held, ${reseq.length} re-sequence, ${rejected.length} rejected). Top prioritized clone${carryObjects.length === 1 ? "" : "s"}: ${carryObjects.map(describeClone).join("; ")}.${unwanted ? ` ${unwanted}` : ""}`,
       nextStep: isKo
         ? "Next step: Expand prioritized clone(s), freeze low-passage vials, and confirm loss of protein expression (e.g. Western blot) and absence of large monoallelic deletions."
         : "Next step: Expand prioritized clone(s), freeze low-passage vials, and confirm zygosity with bidirectional reads and primers outside the homology arms.",
@@ -136,7 +139,7 @@ export function buildTakeHomeMessage(workflow, results = []) {
       headline: held.length > 0
         ? `Hold / Review: ${held.map((r) => r.name).join(", ")} (no unambiguous top clone yet)`
         : `Re-sequencing required for ${reseq.length} trace${reseq.length === 1 ? "" : "s"}`,
-      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, 0 met strict acceptance criteria, ${held.length} ${held.length === 1 ? "is" : "are"} held for review (e.g. heterozygous or partial conversion), and ${reseq.length} require re-sequencing.`,
+      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, 0 met strict acceptance criteria, ${held.length} ${held.length === 1 ? "is" : "are"} held for review (e.g. heterozygous or partial conversion), and ${reseq.length} require re-sequencing.${unwanted ? ` ${unwanted}` : ""}`,
       nextStep: "Next step: Re-sequence traces with low signal quality in both directions, or subclone/screen additional colonies.",
     };
   }
@@ -144,12 +147,12 @@ export function buildTakeHomeMessage(workflow, results = []) {
   return {
     status: "fail",
     headline: "No edited clones identified in this cohort",
-    summary: `All ${total} screened sample${total === 1 ? "" : "s"} were called wild-type or rejected.`,
+    summary: `All ${total} screened sample${total === 1 ? "" : "s"} were called wild-type or rejected.${unwanted ? ` ${unwanted}` : ""}`,
     nextStep: "Next step: Screen additional colonies or verify RNP/donor delivery efficiency in the parental pool before picking clones.",
   };
 }
 
-export function buildQcReportHtml({ title = "Publication Clone Screening Report", workflow, design = "", results, generatedAt = new Date(), notes = [] }) {
+export function buildQcReportHtml({ title = "Publication Clone Screening Report", workflow, design = "", results, generatedAt = new Date(), notes = [], cloneReview = null }) {
   const flow = WORKFLOWS[workflow]?.label || workflow;
   const takeHome = buildTakeHomeMessage(workflow, results);
   const boxBorder = takeHome.status === "pass" ? "#10b981" : takeHome.status === "warn" ? "#f59e0b" : "#ef4444";
@@ -169,6 +172,7 @@ export function buildQcReportHtml({ title = "Publication Clone Screening Report"
   <div style="font-size:12px;color:#475467;font-weight:600;">${esc(takeHome.nextStep)} <span class="muted">(Review required: computed estimates from Sanger traces.)</span></div>
 </div>
 ${notes.map((n) => `<p>${esc(n)}</p>`).join("")}
+${unwantedSection(workflow, results, cloneReview)}
 <h2>Summary</h2>${summarySvg ? `<div style="overflow-x:auto">${summarySvg}</div>` : `<table><tr><th>Rank</th><th>Sample / Clone</th><th>Decision</th><th>Result</th><th>Genotype Call</th><th>Notes</th></tr>${rows}</table>`}
 ${selSec || alnSec ? `<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;color:#475467">Multi-Clone Chromatogram Figures &amp; Cohort Alignments</summary>${selSec}${alnSec}</details>` : ""}
 <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:#475467">Appendix: Per-Sample Chromatogram Details &amp; Method Limits</summary>
@@ -178,15 +182,61 @@ ${selSec || alnSec ? `<details style="margin-top:18px"><summary style="cursor:po
 </body></html>`;
 }
 
+
+// What the sequencing shows beyond the intended edit (see unwanted.js), and what the splice and expression predictors say about it when they were run (cloneReview).
+const UNWANTED_NOTE_CODES = new Set(["unplanned-base", "many-differences", "misaligned-stretch", "reads-disagree"]);
+const joinNames = (list) => list.map((r) => r.name).join(", ");
+function unwantedNote(workflow, results) {
+  const flagged = results.filter((r) => r && r.ok && flagsFor(r, workflow).some((f) => f.severity !== "info" && UNWANTED_NOTE_CODES.has(f.code)));
+  if (!flagged.length) return "";
+  const dropped = flagged.filter((r) => r.decision?.unwanted === "block");
+  const check = flagged.filter((r) => !dropped.includes(r));
+  const parts = [];
+  if (dropped.length) parts.push(`${dropped.length} clone${dropped.length === 1 ? "" : "s"} rejected for a protein-changing base the design did not plan (${joinNames(dropped)})`);
+  if (check.length) parts.push(`${check.length} flagged for review (${joinNames(check)})`);
+  return `Unwanted changes: ${parts.join("; ")}.`;
+}
+
+const SEVERITY_WORD = { block: "Do not use", review: "Review", info: "Note" };
+const VERDICT_WORD = { pass: "supports", review: "review", fail: "advises against" };
+export function unwantedRows(workflow, results, cloneReview = null) {
+  const rows = [];
+  results.forEach((r) => {
+    if (!r || !r.ok) return;
+    flagsFor(r, workflow).filter((f) => f.severity !== "info").forEach((f) => rows.push({ name: r.name, decision: r.decision?.decision || "", severity: f.severity, source: "trace", text: f.text }));
+    const sp = cloneReview?.splice?.clones?.[r.name];
+    if (sp && sp.verdict !== "pass") rows.push({ name: r.name, decision: r.decision?.decision || "", severity: sp.verdict === "fail" ? "block" : "review", source: "SpliceAI", text: `Predicted splice change ${sp.effect.toFixed(3)} (${sp.basis}; allele ${sp.label}): ${VERDICT_WORD[sp.verdict]} the clone. A model prediction, not a measurement: check by RT-PCR if the clone is used.` });
+  });
+  return rows;
+}
+function unwantedSection(workflow, results, cloneReview) {
+  const traces = results.filter((r) => r && r.ok && r.kind !== "junction");
+  if (!traces.length) return "";
+  const rows = unwantedRows(workflow, results, cloneReview);
+  const table = rows.length
+    ? `<table><tr><th>Clone</th><th>Decision</th><th>Flag</th><th>Source</th><th>What was found</th></tr>${rows.map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(DECISION_LABEL[x.decision] || x.decision)}</td><td>${esc(SEVERITY_WORD[x.severity])}</td><td>${esc(x.source)}</td><td>${esc(x.text)}</td></tr>`).join("")}</table>`
+    : "<p>No base change the design did not ask for was found in the traces, and no flag was raised.</p>";
+  const scored = cloneReview?.splice ? `<p class="muted">Splice review: ${esc(cloneReview.splice.tool)} ${esc(cloneReview.splice.version)}, thresholds supports &le; ${cloneReview.splice.thresholds.pass}, review &le; ${cloneReview.splice.thresholds.review} (those of the design review). ${cloneReview.alphagenome ? `AlphaGenome ${esc(cloneReview.alphagenome.modelVersion)} (${esc((cloneReview.alphagenome.ontologyTerms || []).join(", "))}): raw track differences, no calibrated threshold, not a verdict.` : ""}</p>` : "";
+  return `<h2>Unwanted changes</h2><p class="muted">Base changes the design did not plan, found by scanning every read against its control and mapped to the protein; plus other signs that a clone is not the clean edit. Calls from Sanger traces: a base seen in one read only may be a read artefact, and a heterozygous base cannot be placed on one allele.</p>${table}${scored}`;
+}
+
 const csvCell = (value) => { const text = String(value ?? ""); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
 
-export function buildResultsCsv(workflow, results) {
+/** `flags: true` adds the unwanted-change columns at the end (the default layout is unchanged so that earlier consumers of the CSV keep working). */
+export function buildResultsCsv(workflow, results, { cloneReview = null, flags = cloneReview !== null } = {}) {
+  const extraHeader = ["unwanted_flags", "unwanted_changes", "splice_verdict", "splice_effect", "alphagenome_splice_score"];
   const header = ["sample", "well", "decision", "decision_reason", "status", "result", "wild_type_pct", "edited_pct", "edited_lo", "edited_hi", "indel_pct", "between_cuts_pct", "intended_edit_pct", "intended_lo", "intended_hi", "blocking_only_pct", "ko_score_pct", "ko_lo", "ko_hi", "functional_ko_pct", "functional_ko_lo", "functional_ko_hi", "functional_call", "unexplained_pct", "confidence", "clone_call", "reads_used", "reads_agree", "junction_verdict", "fit_r2", "unplanned_changes", "notes", "nuclease", "predicted_cuts", "enzyme_config_version", "analysis_model", "knockout_support", "priority_rank", "recommendation"];
+  if (flags) header.push(...extraHeader);
   const lines = [header.join(",")];
   results.forEach((r) => {
     const s = r.summary || {};
     const iv = r.intervals || {};
-    lines.push([r.name, r.well || "", r.decision?.decision || "", (r.decision?.reasons || []).join(" "), r.ok ? "analysed" : "failed", headline(workflow, r), s.wtPct, s.editedPct, iv.editedPct?.[0] ?? "", iv.editedPct?.[1] ?? "", s.indelPct, s.betweenCutsPct, s.intendedEditPct, iv.intendedEditPct?.[0] ?? "", iv.intendedEditPct?.[1] ?? "", s.partialConversionPct, s.koScorePct, iv.koScorePct?.[0] ?? "", iv.koScorePct?.[1] ?? "", s.functionalKoPct ?? "", iv.functionalKoPct?.[0] ?? "", iv.functionalKoPct?.[1] ?? "", r.functional?.call?.status || "", s.unexplainedPct ?? "", r.confidence?.tier || "", r.genotype?.category || "", r.reads ? r.reads.length : (r.ok && r.kind !== "junction" ? 1 : ""), r.agreement ? r.agreement.agree : "", r.verdict?.status || "", r.quality?.r2 ?? "", (r.unplanned || []).map((h) => `${h.relative}:${h.change}(${Math.round(h.fraction * 100)}%)`).join(" "), (r.warnings || []).concat(r.ok ? [] : [r.error]).join(" | "), r.nuclease || "", JSON.stringify(r.cutSites || []), r.enzymeConfigVersion || "", r.analysisModel || "", r.recommendation?.score ?? "", r.recommendation?.rank ?? "", r.recommendation?.action || ""].map(csvCell).join(","));
+    lines.push([r.name, r.well || "", r.decision?.decision || "", (r.decision?.reasons || []).join(" "), r.ok ? "analysed" : "failed", headline(workflow, r), s.wtPct, s.editedPct, iv.editedPct?.[0] ?? "", iv.editedPct?.[1] ?? "", s.indelPct, s.betweenCutsPct, s.intendedEditPct, iv.intendedEditPct?.[0] ?? "", iv.intendedEditPct?.[1] ?? "", s.partialConversionPct, s.koScorePct, iv.koScorePct?.[0] ?? "", iv.koScorePct?.[1] ?? "", s.functionalKoPct ?? "", iv.functionalKoPct?.[0] ?? "", iv.functionalKoPct?.[1] ?? "", r.functional?.call?.status || "", s.unexplainedPct ?? "", r.confidence?.tier || "", r.genotype?.category || "", r.reads ? r.reads.length : (r.ok && r.kind !== "junction" ? 1 : ""), r.agreement ? r.agreement.agree : "", r.verdict?.status || "", r.quality?.r2 ?? "", (r.unplanned || []).map((h) => `${h.relative}:${h.change}(${Math.round(h.fraction * 100)}%)`).join(" "), (r.warnings || []).concat(r.ok ? [] : [r.error]).join(" | "), r.nuclease || "", JSON.stringify(r.cutSites || []), r.enzymeConfigVersion || "", r.analysisModel || "", r.recommendation?.score ?? "", r.recommendation?.rank ?? "", r.recommendation?.action || "",
+      ...(flags ? [
+        flagsFor(r, workflow).filter((f) => f.severity !== "info").map((f) => `${f.code}:${f.severity}`).join(" "),
+        (r.unwanted?.changes || []).map((c) => `${c.relative >= 0 ? "+" : ""}${c.relative} ${c.ref}>${c.alt} ${c.consequence?.label || c.consequence?.class || ""} ${c.confirmed ? "confirmed" : c.discordant ? "discordant" : "single read"}`.trim()).join("; "),
+        cloneReview?.splice?.clones?.[r.name]?.verdict ?? "", cloneReview?.splice?.clones?.[r.name]?.effect ?? "", cloneReview?.alphagenome?.clones?.[r.name]?.spliceScore ?? "",
+      ] : [])].map(csvCell).join(","));
   });
   return `${lines.join("\n")}\n`;
 }

@@ -53,15 +53,55 @@ function decideCore(workflow, result, options = {}) {
   return { decision: "hold", reasons: [g?.summary || `Intended edit ${s.intendedEditPct}% (interval ${iv ? `${iv.intendedEditPct[0]}-${iv.intendedEditPct[1]}` : "n/a"}).`], next: "Mixed result: re-clone or check the traces." };
 }
 
-/** A clone that would be accepted but carries a base change the design did not ask for is held: it needs a look at the trace. */
+import { flagsFor } from "./unwanted.js";
+
+// Workflows where the clone is meant to carry exactly the designed sequence: an unplanned protein-changing base is a reason to drop the clone there. In a knockout the
+// protein is meant to be lost, and in base editing bystander edits are read from the editing-window table.
+const EXACT_EDIT_WORKFLOWS = new Set(["snp", "tag_small"]);
+
+/**
+ * Add what the sequencing shows beyond the intended edit to the decision.
+ *  - a protein-changing base the design did not plan, seen in two reads, in a workflow that wants the exact designed sequence: reject (`next` says why);
+ *  - the same base seen in one read only (it would change the protein, but a read artefact is possible): sequence again before the clone is used;
+ *  - any other unplanned base, or a read that differs from the control at many positions: an accepted clone is held, an undecided one keeps its decision with the reason added.
+ * A rejected clone stays rejected. Pass options.holdOnUnplanned = false to switch all of this off.
+ */
 export function decide(workflow, result, options = {}) {
   const d = decideCore(workflow, result, options);
-  const hits = result.ok && result.kind !== "junction" ? result.unplanned || [] : [];
-  if (d.decision === "reject" || !hits.length || options.holdOnUnplanned === false) return d;
-  const where = hits.map((h) => `${h.relative >= 0 ? "+" : ""}${h.relative} ${h.change} (${Math.round(h.fraction * 100)}%)`).join(", ");
-  const reasons = [...d.reasons, `Unplanned base change near the cut: ${where}.`];
-  if (d.decision !== "accept") return { ...d, reasons };
-  return { decision: "hold", reasons, next: "Look at the trace at that position and sequence the other direction before using this clone; it may carry a second edit or a variant." };
+  if (!result.ok || result.kind === "junction" || options.holdOnUnplanned === false || d.decision === "reject" && !result.unwanted) return annotate(d, result);
+  const unwanted = result.unwanted || null;
+  const hits = result.unplanned || [];
+  if (!unwanted) { // results without the unwanted-change report (saved by an earlier version): the original rule
+    if (d.decision === "reject" || !hits.length) return d;
+    const where = hits.map((h) => `${h.relative >= 0 ? "+" : ""}${h.relative} ${h.change} (${Math.round(h.fraction * 100)}%)`).join(", ");
+    const reasons = [...d.reasons, `Unplanned base change near the cut: ${where}.`];
+    if (d.decision !== "accept") return { ...d, reasons };
+    return { decision: "hold", reasons, next: "Look at the trace at that position and sequence the other direction before using this clone; it may carry a second edit or a variant." };
+  }
+  const flags = flagsFor({ unwanted }, workflow).filter((f) => f.severity !== "info");
+  if (!flags.length) return annotate(d, result, null);
+  const texts = flags.map((f) => f.text);
+  const exact = EXACT_EDIT_WORKFLOWS.has(workflow) && result.sampleType !== "pool"; // a pool is a mixture of edits: a base in it is not a reason to drop it
+  const confirmedDamage = unwanted.changes?.some((c) => c.severity === "block");
+  const singleDamage = unwanted.changes?.some((c) => c.consequence?.proteinChanging && !c.confirmed);
+  const messy = flags.some((f) => f.code === "many-differences");
+  const keep = (x) => annotate(x, result, "review");
+  if (exact && confirmedDamage) {
+    return annotate({ decision: "reject", reasons: [...texts, ...(d.decision === "reject" ? d.reasons : [])], next: "Do not carry this clone forward: it carries a base change that alters the protein and was not part of the design. Choose another clone." }, result, "block");
+  }
+  if (d.decision === "reject") return { ...d, reasons: [...d.reasons, ...texts] };
+  if (exact && singleDamage && d.decision !== "re-sequence") {
+    return annotate({ decision: "re-sequence", reasons: [...texts, ...(d.decision === "accept" ? [] : d.reasons)], next: "Sequence the clone from the other direction: a protein-changing base seen in one read has to be confirmed before the clone is used or dropped." }, result, "review");
+  }
+  if (messy && d.decision === "accept") return keep({ decision: "re-sequence", reasons: [...texts, ...d.reasons], next: "Sequence again (shorter amplicon, or the other primer); many positions differ from the control, which a clean clone does not show." });
+  if (d.decision !== "accept") return keep({ ...d, reasons: [...d.reasons, ...texts] });
+  return keep({ decision: "hold", reasons: [...texts, ...d.reasons], next: "Look at the trace at that position and sequence the other direction before using this clone; it may carry a second edit or a variant." });
+}
+
+// The unwanted-change level is recorded with the decision so that a table can show why a clone was held or dropped.
+function annotate(d, result, level) {
+  const worst = level === undefined ? result.unwanted?.worst || null : level;
+  return worst && worst !== "info" ? { ...d, unwanted: worst } : d;
 }
 
 export const DECISION_ORDER = ["accept", "hold", "re-sequence", "reject"];

@@ -12,6 +12,7 @@ import { buildTraceView } from "./alignedView.js";
 import { baseEditMarkers, baseEditTable } from "./baseEdit.js";
 import { discoverCut } from "./cutDiscovery.js";
 import { buildCodingContext, describeContext, codingBlockToGenBank } from "./coding.js";
+import { buildUnwanted, observedAlleles } from "./unwanted.js";
 
 export const WORKFLOWS = {
   knockout: { label: "Knockout (indels at one cut)", needsDonor: false, method: "trace" },
@@ -109,6 +110,8 @@ export function analyseSample({ name, spec, control, edited, extraReads = [], sa
     : analysePair({ control, edited, spec, options: { ...engineOptions, sampleType, coding } });
   if (!result.ok) return { name, kind: "trace-pair", ok: false, error: result.error, warnings: result.warnings || [] };
   const decomposition = result.decomposition;
+  // what the sequencing shows beyond the intended edit: unplanned bases (every read) with their protein effect, and the other unwanted-change flags
+  const unwanted = buildUnwanted({ spec, coding, result, workflow: spec.design?.editKind || "" });
   return {
     name, kind: "trace-pair", ok: true, sampleType, enzymeConfigVersion: ENZYME_CONFIG_VERSION, analysisModel: enzymeAnalysisNotes(spec).length ? "staggered-break-span/1" : "single-cut/1", nuclease: specNuclease(spec), cutSites: spec.guides.map(g => ({ name: g.name, strand: g.strand, cut: g.cut, ...(g.cuts ? { cuts: g.cuts } : {}) })), warnings: result.warnings, orientation: result.prepared.orientation,
     summary: result.summary, intervals: result.intervals || null, confidence: result.confidence || null, reads: result.reads || null, agreement: result.agreement || null,
@@ -116,7 +119,10 @@ export function analyseSample({ name, spec, control, edited, extraReads = [], sa
     contributions: decomposition.contributions.slice(0, 14).map((c) => ({ label: c.label, kind: c.kind, size: c.size, fraction: round(c.fraction, 4), indistinguishable: c.indistinguishable, alsoConsistentWith: c.alsoConsistentWith })),
     functional: result.functional ? compactFunction(result.functional) : null,
     baseEdits: spec.baseEditor ? { editor: spec.baseEditor.editor, window: spec.baseEditor.window, target: spec.baseEditor.target, positions: baseEditTable(result.prepared, result.markerReadout, result.quality.upstreamRms, options.baseEdit || {}) } : null,
-    unplanned: (result.unplanned || []).map((h) => ({ relative: h.relative, change: `${h.ref}>${h.alt}`, fraction: round(h.fraction, 3) })),
+    unplanned: (result.unplanned || []).map((h) => ({ relative: h.relative, change: `${h.ref}>${h.alt}`, fraction: round(h.fraction, 3), position: h.position, ref: h.ref, alt: h.alt, readsSeen: h.readsSeen, readsCovering: h.readsCovering, confirmed: h.confirmed, discordant: h.discordant, single: h.single, lowFit: h.lowFit, reads: (h.reads || []).map((r) => ({ name: r.name, fraction: round(r.fraction, 3) })) })),
+    unwanted: { model: unwanted.model, changes: unwanted.changes.map((c) => ({ position: c.position, relative: c.relative, ref: c.ref, alt: c.alt, fraction: round(c.fraction, 3), confirmed: c.confirmed, discordant: c.discordant, single: c.single, lowFit: c.lowFit, readsSeen: c.readsSeen, readsCovering: c.readsCovering, reads: (c.reads || []).map((r) => ({ name: r.name, fraction: round(r.fraction, 3) })), severity: c.severity, consequence: c.consequence })),
+      flags: unwanted.flags, worst: unwanted.worst, proteinChanging: unwanted.proteinChanging, confirmedProteinChange: unwanted.confirmedProteinChange },
+    alleles: observedAlleles({ decomposition, prepared: result.prepared, spec }),
     markers: result.markerReadout.map((row) => ({ position: row.marker.pos, change: `${row.marker.ref}>${row.marker.alt}`, role: row.marker.role, label: row.marker.label || "", covered: row.covered, reason: row.reason || "", altEdited: round(row.altEdited), altControl: round(row.altControl), altNet: round(row.altNet), ...(row.marker.protein ? { protein: { label: row.marker.protein.label, residue: row.marker.protein.residue, from: row.marker.protein.from, to: row.marker.protein.to, silent: row.marker.protein.silent, codonFrom: row.marker.protein.codonFrom, codonTo: row.marker.protein.codonTo } } : {}) })),
     quality: { upstreamRms: round(result.quality.upstreamRms, 4), upstreamBackground: round(result.quality.upstreamBackground, 4), r2: round(decomposition.r2), noiseFraction: round(decomposition.noiseFraction), rawSum: round(decomposition.rawSum), windowLength: decomposition.windowLength, positionsUsed: decomposition.positionsUsed, candidates: decomposition.candidates, columns: decomposition.columns, discordanceBefore: round(result.quality.discordanceBefore), discordanceNearCut: round(result.quality.discordanceNearCut), discordanceAfter: round(result.quality.discordanceAfter), patches: result.prepared.patches.length },
     charts: { contributions: contributionsSvg(decomposition.contributions), discordance: discordanceSvg(result.prepared) },

@@ -3,12 +3,26 @@ import { Download, Award, Search, CheckCircle, AlertTriangle, XCircle, RefreshCw
 import { cloneSelectionFigure } from "../../engine/qc/selectionFigure.js";
 import { buildQcReportHtml, buildTakeHomeMessage } from "../../engine/qc/report.js";
 import { saveSvg, savePng, savePdf } from "../../engine/qc/saveFigure.js";
+import { cloneFlags, actionableFlags, chipLabel, worstSeverity } from "../../services/cloneFlags.js";
+import { CloneReviewPanel } from "./CloneReviewPanel.jsx";
+import { useCloneReview } from "./useCloneReview.js";
 
-export function DecisionView({ currentProject, onBackToQc }) {
+const CHIP_CLASS = { block: "badge badge-blocked", review: "badge badge-review", info: "badge" };
+const FlagChips = ({ flags, limit = 3 }) => (flags.length === 0 ? null : (
+  <span style={{ display: "inline-flex", gap: "0.25rem", flexWrap: "wrap" }}>
+    {flags.slice(0, limit).map((f, i) => <span key={`${f.code}-${i}`} className={CHIP_CLASS[f.severity]} title={f.text} style={{ fontSize: "0.7rem" }}>{chipLabel(f)}</span>)}
+    {flags.length > limit && <span className="badge" style={{ fontSize: "0.7rem" }}>+{flags.length - limit}</span>}
+  </span>
+));
+
+export function DecisionView({ currentProject, onBackToQc, onUpdateProject }) {
   const qcResults = currentProject?.qcResults || [];
   const [selectedClone, setSelectedClone] = useState(null);
   const [verdictFilter, setVerdictFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [reviewSettings, setReviewSettings] = useState({ ontologyTerm: currentProject?.alleleReviewContext || "", sequenceLength: 131072 });
+  const cloneReview = useCloneReview(currentProject, qcResults, reviewSettings);
+  const flagsOf = r => cloneFlags(r, cloneReview.review);
 
   const selectionSvg = useMemo(() => cloneSelectionFigure(qcResults), [qcResults]);
   const workflow = useMemo(() => {
@@ -28,6 +42,7 @@ export function DecisionView({ currentProject, onBackToQc }) {
       workflow,
       design: currentProject?.qcDesignSource || currentProject?.gene || "",
       results: qcResults,
+      cloneReview: cloneReview.review,
     });
     const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -56,7 +71,7 @@ export function DecisionView({ currentProject, onBackToQc }) {
 
   const handleDownloadCsv = () => {
     if (qcResults.length === 0) return;
-    const headers = ["Sample", "Decision", "HDR_Fraction", "BlockingOnly_Fraction", "Indel_Fraction", "WT_Fraction", "Rank", "Reasons"];
+    const headers = ["Sample", "Decision", "HDR_Fraction", "BlockingOnly_Fraction", "Indel_Fraction", "WT_Fraction", "Rank", "Reasons", "Flags", "Unplanned_Bases", "SpliceAI_Verdict", "SpliceAI_Effect"];
     const rows = qcResults.map(r => {
       const s = r.summary || {};
       const dec = r.decision?.decision || r.decision?.verdict || "unknown";
@@ -66,7 +81,9 @@ export function DecisionView({ currentProject, onBackToQc }) {
       const wt = s.wtPct ?? (r.wildTypeFraction !== undefined ? Math.round(r.wildTypeFraction * 100) : "");
       const rank = r.recommendation?.rank || r.rank || "";
       const reasons = (r.decision?.reasons || []).join("; ");
-      return [r.name, dec, hdr, block, indel, wt, rank, reasons];
+      const unplanned = (r.unwanted?.changes || []).map(c => `${c.relative >= 0 ? "+" : ""}${c.relative} ${c.ref}>${c.alt} ${c.consequence?.label || c.consequence?.class || ""} ${c.confirmed ? "confirmed" : c.discordant ? "discordant" : "single read"}`.trim()).join("; ");
+      const sp = cloneReview.review?.splice?.clones?.[r.name];
+      return [r.name, dec, hdr, block, indel, wt, rank, reasons, actionableFlags(r, cloneReview.review).map(f => `${f.source}:${f.code}:${f.severity}`).join(" "), unplanned, sp?.verdict ?? "", sp?.effect ?? ""];
     });
 
     const csv = [headers.join(","), ...rows.map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
@@ -101,16 +118,19 @@ export function DecisionView({ currentProject, onBackToQc }) {
   const reseq = qcResults.filter(r => (r.decision?.decision || r.decision?.verdict) === "re-sequence");
   const rejected = qcResults.filter(r => (r.decision?.decision || r.decision?.verdict) === "reject");
   const topPanel = qcResults.filter(r => r.recommendation?.rank || r.rank);
+  const flagged = qcResults.filter(r => actionableFlags(r, cloneReview.review).length > 0);
 
   const filteredResults = qcResults.filter(r => {
     const dec = (r.decision?.decision || r.decision?.verdict || "").toLowerCase();
-    if (verdictFilter !== "all" && dec !== verdictFilter) return false;
+    if (verdictFilter === "flagged") { if (!actionableFlags(r, cloneReview.review).length) return false; }
+    else if (verdictFilter !== "all" && dec !== verdictFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
         (r.name || "").toLowerCase().includes(q) ||
         (r.genotype?.summary || "").toLowerCase().includes(q) ||
-        (r.decision?.reasons || []).join(" ").toLowerCase().includes(q)
+        (r.decision?.reasons || []).join(" ").toLowerCase().includes(q) ||
+        flagsOf(r).some(f => f.text.toLowerCase().includes(q))
       );
     }
     return true;
@@ -195,6 +215,10 @@ export function DecisionView({ currentProject, onBackToQc }) {
             <div style={{ fontSize: "0.75rem", color: "var(--danger)", fontWeight: 700, textTransform: "uppercase" }}>Rejected / WT</div>
             <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--danger)" }}>{rejected.length}</div>
           </div>
+          <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "var(--warning-bg)", border: "1px solid var(--warning-border)" }}>
+            <div style={{ fontSize: "0.75rem", color: "var(--warning)", fontWeight: 700, textTransform: "uppercase" }}>Flagged: unwanted changes</div>
+            <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--warning)" }} data-testid="flagged-count">{flagged.length}</div>
+          </div>
         </div>
       </div>
 
@@ -264,6 +288,7 @@ export function DecisionView({ currentProject, onBackToQc }) {
                       {clone.genotype.summary}
                     </div>
                   )}
+                  <FlagChips flags={flagsOf(clone)} />
 
                   <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
                     {isKnock ? (
@@ -316,6 +341,15 @@ export function DecisionView({ currentProject, onBackToQc }) {
             )}
           </div>
 
+          {flagsOf(activeClone).length > 0 && (
+            <div style={{ fontSize: "0.85rem", margin: "0 0 0.75rem", padding: "0.75rem 1rem", background: "var(--warning-bg)", borderRadius: "8px", border: "1px solid var(--warning-border)" }}>
+              <strong>Flags ({worstSeverity(flagsOf(activeClone)) === "block" ? "do not carry forward" : "check before use"}):</strong>
+              <ul style={{ margin: "0.35rem 0 0 1.1rem", padding: 0 }}>
+                {flagsOf(activeClone).map((f, i) => <li key={`${f.code}-${i}`}><span className={CHIP_CLASS[f.severity]} style={{ fontSize: "0.7rem", marginRight: "0.4rem" }}>{f.source}</span>{f.text}</li>)}
+              </ul>
+            </div>
+          )}
+
           {activeClone.recommendation && activeClone.recommendation.priority !== "none" && (
             <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", padding: "0.75rem 1rem", background: "#f0f6fc", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
               <strong>Recommendation ({activeClone.recommendation.tier || activeClone.recommendation.priority}):</strong>{" "}
@@ -325,6 +359,8 @@ export function DecisionView({ currentProject, onBackToQc }) {
           )}
         </div>
       )}
+
+      {onUpdateProject && <CloneReviewPanel project={currentProject} review={cloneReview} settings={reviewSettings} onSettings={setReviewSettings} onUpdateProject={onUpdateProject} />}
 
       {/* Complete Clone Screening Table */}
       <div className="card">
@@ -343,7 +379,7 @@ export function DecisionView({ currentProject, onBackToQc }) {
               />
             </div>
 
-            {["all", "accept", "hold", "re-sequence", "reject"].map(mode => (
+            {["all", "accept", "hold", "re-sequence", "reject", "flagged"].map(mode => (
               <button
                 key={mode}
                 type="button"
@@ -368,6 +404,7 @@ export function DecisionView({ currentProject, onBackToQc }) {
                 <th>Blocking-Only %</th>
                 <th>Wild-Type %</th>
                 <th>Confidence</th>
+                <th>Flags</th>
                 <th>Reasons &amp; Next Action</th>
               </tr>
             </thead>
@@ -402,6 +439,7 @@ export function DecisionView({ currentProject, onBackToQc }) {
                     <td className="mono">{block !== "—" ? `${block}%` : "—"}</td>
                     <td className="mono">{wt !== "—" ? `${wt}%` : "—"}</td>
                     <td>{r.confidence?.tier || "—"}</td>
+                    <td><FlagChips flags={flagsOf(r)} /></td>
                     <td style={{ fontSize: "0.82rem", color: "var(--text-muted)", maxWidth: "360px" }}>
                       {(r.decision?.reasons || []).join(" ")}
                     </td>

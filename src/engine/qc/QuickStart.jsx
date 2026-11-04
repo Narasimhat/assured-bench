@@ -850,7 +850,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked), "text/csv")}
+                    onClick={() => download(`assured_qc_${stamp}.csv`, buildResultsCsv(outcome.workflow, ranked, { flags: true }), "text/csv")}
                     style={{ fontSize: "12px", padding: "6px 12px", margin: 0 }}
                   >
                     Download Table (CSV)

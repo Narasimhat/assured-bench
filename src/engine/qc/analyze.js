@@ -6,7 +6,7 @@ import { computeIntervals, upstreamNoise, upstreamBackground } from "./uncertain
 import { confidenceFrom } from "./reliability.js";
 import { callGenotype } from "./genotype.js";
 import { shiftAt } from "./offset.js";
-import { scanUnplanned, describeUnplanned } from "./unplanned.js";
+import { scanUnplannedDetailed, mergeUnplannedReads, describeUnplanned, forwardFrame } from "./unplanned.js";
 import { assessFunction, assessAllele } from "./coding.js";
 
 const KO_MIN_SIZE = 21;
@@ -130,7 +130,8 @@ export function analysePair({ control, edited, spec, options = {} }) {
   const functional = functionalFor(options.coding, decomposition, summary);
   const intervals = options.intervals === false ? null : computeIntervals(decomposition, summary, { noiseFloor: upstreamNoise(prepared), lofOf: lofOfFor(options.coding), ...(options.interval || {}) });
   // a base change the design did not ask for (needs the fit's internals, so it is read before they are dropped)
-  const unplanned = scanUnplanned(prepared, decomposition.internals, decomposition, options.unplannedScan || {});
+  const scanned = mergeUnplannedReads([{ name: "read", orientation: prepared.orientation, scan: scanUnplannedDetailed(prepared, decomposition.internals, decomposition, options.unplannedScan || {}) }], forwardFrame([prepared]));
+  const unplanned = scanned.changes; const unplannedOverflow = scanned.overflow; const unplannedRuns = scanned.runs;
   delete decomposition.internals; // large matrices; not part of a result
   const warnings = [...prepared.warnings];
   if (unplanned.length) warnings.push(`Unplanned base change${unplanned.length > 1 ? "s" : ""} relative to the cut: ${describeUnplanned(unplanned)}. The design does not predict ${unplanned.length > 1 ? "them" : "it"}; check the trace (a second edit, a bystander edit, a sequence variant or mixed template).`);
@@ -145,7 +146,7 @@ export function analysePair({ control, edited, spec, options = {} }) {
   const genotype = options.sampleType === "clone" ? callGenotype(decomposition, options.genotype || {}) : null;
   return {
     ok: true, warnings, prepared, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (prepared.spec.donors || []).length > 0), markerReadout, genotype, functional,
-    quality, unplanned,
+    quality, unplanned, unplannedOverflow, unplannedRuns,
   };
 }
 
@@ -171,6 +172,13 @@ export function analyseReads({ reads, spec, options = {} }) {
   const noise = list.reduce((s, p) => s + upstreamNoise(p), 0) / list.length;
   const intervals = options.intervals === false ? null : computeIntervals(decomposition, summary, { noiseFloor: noise, lofOf: lofOfFor(options.coding), ...(options.interval || {}) });
   delete decomposition.internals;
+  // Base changes the design did not ask for: every read is fitted and scanned on its own (the joint fit hides which read carries a base), then the reads are compared on the forward strand.
+  const scans = options.unplannedScan?.unplanned === false || options.unplanned === false ? [] : list.map((p, k) => {
+    const own = decomposeAdaptive({ prepared: p, alleles: buildExpectedAlleles(p.spec, options.library || {}).alleles, options: { ...options, returnInternals: true } });
+    return { name: reads[usable[k].i].name || `read ${usable[k].i + 1}`, orientation: p.orientation, scan: scanUnplannedDetailed(p, own.internals, own, options.unplannedScan || {}) };
+  });
+  const scanned = mergeUnplannedReads(scans, forwardFrame(list)); const unplanned = scanned.changes; const unplannedOverflow = scanned.overflow; const unplannedRuns = scanned.runs;
+  if (unplanned.length) warnings.push(`Unplanned base change${unplanned.length > 1 ? "s" : ""} relative to the cut: ${describeUnplanned(unplanned)} (${unplanned.map((u) => (u.confirmed ? "seen in " + u.readsSeen + " reads" : u.discordant ? "seen in one read, not in the other" : "seen in one read")).join("; ")}). The design does not predict ${unplanned.length > 1 ? "them" : "it"}; check the traces (a second edit, a bystander edit, a sequence variant or mixed template).`);
   if (decomposition.r2 !== null && decomposition.r2 < 0.8) warnings.push(`The fit explains only ${(decomposition.r2 * 100).toFixed(0)}% of the difference from the wild type; the mixture may contain alleles outside the expected library or the traces may be noisy.`);
   if (summary.unexplainedPct >= 15) warnings.push(`${summary.unexplainedPct}% of the signal after the cut is not explained by any allele in the library. It is counted as not wild type.`);
   const perRead = (decomposition.perRead || []).map((r, k) => ({ name: reads[usable[k].i].name || `read ${usable[k].i + 1}`, orientation: list[k].orientation, editedPct: r.editedShare === null ? null : pct(r.editedShare), intendedEditPct: r.intendedShare === null ? null : pct(r.intendedShare), positions: r.positions }));
@@ -179,5 +187,5 @@ export function analyseReads({ reads, spec, options = {} }) {
   if (agreement && !agreement.agree) warnings.push(`The reads disagree about the edited share (${perRead.map((r) => `${r.name} ${r.editedPct}%`).join(", ")}). A PCR or sequencing artefact, a poor read or mixed template is more likely than biology: re-sequence from both ends.`);
   const quality = { discordanceBefore: Math.max(...list.map((p) => meanDiscordance(p, p.alignmentWindow.start, p.alignmentWindow.end))), upstreamRms: Math.sqrt(noise) };
   const genotype = options.sampleType === "clone" ? callGenotype(decomposition, options.genotype || {}) : null;
-  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout: readMarkers(first), genotype, functional, quality, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
+  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout: readMarkers(first), genotype, functional, quality, unplanned, unplannedOverflow, unplannedRuns, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
 }
