@@ -24,7 +24,7 @@ export function useCloneReview(project, results, settings) {
       if (live) setState(next);
     })();
     return () => { live = false; };
-  }, [project?.designResult, project?.genbankRaw, results, saved.splice, saved.alphagenome, settings.ontologyTerm, settings.sequenceLength]);
+  }, [project?.designResult, project?.genbankRaw, project?.qcImportedDesignText, project?.qcDesignSpec, project?.cloneReviewReferenceRaw, project?.cloneReviewReferenceName, results, saved.splice, saved.alphagenome, settings.ontologyTerm, settings.sequenceLength]);
   const fresh = {
     splice: state.splice.fresh ? saved.splice.summary : null,
     alphagenome: state.alphagenome.fresh ? saved.alphagenome.summary : null,

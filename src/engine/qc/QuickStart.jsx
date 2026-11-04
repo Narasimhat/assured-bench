@@ -11,7 +11,7 @@ import { tally, DECISION_ORDER } from "./decision.js";
 import { withRecommendations, recommendationCsv, panelOf } from "./recommend.js";
 import { runProteinFigure } from "./proteinFigure.js";
 import { runSummaryFigure } from "./summaryFigure.js";
-import { alignedGroups, clonesAlignedFigure, clonesAlignmentFigure } from "./alignedFigure.js";
+import { alignedGroups, clonesAlignedFigure } from "./alignedFigure.js";
 import { cloneSelectionFigure } from "./selectionFigure.js";
 import { saveSvg, savePng, savePdf } from "./saveFigure.js";
 import { NUCLEASES, specNuclease } from "./nucleases.js";
@@ -282,7 +282,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
 
   const result = outcome ? outcome.results[picked] : null; const counts = outcome ? tally(outcome.results.map((r) => r.decision)) : null;
   const runFigure = outcome ? runProteinFigure(outcome.results) : ""; const koRun = outcome ? outcome.workflow === "knockout" || outcome.workflow === "deletion" : false; const panelAuto = koRun ? 3 : 6; const ranked = outcome ? withRecommendations(outcome.results, panel ? { panel } : {}) : null; const selectionSvg = ranked ? cloneSelectionFigure(ranked) : ""; const summaryFigure = ranked ? runSummaryFigure(ranked) : ""; const recommendation = ranked && ranked[picked] ? ranked[picked].recommendation : null;
-  const alignedList = ranked ? alignedGroups(ranked).map((items) => ({ items, grid: clonesAlignmentFigure(items), stack: items.length <= 48 ? clonesAlignedFigure(items) : "" })) : [];
+  const alignedList = ranked ? alignedGroups(ranked).map((items) => ({ items, stack: items.length <= 48 ? clonesAlignedFigure(items) : "" })).filter((g) => g.stack) : [];
   const PRIORITY_LABEL = { first: "carry forward", confirmed: "confirmed", reserve: "reserve", duplicate: "backup", caution: "protein still made", not_recommended: "not recommended", discard: "discard", resequence: "sequence again" };
   const stamp = new Date().toISOString().slice(0, 10);
   const figure = async (format) => {
@@ -917,15 +917,11 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
               {alignedList.map((g, gi) => (
                 <div key={gi} style={{ marginTop: "12px" }}>
                   <p><b>All clones aligned with the wild-type control</b>{alignedList.length > 1 ? ` (design group ${gi + 1}, ${g.items.length} samples)` : ` (${g.items.length} samples)`}</p>
-                  <div className="scroll" dangerouslySetInnerHTML={{ __html: g.grid }} />
-                  {g.stack && <div className="scroll" dangerouslySetInnerHTML={{ __html: g.stack }} />}
+                  <div className="scroll" dangerouslySetInnerHTML={{ __html: g.stack }} />
                   <p>
-                    <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_alignment_${stamp}.svg`, g.grid)}>Base-call alignment (SVG)</button>
-                    <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_alignment_${stamp}_300dpi.png`, g.grid)}>Base-call alignment (PNG)</button>
-                    <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_alignment_${stamp}.pdf`, g.grid)}>Base-call alignment (PDF)</button>
-                    {g.stack && <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_aligned_${stamp}.svg`, g.stack)}>Chromatograms (SVG)</button>}
-                    {g.stack && <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_aligned_${stamp}_300dpi.png`, g.stack)}>Chromatograms (PNG)</button>}
-                    {g.stack && <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_aligned_${stamp}.pdf`, g.stack)}>Chromatograms (PDF)</button>}
+                    <button type="button" className="link" onClick={() => saveSvg(`assured_qc_clones_aligned_${stamp}.svg`, g.stack)}>Chromatograms (SVG)</button>
+                    <button type="button" className="link" onClick={() => savePng(`assured_qc_clones_aligned_${stamp}_300dpi.png`, g.stack)}>Chromatograms (PNG)</button>
+                    <button type="button" className="link" onClick={() => savePdf(`assured_qc_clones_aligned_${stamp}.pdf`, g.stack)}>Chromatograms (PDF)</button>
                   </p>
                 </div>
               ))}
@@ -938,10 +934,12 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
                 {runFigure && <button type="button" className="link" onClick={() => download(`assured_qc_protein_products_${stamp}.svg`, runFigure, "image/svg+xml")}>Protein products (SVG)</button>}
                 {runFigure && <button type="button" className="link" onClick={() => savePdf(`assured_qc_protein_products_${stamp}.pdf`, runFigure)}>Protein products (PDF)</button>}
               </p>
+            </details>
+            <div style={{ marginTop: "10px" }}>
               <IceExport tasks={outcome.tasks} results={outcome.results} getBytes={name => {
                 const bytes = buffers.current.get(name); if (!bytes) throw new Error(`Trace no longer available: ${name}`); return bytes;
               }} />
-            </details>
+            </div>
           </>
         );
       })()}

@@ -64,8 +64,20 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", margin: "0.5rem 0" }}>
         The design review predicted the planned edit. This asks the same predictors about what the clones were found to carry: the intended edit as read, any base the design did not plan, any indel allele.
-        Both run on your computer; the results are model predictions, not measurements. A base seen in a trace cannot be placed on one allele, so an unplanned base is assumed to sit on the allele that carries the intended edit.
+        SpliceAI runs locally. The AlphaGenome runner retrieves GRCh38 context from Ensembl and sends the sequences to Google; your API key stays local. Results are model predictions, not measurements. A base seen in a trace cannot be placed on one allele, so an unplanned base is assumed to sit on the allele that carries the intended edit.
       </p>
+      {(project.qcImportedDesignText || project.qcDesignSpec) && <label style={{ display: "block", margin: "0.75rem 0" }}>
+        Genomic reference for the original experimental design (.gb / .gbk)
+        <input type="file" accept=".gb,.gbk,.genbank" aria-label="Genomic reference for clone review" onChange={async e => {
+          const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+          try {
+            if (file.size > MAX_FILE) throw new Error("The reference must be smaller than 6 MB.");
+            onUpdateProject({ cloneReviewReferenceRaw: await file.text(), cloneReviewReferenceName: file.name, cloneReview: null });
+            setError("");
+          } catch (error) { setError(error.message); }
+        }} />
+        {project.cloneReviewReferenceName && <span>Loaded: {project.cloneReviewReferenceName}. All reviewed edits must match its sequence; noisy QC-window ends may be excluded using a unique exact core.</span>}
+      </label>}
       {alleles.length > 0 && (
         <p style={{ fontSize: "0.85rem" }}>
           {alleles.length} allele{alleles.length === 1 ? "" : "s"} over {new Set(alleles.flatMap(a => a.clones.map(c => c.name))).size} clone{new Set(alleles.flatMap(a => a.clones.map(c => c.name))).size === 1 ? "" : "s"} to review
@@ -121,7 +133,7 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
       {rows.length > 0 && (
         <div style={{ overflowX: "auto", marginTop: "0.75rem" }}>
           <table aria-label="Predicted splice and expression effect per clone">
-            <thead><tr><th>Clone</th><th>Allele reviewed</th><th>SpliceAI effect</th><th>SpliceAI verdict</th><th>Basis</th><th>AlphaGenome splice-site change</th></tr></thead>
+            <thead><tr><th>Clone</th><th>Allele reviewed</th><th>SpliceAI effect</th><th>SpliceAI verdict</th><th>Basis</th><th>AlphaGenome RNA mean |Δ|</th><th>AlphaGenome splice-usage max |Δ|</th><th>AlphaGenome splice-site max |Δ|</th></tr></thead>
             <tbody>
               {rows.map(name => {
                 const s = spliceNow?.clones?.[name]; const a = agNow?.clones?.[name];
@@ -132,7 +144,9 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
                     <td className="mono">{s ? s.effect.toFixed(3) : "—"}</td>
                     <td>{s ? <span className={VERDICT_BADGE[s.verdict]}>{VERDICT_WORD[s.verdict]}</span> : "—"}</td>
                     <td style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{s ? s.basis : "—"}</td>
-                    <td className="mono">{a ? a.spliceScore.toPrecision(3) : "—"}</td>
+                    <td className="mono">{a?.outputs.RNA_SEQ ? a.outputs.RNA_SEQ.meanAbsDelta.toPrecision(3) : "—"}</td>
+                    <td className="mono">{a?.outputs.SPLICE_SITE_USAGE ? a.outputs.SPLICE_SITE_USAGE.maxAbsDelta.toPrecision(3) : "—"}</td>
+                    <td className="mono">{a?.outputs.SPLICE_SITES ? a.outputs.SPLICE_SITES.maxAbsDelta.toPrecision(3) : "—"}</td>
                   </tr>
                 );
               })}
@@ -141,6 +155,7 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
           <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.4rem" }}>
             {spliceNow && `${spliceNow.tool} ${spliceNow.version}. `}{agNow && `AlphaGenome ${agNow.modelVersion}, ${(agNow.ontologyTerms || []).join(", ")}. `}
             A clone that was not reviewed carried no allele to predict (wild type, rejected without a flagged change, or unreadable).
+            AlphaGenome shows the allele with the largest splice-usage change per clone, compared with its intended donor allele when matched, otherwise with WT. Values are whole-window raw track differences, not expression percentages or significance tests. Zero can mean the observed and intended sequences are identical. Indels can shift downstream track positions.
           </p>
         </div>
       )}

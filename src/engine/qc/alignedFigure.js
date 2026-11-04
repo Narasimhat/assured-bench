@@ -13,6 +13,30 @@ const DECISION_LABEL = { accept: "Accept", hold: "Hold", "re-sequence": "Sequenc
 const MARKER_COLOR = (role) => (/block/i.test(role) ? "#e08214" : "#7b3294");
 const fmt = (x) => x.toFixed(1);
 
+/** Shorten long sample names while keeping the clone number/distinguishing suffix visible. */
+export function shortCloneName(raw, maxLen = 17) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const noBarcode = s.replace(/[_\-\s]+[A-Z]{1,4}\d{6,}$/i, "");
+  const cloneMatch = noBarcode.match(/^(.*?)[_\-\s]+(?:clone[_\-\s]*)?(\d{1,4}[A-Za-z]?)$/i);
+  if (cloneMatch && s.length > maxLen) {
+    const prefix = cloneMatch[1];
+    const cloneId = `Clone ${cloneMatch[2]}`;
+    if (maxLen <= 18) return cloneId;
+    const room = maxLen - cloneId.length - 3;
+    if (room >= 6) {
+      const shortPrefix = prefix.length > room ? `${prefix.slice(0, room - 1)}\u2026` : prefix;
+      return `${cloneId} (${shortPrefix})`;
+    }
+    return cloneId;
+  }
+  if (noBarcode.length <= maxLen) return noBarcode;
+  if (s.length <= maxLen) return s;
+  const tailLen = Math.max(5, Math.ceil((maxLen - 1) * 0.55));
+  const headLen = Math.max(3, maxLen - 1 - tailLen);
+  return `${noBarcode.slice(0, headLen)}\u2026${noBarcode.slice(-tailLen)}`;
+}
+
 function frame(view, { width, ml, mr }) {
   const w = width - ml - mr; const step = w / view.length;
   return { n: view.length, step, ml, w, x: (i) => ml + (i + 0.5) * step, xl: (i) => ml + i * step };
@@ -172,7 +196,7 @@ export function cloneAlignedFigure(view, { name = "clone", decision = "", headli
   svg += ann.svg + gl.bands + mismatchBands(view, F, yE, h + 12);
   svg += `<text x="8" y="${yC + 30}" font-size="10" font-weight="700" fill="${INK}">Wild type</text><text x="8" y="${yC + 42}" font-size="8.5" fill="${MUTED}">control</text>`;
   svg += letters(view.control.calls, F, yC) + strip(view.control.curves, null, F, yC + 4, h);
-  svg += `<text x="8" y="${yE + 30}" font-size="10" font-weight="700" fill="${INK}">${esc(name.length > 14 ? `${name.slice(0, 13)}\u2026` : name)}</text><text x="8" y="${yE + 42}" font-size="8.5" fill="${MUTED}">clone</text>`;
+  svg += `<text x="8" y="${yE + 30}" font-size="10" font-weight="700" fill="${INK}"><title>${esc(name)}</title>${esc(shortCloneName(name, 14))}</text><text x="8" y="${yE + 42}" font-size="8.5" fill="${MUTED}">clone</text>`;
   svg += gapBlocks(view, F, yE + 4, h) + letters(view.edited.calls, F, yE, view.control.calls, view.edited.second) + strip(view.edited.curves, view.edited.calls, F, yE + 4, h) + cloneChips(view, F, yE + 4 + h + 3);
   svg += gl.cuts + legend(F, ml, bottom + 26, view) + "</svg>";
   return svg;
@@ -206,7 +230,7 @@ export function clonesAlignedFigure(items, { title = "All clones aligned with th
   const rows = [{ name: "Wild type", sub: "control", view: v0, control: true }, ...items];
   rows.forEach((it, r) => {
     const y = y0 + r * rowH; const v = it.view; const [chip, bg, line] = it.control ? ["", "", ""] : DECISION[it.decision] || ["", "#f2f4f7", "#98a2b3"];
-    svg += `<text x="8" y="${y + 21}" font-size="10" font-weight="700" fill="${INK}">${esc(it.name.length > 17 ? `${it.name.slice(0, 16)}\u2026` : it.name)}</text>`;
+    svg += `<text x="8" y="${y + 21}" font-size="10" font-weight="700" fill="${INK}"><title>${esc(it.name)}</title>${esc(it.control ? it.name : shortCloneName(it.name, 17))}</text>`;
     if (chip) svg += `<rect x="${ml - 24}" y="${y + 10}" width="14" height="14" rx="3" fill="${bg}" stroke="${line}"/><text x="${ml - 17}" y="${y + 21}" text-anchor="middle" font-size="9.5" fill="${INK}">${chip}</text>`;
     svg += `<text x="8" y="${y + 33}" font-size="8" fill="${MUTED}">${esc(it.control ? it.sub : it.note)}</text>`;
     if (it.control) svg += letters(v.control.calls, F, y + 9) + strip(v.control.curves, null, F, y + 12, h, { lw: 0.8 });
@@ -231,7 +255,7 @@ export function clonesAlignmentFigure(items, { title = "Base calls of all clones
   items.forEach((it, r) => {
     const y = yRows + r * rh; const v = it.view; const [chip, bg, line] = DECISION[it.decision] || ["", "#f2f4f7", "#98a2b3"];
     if (r % 2 === 0) svg += `<rect x="0" y="${y}" width="${W}" height="${rh}" fill="#f9fafb"/>`;
-    svg += `<text x="8" y="${y + 11}" font-size="10" fill="${INK}">${esc(it.name.length > 17 ? `${it.name.slice(0, 16)}\u2026` : it.name)}</text>`;
+    svg += `<text x="8" y="${y + 11}" font-size="10" fill="${INK}"><title>${esc(it.name)}</title>${esc(shortCloneName(it.name, 17))}</text>`;
     if (chip) svg += `<rect x="${ml - 24}" y="${y + 1}" width="14" height="13" rx="3" fill="${bg}" stroke="${line}"/><text x="${ml - 17}" y="${y + 11}" text-anchor="middle" font-size="9" fill="${INK}">${chip}</text>`;
     for (let i = 0; i < n; i += 1) {
       const c = v.edited.calls[i]; const ref = v.control.calls[i];

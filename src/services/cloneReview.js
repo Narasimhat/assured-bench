@@ -6,6 +6,8 @@ import { buildQcDesignSpec } from "../engine/design/qcExport.js";
 import { SPLICE_CHECK_THRESHOLDS } from "../engine/design/pairBlocking.js";
 import { resolveAlphaGenomeMapping, reviewRequestId } from "./alphaGenomeReview.js";
 import { ALLELE_CONTEXT_LENGTHS } from "./alphaGenomeAlleles.js";
+import { parseGenBank } from "../engine/qc/genbank.js";
+import { validateDesignSpec } from "../engine/qc/designSpec.js";
 
 export const CLONE_SPLICE_REQUEST_SCHEMA = "assured-clone-splice-request/1";
 export const CLONE_SPLICE_RESULT_SCHEMA = "assured-clone-splice-result/1";
@@ -53,6 +55,37 @@ export function cloneAlleleCandidates(result) {
 
 /** The reference, the offset of the QC window in it and the intended alleles (one per ssODN) of the open design. Throws a message the user can act on. */
 export async function cloneReviewContext(project) {
+  // Imported experimental designs take precedence over newly generated guide/donor alternatives.
+  if (project?.qcImportedDesignText || project?.qcDesignSpec) {
+    const spec = project.qcImportedDesignText ? JSON.parse(project.qcImportedDesignText) : project.qcDesignSpec;
+    const validation = validateDesignSpec(spec);
+    if (!validation.ok) throw new Error("The imported experimental QC design is invalid: " + validation.errors.join(" "));
+    const raw = project.cloneReviewReferenceRaw || project.genbankRaw;
+    if (!raw) throw new Error("Load the genomic GenBank reference for this experimental QC design below. Its sequence must match the QC window.");
+    const record = parseGenBank(raw);
+    const genome = record.sequence;
+    if (!genome || genome.length > 1000000) throw new Error("Load a genomic GenBank reference of at most 1 Mb.");
+    const window = spec.reference.sequence.toUpperCase();
+    // Sanger-derived reference windows can have noisy ends. Only permit a uniquely exact core;
+    // every marker and every reviewed change must lie inside it. Never repair internal mismatches.
+    const trim = Math.min(40, Math.floor(window.length / 10));
+    let offset = genome.indexOf(window), coreStart = 0, coreEnd = window.length;
+    if (offset < 0) {
+      coreStart = trim; coreEnd = window.length - trim;
+      const core = window.slice(coreStart, coreEnd), hit = genome.indexOf(core);
+      if (core.length < 100 || hit < 0 || genome.indexOf(core, hit + 1) >= 0) throw new Error("The QC reference has no unique exact match in this record. Check the reference, strand and parental variants; internal mismatches cannot be ignored.");
+      offset = hit - coreStart;
+    } else if (genome.indexOf(window, offset + 1) >= 0) throw new Error("The QC reference matches more than once in this record.");
+    if (offset < 0 || offset + window.length > genome.length || (spec.markers || []).some(m => m.pos < coreStart || m.pos >= coreEnd)) throw new Error("The QC markers or window extend outside the verified reference match.");
+    const intended = (spec.donors || []).filter(d => !(d.insertBp > 0)).map((d, i) => ({
+      id: `D${i + 1}`, name: d.name,
+      edits: (spec.markers || []).filter(m => m.pos >= d.refStart && m.pos < d.refEnd && (!d.carriesMarkers || d.carriesMarkers.includes(m.pos)))
+        .map(m => ({ start: m.pos + offset, end: m.pos + offset + 1, ref: m.ref, inserted: m.alt, role: m.role === "intended" ? "intended" : "blocking" })).sort((a, b) => a.start - b.start),
+    })).filter(d => d.edits.length);
+    const strands = new Set(record.features.filter(f => f.type === "CDS" && f.location).map(f => f.location.strand));
+    if (strands.size !== 1) throw new Error("The reference must identify one unambiguous coding strand.");
+    return { genome, spec, offset, intended, strand: strands.has("-") ? -1 : 1, gene: spec.design?.gene || project.gene || "Locus", fileName: project.cloneReviewReferenceName || "reference.gb", verifiedCore: [coreStart, coreEnd] };
+  }
   const design = project?.designResult;
   if (!design || design.err) throw new Error("Open the design (Step 1) that these clones were made from, so that the clone changes can be placed on its reference.");
   const genome = String(design.gb?.genomicSequence || "").toUpperCase();
@@ -75,6 +108,7 @@ export function collectReviewAlleles(context, results, options = {}) {
   const byKey = new Map(); const problems = [];
   for (const result of reviewableClones(results, options)) {
     for (const candidate of cloneAlleleCandidates(result)) {
+      if (context.verifiedCore && candidate.edits.some(e => e.start < context.verifiedCore[0] || e.end > context.verifiedCore[1])) throw new Error(`${result.name}: a change lies outside the exact reference match; verify the read before predicting it.`);
       const edits = candidate.edits.map((e) => ({ start: e.start + offset, end: e.end + offset, ref: e.ref, inserted: e.inserted, role: e.role })).sort((a, b) => a.start - b.start);
       if (edits.some((e, i) => i && edits[i - 1].end > e.start)) { problems.push(`${result.name}: overlapping edits in ${candidate.label}`); continue; }
       const bad = edits.find((e) => genome.slice(e.start, e.end) !== e.ref);
@@ -118,7 +152,7 @@ export async function buildCloneAlphaGenomeRequest(project, results, { ontologyT
   if (!/^(CL|EFO|UBERON):\d+$/.test(ontologyTerm || "")) throw new Error("Choose the experimental cell context.");
   if (!ALLELE_CONTEXT_LENGTHS.includes(sequenceLength)) throw new Error("Unsupported context length.");
   const context = await cloneReviewContext(project);
-  const mapping = await resolveAlphaGenomeMapping(project);
+  const mapping = await resolveAlphaGenomeMapping(project.cloneReviewReferenceRaw ? { ...project, genbankRaw: project.cloneReviewReferenceRaw, genomicDesignInput: null } : project);
   if (!mapping || mapping.assembly !== "GRCh38") throw new Error("Fetch a mapped human GRCh38 reference before reviewing the clone alleles (the design review needs the same).");
   const { alleles } = collectReviewAlleles(context, results, options);
   const L = context.genome.length; const S = mapping.referenceStart; const forward = mapping.orientation === 1;

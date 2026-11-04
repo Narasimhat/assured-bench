@@ -18,6 +18,10 @@ for (const [type, mutation, tag] of [["ko", "", ""], ["pm", "R154S", ""], ["ct",
     assert.match(html, /Figure 1\./);
     assert.match(html, /Figure 2\./);
     assert.match(html, /Table 1\./);
+    assert.match(html, /Table 7\. Epistemic classification and human review gates\./);
+    assert.match(html, /Verified in reference/);
+    assert.match(html, /Unknown \/ unassessed/);
+    assert.match(html, /Experimentally demonstrated: none \(pre-experimental\)/);
     assert.match(html, /id="references"/);
     const imported = parseDesignReport(html);
     assert.equal(imported.length, 1);

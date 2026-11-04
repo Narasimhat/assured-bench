@@ -156,3 +156,18 @@ test("the larger edit of a knock-in allele is the intended edit, that of an inde
   assert.equal(odd.edits[0].role, "unplanned");
   assert.equal(odd.unwanted, true);
 });
+
+
+test("original experimental QC spec uses an exact unique reference core, never regenerated donors", async () => {
+  const reference = genome.slice(100, 400);
+  const imported = { schema: "assured-qc-design/1", design: { gene: "APOE", editKind: "snp" }, reference: { sequence: reference, offset: 0 }, guides: [], donors: [], markers: [] };
+  const context = await cloneReviewContext({ qcDesignSpec: imported, cloneReviewReferenceRaw: raw });
+  assert.equal(context.offset, 100);
+  const noisy = structuredClone(imported);
+  noisy.reference.sequence = other(reference[0]) + reference.slice(1, -1) + other(reference.at(-1));
+  const trimmed = await cloneReviewContext({ qcDesignSpec: noisy, cloneReviewReferenceRaw: raw });
+  assert.equal(trimmed.offset, 100);
+  assert.deepEqual(trimmed.verifiedCore, [30, 270]);
+  noisy.reference.sequence = noisy.reference.sequence.slice(0, 100) + other(reference[100]) + noisy.reference.sequence.slice(101);
+  await assert.rejects(cloneReviewContext({ qcDesignSpec: noisy, cloneReviewReferenceRaw: raw }), /no unique exact match/);
+});

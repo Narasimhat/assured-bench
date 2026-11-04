@@ -140,6 +140,44 @@ function donorComparisonSection(project, result) {
     ${paragraph("Only additional blocker-associated changes relative to the intended mutation inform these axes. Splice-site predictions are tissue-agnostic. Whole-transcript exon and splice coverage is required; zero or missing baseline RNA signals prevent a complete preference. Genome-wide specificity, protein function and disease phenotype remain unassessed.")}`;
 }
 
+function epistemicGateSection(project, result, b) {
+  const refOk = Boolean(result?.gb?.genomicSequence?.length);
+  const hasModel = Boolean(result?.koAssessment?.outcomes || project?.donorCandidatePanel?.review || project?.alleleReview || project?.structuralAlternatives);
+  const rows = [
+    [
+      "Target locus and reference sequence",
+      refOk ? "Verified in reference" : "Unknown / unassessed",
+      refOk ? `Checked against supplied reference (${result.gb.genomicSequence.length} bp).` : "Reference sequence was not recorded.",
+      "Confirm transcript, coding change, parental cell line and target zygosity before ordering.",
+    ],
+    [
+      "Repair and regulatory outcomes",
+      hasModel ? "Predicted (model)" : "Unknown / unassessed",
+      hasModel ? "Derived from computational repair or regulatory models; not a measurement of cutting, HDR or therapeutic benefit." : "No repair or regulatory model output is recorded for this design.",
+      "Review candidate trade-offs and blocker protection; do not treat model scores as experimental certification.",
+    ],
+    [
+      "Genome-wide off-target specificity",
+      "Unknown / unassessed",
+      "In-app checks evaluate the supplied reference window only; genome-wide off-target sites are not searched here.",
+      "Run a genome-wide off-target search (for example Cas-OFFinder) against the matching assembly and verify top sites in edited clones.",
+    ],
+    [
+      "Sample-specific variants and haplotype",
+      b?.variantScreen?.retrievedAt ? "Predicted (population database)" : "Unknown / unassessed",
+      b?.variantScreen?.summary || "Population variants were not screened, and private variants in the experimental cell line are unknown.",
+      "Sequence the parental cell line across the screening amplicon before transfection.",
+    ],
+    [
+      "Editing efficiency, clone zygosity and biological effect",
+      "Experimentally demonstrated: none (pre-experimental)",
+      "No wet-lab editing, copy-number, transcript or protein measurements are included in this report.",
+      "Verify edited clones by sequencing, copy-number/LOH check and RNA, protein or functional assays.",
+    ],
+  ];
+  return `<h3>4.1 Epistemic status and pre-experimental review gates</h3>${paragraph("Each dimension of the pre-experimental evidence package is classified below to keep model predictions, reference checks and untested laboratory requirements distinct until resolved.")}${table("Table 7. Epistemic classification and human review gates.", ["Dimension", "Epistemic status", "Recorded evidence and limits", "Required human review / experimental gate"], rows)}`;
+}
+
 export function buildPublicationReport(project, result, supplementaryHtml) {
   const b = project.biomniReport || {};
   const home = buildTakeHome({ designResult: result, biomniReport: b });
@@ -218,7 +256,7 @@ ${paragraph(b.genotypingAssay?.ok ? `Recorded assay: ${b.genotypingAssay.assayTy
 ${screening?.ok ? paragraph(`Assumption-based screening scenario: ${screening.recommendedClonesToScreen == null ? "clone number unavailable" : `${screening.recommendedClonesToScreen} clones to screen`}; predicted biallelic fraction ${pct(screening.predictedBiallelicClonePct)}. ${screening.model || ""}`) + list(screening.assumptions || []) : paragraph(screening?.reason || "A clonal screening estimate is unavailable; no editing or HDR efficiency is assumed here.")}
 <ol>${(home?.nextSteps || ["Review guide and primer specificity against the matching reference assembly.", "Validate the intended allele by sequencing and an assay appropriate to the biological objective."]).map(x => `<li>${esc(x)}</li>`).join("")}</ol>
 ${paragraph("For knockout designs, confirm loss of the relevant protein or function in addition to DNA sequence. For knock-ins, confirm both junctions or the intended substitution, reading frame and relevant expression or localization. Retain unedited controls and the intended design with downstream sequencing analyses.")}</section>
-<section id="discussion"><h2>4. Discussion and limitations</h2>${list(limitations)}${paragraph(candidateRows.length ? `${b.lindelRanking.totalCandidates ?? candidateRows.length} guide candidates were considered by the recorded repair-ranking workflow. Retained candidate comparisons appear in Supplementary Table S1; an alternative guide is not necessarily interchangeable with the selected guide-donor or primer design.` : "Alternative-guide ranking evidence is unavailable in this project. No superiority claim over unrecorded alternatives is made.")}</section>
+<section id="discussion"><h2>4. Discussion and limitations</h2>${list(limitations)}${paragraph(candidateRows.length ? `${b.lindelRanking.totalCandidates ?? candidateRows.length} guide candidates were considered by the recorded repair-ranking workflow. Retained candidate comparisons appear in Supplementary Table S1; an alternative guide is not necessarily interchangeable with the selected guide-donor or primer design.` : "Alternative-guide ranking evidence is unavailable in this project. No superiority claim over unrecorded alternatives is made.")}${epistemicGateSection(project, result, b)}</section>
 <section id="methods"><h2>5. Methods and reproducibility</h2>${table("Table 4. Recorded provenance and analysis configuration.", ["Field", "Recorded value"], methodRows)}
 ${parameters.length ? table("Table 5. Saved design parameters.", ["Parameter", "Value"], parameters) : paragraph("Additional design parameters were not recorded in the saved project.")}
 ${paragraph(outcome ? "For supported SpCas9 guides, Lindel predicts repair outcomes from local sequence context [2]. ASSURED applies transcript-level NMD and truncation rules to those outcomes. Guide ranking combines functional eligibility, available annotation coverage and repair predictions; the full internal selection record is included in the supplementary material. This is distinct from genome-wide off-target assessment." : "A repair-outcome model was not applied or was not recorded for this design. This report does not infer an outcome distribution for an unsupported enzyme or edit type.")}

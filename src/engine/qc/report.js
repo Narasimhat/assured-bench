@@ -2,7 +2,7 @@
 import { WORKFLOWS, headline } from "./batch.js";
 import { cloneProteinFigure } from "./proteinFigure.js";
 import { runSummaryFigure } from "./summaryFigure.js";
-import { cloneAlignedFigure, alignedGroups, clonesAlignedFigure, clonesAlignmentFigure } from "./alignedFigure.js";
+import { cloneAlignedFigure, alignedGroups, clonesAlignedFigure } from "./alignedFigure.js";
 import { cloneSelectionFigure } from "./selectionFigure.js";
 import { panelOf } from "./recommend.js";
 import { flagsFor } from "./unwanted.js";
@@ -97,11 +97,11 @@ export function selectionSection(results, workflow) {
   return `<h2>Clone selection</h2><div style="overflow-x:auto">${figure}</div>${names.length ? `<h3>Next steps for ${esc(names.join(", "))}</h3><ol>${steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol><p class="muted">Suggested steps; adapt them to your own workflow.</p>` : ""}`;
 }
 
-/** The clones of each design on one stretch of the control: the base calls as an alignment, and the chromatograms stacked (up to 48 clones). */
+/** The clones of each design on one stretch of the control: the chromatograms stacked (up to 48 clones). */
 export function alignedSection(results) {
   const groups = alignedGroups(results); if (!groups.length) return "";
   const intro = "<p class=\"muted\">Best clone first. Every clone is laid onto the same stretch of the wild-type control read, base by base. Guides (grey bar, PAM darker), cuts and designed changes are marked. A base that differs from the control is highlighted; a dash is a base the clone lacks.</p>";
-  return `<h2>All clones aligned</h2>${intro}${groups.map((items, g) => `${groups.length > 1 ? `<h3>Design group ${g + 1} (${items.length} samples)</h3>` : ""}<h3>Base calls</h3><div style="overflow-x:auto">${clonesAlignmentFigure(items)}</div>${items.length <= 48 ? `<h3>Chromatograms</h3><div style="overflow-x:auto">${clonesAlignedFigure(items)}</div>` : "<p class=\"muted\">More than 48 clones: the chromatograms are in the sample sections below.</p>"}`).join("")}`;
+  return `<h2>All clones aligned</h2>${intro}${groups.map((items, g) => `${groups.length > 1 ? `<h3>Design group ${g + 1} (${items.length} samples)</h3>` : ""}${items.length <= 48 ? `<div style="overflow-x:auto">${clonesAlignedFigure(items)}</div>` : "<p class=\"muted\">More than 48 clones: the chromatograms are in the sample sections below.</p>"}`).join("")}`;
 }
 
 export function buildTakeHomeMessage(workflow, results = []) {
@@ -206,6 +206,7 @@ ${results.some((r) => r.genotype?.copyNumber === 1) ? `<p class="note"><b>One co
 </div>
 ${notes.map((n) => `<p>${esc(n)}</p>`).join("")}
 ${actionTable(view)}
+${clonePredictionSection(cloneReview, short)}
 <details style="margin-top:18px"><summary class="fold">Flagged changes in detail${flagged.size ? ` (${flagged.size} clone${flagged.size === 1 ? "" : "s"})` : ""}</summary>${unwantedSection(workflow, results, cloneReview, short, redundant)}</details>
 ${summarySvg ? `<details style="margin-top:10px"><summary class="fold">Run summary figure</summary><div style="overflow-x:auto">${summarySvg}</div></details>` : ""}
 ${selSec || alnSec ? `<details style="margin-top:10px"><summary class="fold">Multi-clone chromatogram figures &amp; cohort alignments</summary>${selSec}${alnSec}</details>` : ""}
@@ -234,6 +235,16 @@ function unwantedNote(workflow, results) {
 
 const SEVERITY_WORD = { block: "Do not use", review: "Review", info: "Note" };
 const VERDICT_WORD = { pass: "supports", review: "review", fail: "advises against" };
+function clonePredictionSection(review, short) {
+  const splice = review?.splice, ag = review?.alphagenome;
+  const names = [...new Set([...Object.keys(splice?.clones || {}), ...Object.keys(ag?.clones || {})])];
+  if (!names.length) return "";
+  const n = x => Number.isFinite(x) ? x.toPrecision(4) : "Not assessed";
+  return `<h2>Observed clone alleles: splice and expression predictions</h2><p class="muted">${splice ? `SpliceAI ${esc(splice.version)}. ` : ""}${ag ? `AlphaGenome ${esc(ag.modelVersion)}, context ${esc((ag.ontologyTerms || []).join(", "))}. ` : ""}Model predictions do not change sequencing QC decisions. AlphaGenome values are whole-window raw track differences, not gene-expression percentages, significance tests or protein measurements. The displayed allele has the largest splice-usage change per clone, against the intended donor allele when matched, otherwise WT. Zero can mean identical input sequences; it does not prove no effect versus WT. Indels may shift downstream track positions. SpliceAI is not cell-type-specific.</p><table><tr><th>Clone</th><th>SpliceAI max effect</th><th>SpliceAI basis</th><th>AlphaGenome allele / comparison</th><th>RNA mean |Δ|</th><th>Splice usage max |Δ|</th><th>Splice sites max |Δ|</th></tr>${names.map(name => {
+    const s = splice?.clones[name], a = ag?.clones[name];
+    return `<tr><td>${esc(short(name))}</td><td>${s ? `${n(s.effect)} (${VERDICT_WORD[s.verdict]})` : "Not assessed"}</td><td>${esc(s?.basis || "Not assessed")}</td><td>${esc(a ? `${a.allele}: ${a.label}; ${a.comparison}` : "Not assessed")}</td><td>${n(a?.outputs.RNA_SEQ?.meanAbsDelta)}</td><td>${n(a?.outputs.SPLICE_SITE_USAGE?.maxAbsDelta)}</td><td>${n(a?.outputs.SPLICE_SITES?.maxAbsDelta)}</td></tr>`;
+  }).join("")}</table>`;
+}
 export function unwantedRows(workflow, results, cloneReview = null) {
   const rows = [];
   results.forEach((r) => {

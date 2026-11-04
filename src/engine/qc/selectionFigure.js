@@ -2,7 +2,7 @@
 // forward, aligned with the wild-type control, and under them a table of all clones (the share of the donor base at each designed change, the
 // genotype read from the sequence, the call and the support) grouped by what to do with them. Built from the views and results of a run; vector SVG
 // with real text, 1 unit = 1 pixel at 96 dpi, no scripts and no external resources.
-import { alignedItem, clonesAlignedFigure } from "./alignedFigure.js";
+import { alignedItem, clonesAlignedFigure, shortCloneName } from "./alignedFigure.js";
 import { summaryOrder } from "./summaryFigure.js";
 
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -53,9 +53,9 @@ export function cloneSelectionFigure(results, { title = "", width = 980, note = 
       if (collapse) {
         out += `<text x="12" y="${y + 13}" font-size="10" fill="${INK}">${members.length} clones</text>`;
         markers.forEach((m, k) => { out += `<rect x="${mx + k * cw}" y="${y + 1}" width="${cw - 4}" height="${rh - 2}" rx="2" fill="#f2f4f7"/><text x="${mx + k * cw + (cw - 4) / 2}" y="${y + 13}" text-anchor="middle" font-size="9" fill="${INK}">0</text>`; });
-        out += `<text x="${gx}" y="${y + 13}" font-size="9" fill="${INK}">${esc(shorten(members.map((x) => x.name).join(", "), Math.floor((chipX - gx) / 4.9)))}</text>`;
+        out += `<text x="${gx}" y="${y + 13}" font-size="9" fill="${INK}"><title>${esc(members.map((x) => x.name).join(", "))}</title>${esc(shorten(members.map((x) => shortCloneName(x.name, 14)).join(", "), Math.floor((chipX - gx) / 4.9)))}</text>`;
       } else {
-        out += `<text x="12" y="${y + 13}" font-size="10" fill="${INK}">${esc(shorten(r.name, 14))}</text>`;
+        out += `<text x="12" y="${y + 13}" font-size="10" fill="${INK}"><title>${esc(r.name)}</title>${esc(shortCloneName(r.name, 14))}</text>`;
         markers.forEach((m, k) => {
           const row = (r.markers || [])[k]; const v = row && row.covered && !shifted(r) && row.altNet !== null && row.altNet !== undefined ? Math.max(0, Math.min(1, row.altNet)) : null; const x = mx + k * cw;
           if (v === null) out += `<rect x="${x}" y="${y + 1}" width="${cw - 4}" height="${rh - 2}" rx="2" fill="#f2f4f7" stroke="#d0d5dd" stroke-dasharray="2 2"/><text x="${x + (cw - 4) / 2}" y="${y + 13}" text-anchor="middle" font-size="8" fill="${MUTED}">n/a</text>`;

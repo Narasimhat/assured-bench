@@ -11,6 +11,7 @@ yarn-error.log*
 
 # Optional local AlphaGenome environment and sensitive run artifacts
 .venv-alphagenome/
+.venv-spliceai/
 __pycache__/
 *.pyc
 .env

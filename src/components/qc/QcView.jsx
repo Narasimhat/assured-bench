@@ -114,6 +114,12 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         </div>
       )}
     </div>
+    {qcResults.length > 0 && <div className="card">
+      <button type="button" className="btn btn-primary" onClick={onProceedToDecision}>
+        Open clone review and publication report <ArrowRight size={16} />
+      </button>
+      <p>Review observed clone alleles with SpliceAI and AlphaGenome, then export the report.</p>
+    </div>}
     <iframe ref={frame} src={source} title="Trace Analysis upload and analysis" style={{ width: "100%", height: "88vh", minHeight: 760, border: "none", borderRadius: 12, background: "transparent" }} />
   </div>;
 }

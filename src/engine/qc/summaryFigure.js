@@ -49,7 +49,11 @@ export function runSummaryFigure(results, { title = "", width = 980, generatedLa
   order.forEach((i, row) => {
     const r = results[i]; const ry = top + row * rh; const mid = ry + rh / 2; const cell = rh - 6;
     if (row % 2 === 0) parts.push(`<rect x="8" y="${ry}" width="${width - 16}" height="${rh}" fill="#f9fafb"/>`);
-    const full = `${r.well ? `${r.well} ` : ""}${r.name}`; const shown = full.length > (labels ? 30 : 36) ? `${full.slice(0, labels ? 29 : 35)}\u2026` : full;
+    const full = `${r.well ? `${r.well} ` : ""}${r.name}`;
+    const maxN = labels ? 30 : 36;
+    const noBarcode = full.replace(/[_\-\s]+[A-Z]{1,4}\d{6,}$/i, "");
+    const cloneMatch = noBarcode.match(/^(.*?)[_\-\s]+(?:clone[_\-\s]*)?(\d{1,4}[A-Za-z]?)$/i);
+    const shown = full.length <= maxN ? full : cloneMatch ? `Clone ${cloneMatch[2]} (${cloneMatch[1].length > maxN - 12 ? `${cloneMatch[1].slice(0, maxN - 13)}\u2026` : cloneMatch[1]})` : `${noBarcode.slice(0, maxN - 9)}\u2026${noBarcode.slice(-8)}`;
     const dec = r.decision && DECISION[r.decision.decision]; const rec = r.recommendation;
     parts.push(`<g><title>${esc(`${full}${r.decision ? `: ${DECISION_LABEL[r.decision.decision] || r.decision.decision}. ${(r.decision.reasons || []).join(" ")} ${r.decision.next || ""}` : ""}`)}</title>`);
     parts.push(`<text x="${NAME.x}" y="${mid + fs / 3}" font-size="${fs}" fill="${INK}">${esc(shown)}</text>${attention(r) ? `<text x="${NAME.x + NAME.w + 4}" y="${mid + fs / 3}" font-size="${fs + 2}" fill="#b54708">!</text>` : ""}`);
