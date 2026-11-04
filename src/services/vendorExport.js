@@ -1,4 +1,5 @@
 import { getEnzyme } from "../engine/design/enzymeConfig.js";
+import { downloadFile } from "./downloadFile.js";
 
 function guideOrder(result, guide) {
   const id = result.enzyme?.id || result.input?.enzyme || "spcas9";
@@ -223,11 +224,5 @@ export function exportOrderToCsv(orderRows, filename = "reagents_order.csv") {
     ...orderRows.map(row => headers.map(h => `"${String(row[h] || "").replace(/"/g, '""')}"`).join(","))
   ].join("\n");
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadFile(csvContent, filename, "text/csv;charset=utf-8;");
 }

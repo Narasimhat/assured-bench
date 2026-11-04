@@ -2,6 +2,7 @@
  * Local IndexedDB / LocalStorage service for persistent Assured Studio projects.
  * 100% client-side: no cloud dependencies, preserving complete data confidentiality.
  */
+import { downloadFile } from "./downloadFile.js";
 
 const DB_NAME = "AssuredStudioDB";
 const STORE_NAME = "projects";
@@ -141,11 +142,5 @@ function listProjectsLocal() {
  * Export project as a downloadable .assured bundle
  */
 export function exportProjectBundle(project) {
-  const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${(project.name || "experiment").toLowerCase().replace(/[^a-z0-9]/g, "_")}.assured`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadFile(JSON.stringify(project, null, 2), `${(project.name || "experiment").toLowerCase().replace(/[^a-z0-9]/g, "_")}.assured`, "application/json");
 }
