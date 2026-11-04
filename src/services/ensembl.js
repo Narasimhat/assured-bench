@@ -128,8 +128,94 @@ export async function fetchGeneGenbank(geneSymbol, species = "homo_sapiens") {
       } catch {}
     }
 
+    try {
+      return await fetchMyGeneUcscGenbank(geneSymbol, species);
+    } catch {}
+
     throw error;
   }
+}
+
+/**
+ * High-availability fallback using MyGene.info + UCSC Genome Browser REST API when rest.ensembl.org is unavailable (e.g. HTTP 500).
+ */
+async function fetchMyGeneUcscGenbank(geneSymbol, species = "homo_sapiens") {
+  const sym = (geneSymbol || "").trim().toUpperCase();
+  if (!sym) throw new Error("Enter a gene symbol.");
+  const speciesMap = {
+    homo_sapiens: { mygene: "human", ucsc: "hg38", assembly: "GRCh38", organism: "Homo sapiens" },
+    mus_musculus: { mygene: "mouse", ucsc: "mm39", assembly: "GRCm39", organism: "Mus musculus" },
+    rattus_norvegicus: { mygene: "rat", ucsc: "rn7", assembly: "mRatBN7.2", organism: "Rattus norvegicus" },
+    danio_rerio: { mygene: "zebrafish", ucsc: "danRer11", assembly: "GRCz11", organism: "Danio rerio" },
+  };
+  const cfg = speciesMap[species];
+  if (!cfg) throw new Error(`Unsupported species for UCSC fallback: ${species}`);
+  const qExpr = /^ENS[A-Z]*G\d+/i.test(sym) ? `ensembl.gene:${sym.split(".")[0]}` : `symbol:${sym}`;
+  const mgUrl = `https://mygene.info/v3/query?q=${encodeURIComponent(qExpr)}&species=${cfg.mygene}&fields=symbol,name,ensembl.gene,exons,genomic_pos`;
+  const mgData = await fetchJson(mgUrl, `looking up '${sym}' via MyGene`);
+  const hits = Array.isArray(mgData?.hits) ? mgData.hits : [];
+  const hit = hits.find(h => String(h.symbol || "").toUpperCase() === sym && h.exons) || hits.find(h => h.exons) || null;
+  if (!hit) throw new Error(`No transcript exon annotations found for '${sym}'.`);
+  const exonsList = Array.isArray(hit.exons) ? hit.exons : [hit.exons];
+  const codingList = exonsList.filter(e => e && Array.isArray(e.position) && e.position.length > 0 && Number.isFinite(e.cdsstart) && Number.isFinite(e.cdsend) && e.cdsstart < e.cdsend);
+  const chosen = (codingList.length ? codingList : exonsList).sort((a, b) => ((b.cdsend || b.txend) - (b.cdsstart || b.txstart)) - ((a.cdsend || a.txend) - (a.cdsstart || a.txstart)))[0];
+  if (!chosen || !Array.isArray(chosen.position) || !chosen.position.length) throw new Error(`Incomplete exon coordinates for '${sym}'.`);
+
+  const chr = String(chosen.chr || "").replace(/^chr/i, "");
+  const strand = chosen.strand === -1 ? -1 : 1;
+  const padding = 1500;
+  const start = Math.max(1, Number(chosen.txstart) + 1 - padding);
+  const end = Number(chosen.txend) + padding;
+  const ucscUrl = `https://api.genome.ucsc.edu/getData/sequence?genome=${cfg.ucsc};chrom=chr${chr};start=${start - 1};end=${end}`;
+  const seqData = await fetchJson(ucscUrl, "loading genomic sequence from UCSC");
+  const dnaSeq = String(seqData?.dna || "").toLowerCase();
+  if (!/^[acgtn]+$/.test(dnaSeq) || dnaSeq.length !== end - start + 1) {
+    throw new Error("UCSC returned an incomplete genomic sequence.");
+  }
+
+  const ensemblId = (Array.isArray(hit.ensembl) ? hit.ensembl[0]?.gene : hit.ensembl?.gene) || hit.symbol || sym;
+  const transcriptId = chosen.transcript || `${hit.symbol || sym}_canonical`;
+  const exons = chosen.position.map(([eStart0, eEnd1], idx) => ({
+    id: `${transcriptId}_exon${idx + 1}`,
+    start: Number(eStart0) + 1,
+    end: Number(eEnd1),
+  }));
+  const translation = Number.isFinite(chosen.cdsstart) && Number.isFinite(chosen.cdsend) && chosen.cdsstart < chosen.cdsend
+    ? { id: `${transcriptId}_cds`, start: Number(chosen.cdsstart) + 1, end: Number(chosen.cdsend) }
+    : null;
+
+  const gbContent = buildSyntheticGenbank({
+    gene: hit.symbol || sym,
+    ensemblGeneId: ensemblId,
+    transcriptId,
+    assembly: cfg.assembly,
+    organism: cfg.organism,
+    isCanonical: true,
+    chr,
+    genomicStart: start,
+    genomicEnd: end,
+    strand,
+    exons,
+    translation,
+    sequence: dnaSeq,
+  });
+
+  return {
+    geneSymbol: hit.symbol || sym,
+    ensemblId,
+    transcriptId,
+    isCanonical: true,
+    assembly: cfg.assembly,
+    source: "UCSC / NCBI RefSeq (Ensembl fallback)",
+    chr,
+    genomicStart: start,
+    genomicEnd: end,
+    strand,
+    referenceOrientation: "gene",
+    ...(strand === -1 ? { warning: "Reverse-strand gene: the reference sequence and exon coordinates are oriented in the gene direction. Guide strands and positions are relative to this reference, not chromosome plus." } : {}),
+    genbankText: gbContent,
+    sequenceLength: dnaSeq.length,
+  };
 }
 
 /**
@@ -140,18 +226,39 @@ export async function searchGeneSymbols(query, species = "homo_sapiens") {
   try {
     const url = `${ENSEMBL_REST_URL}/lookup/symbol/${species}/${encodeURIComponent(query.trim())}?expand=1`;
     const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return [{
-      id: data.id,
-      symbol: data.display_name,
-      description: data.description,
-      biotype: data.biotype,
-      seq_region_name: data.seq_region_name,
-      start: data.start,
-      end: data.end,
-      strand: data.strand
-    }];
+    if (res.ok) {
+      const data = await res.json();
+      return [{
+        id: data.id,
+        symbol: data.display_name,
+        description: data.description,
+        biotype: data.biotype,
+        seq_region_name: data.seq_region_name,
+        start: data.start,
+        end: data.end,
+        strand: data.strand
+      }];
+    }
+  } catch {}
+  try {
+    const sym = query.trim().toUpperCase();
+    const mgRes = await fetch(`https://mygene.info/v3/query?q=symbol:${encodeURIComponent(sym)}&species=human&fields=symbol,name,ensembl.gene,genomic_pos&size=3`);
+    if (!mgRes.ok) return [];
+    const mgData = await mgRes.json();
+    return (mgData.hits || []).filter(h => h.symbol).map(h => {
+      const gp = Array.isArray(h.genomic_pos) ? h.genomic_pos[0] : h.genomic_pos;
+      const eid = (Array.isArray(h.ensembl) ? h.ensembl[0]?.gene : h.ensembl?.gene) || h.symbol;
+      return {
+        id: eid,
+        symbol: h.symbol,
+        description: h.name || "",
+        biotype: "protein_coding",
+        seq_region_name: gp?.chr || "",
+        start: gp?.start || 0,
+        end: gp?.end || 0,
+        strand: gp?.strand || 1,
+      };
+    });
   } catch {
     return [];
   }
