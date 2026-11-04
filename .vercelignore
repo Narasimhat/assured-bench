@@ -1,9 +1,4 @@
-local-reviews/
-output/
-.venv-alphagenome/
-.env*
-*.local
-test/
-**/__pycache__/
-**/test_*.py
-.venv/
+.venv*
+local-reviews
+node_modules
+.git
