@@ -77,7 +77,6 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
               const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);
               onSettings({ ...settings, ontologyTerm: "CL:0000540" });
               onUpdateProject({
-                gene: project.gene || "APOE",
                 alleleReviewContext: "CL:0000540",
                 cloneReviewReferenceRaw: gbText,
                 cloneReviewReferenceName: "apoe-ensg00000130203.gb",

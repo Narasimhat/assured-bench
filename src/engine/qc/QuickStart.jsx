@@ -44,10 +44,9 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
   const [designIndex, setDesignIndex] = useState(0);
 
   useEffect(() => {
-    if ((initialDesign?.text || "") === designText) return;
-    setDesignText(initialDesign?.text || ""); setDesignName(initialDesign ? initialDesign.name || "Bench design" : ""); setDesignIndex(0);
-    files.current.clear(); buffers.current.clear();
-    setTraceNames([]); setExplicitControls([]); setPairsEdit({}); setOutcome(null); setError("");
+    if (!initialDesign?.text || initialDesign.text === designText) return;
+    setDesignText(initialDesign.text); setDesignName(initialDesign.name || "Bench design"); setDesignIndex(0);
+    setOutcome(null); setError("");
   }, [initialDesign]);
   const previousOutcome = useRef(null);
   useEffect(() => {

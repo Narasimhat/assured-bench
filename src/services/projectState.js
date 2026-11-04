@@ -28,7 +28,10 @@ export function updateProject(project, fields) {
     Object.assign(next, { designResult: null, svgScheme: null, caption: null, status: null, qcResults: [], cloneReview: null, qcDesignSpec: null, qcDesignSource: null, qcImportedDesignText: null, workflowRecommendation: null, biomniReport: null }, fields);
   }
   if ("editType" in fields && fields.editType !== project.editType && !("genomicDesignInput" in fields)) next.genomicDesignInput = null;
-  if ("qcDesignSpec" in fields && fields.qcDesignSpec !== project.qcDesignSpec) { next.qcResults = []; next.cloneReview = null; }
+  if ("qcDesignSpec" in fields && fields.qcDesignSpec !== project.qcDesignSpec) {
+    if (!("qcResults" in fields)) next.qcResults = [];
+    if (!("cloneReview" in fields)) next.cloneReview = null;
+  }
   return next;
 }
 

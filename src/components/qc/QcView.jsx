@@ -31,11 +31,10 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         frame.current.contentWindow.postMessage({ type: "assured:qc:design", design: currentDesign.current }, qcOrigin);
       }
       if (event.data?.type === "assured:qc:results" && Array.isArray(event.data.results)) {
-        const isJsonText = typeof event.data.designText === "string" && /^\s*\{/.test(event.data.designText);
         update.current({
           qcResults: event.data.results,
           ...(event.data.spec ? { qcDesignSpec: event.data.spec } : {}),
-          ...(isJsonText ? { qcImportedDesignText: event.data.designText, qcDesignSource: event.data.designName } : event.data.spec ? { qcImportedDesignText: JSON.stringify(event.data.spec), qcDesignSource: event.data.designName } : {}),
+          ...(event.data.designText ? { qcImportedDesignText: event.data.designText, qcDesignSource: event.data.designName } : {}),
         });
       }
     };
@@ -73,7 +72,6 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);
         if (cancelled) return;
         update.current({
-          gene: currentProject?.gene || "APOE",
           alleleReviewContext: "CL:0000540",
           cloneReviewReferenceRaw: gbText,
           cloneReviewReferenceName: "apoe-ensg00000130203.gb",
