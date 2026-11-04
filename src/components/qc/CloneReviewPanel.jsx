@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Download, Upload, AlertTriangle } from "lucide-react";
+import { Download, Upload, AlertTriangle, Search } from "lucide-react";
 import { summariseCloneSplice, summariseCloneAlphaGenome, SPLICE_CHECK_THRESHOLDS } from "../../services/cloneReview.js";
 import { REGULATORY_CONTEXT_CATALOG } from "../../services/regulatoryContexts.js";
 import { ALLELE_CONTEXT_LENGTHS } from "../../services/alphaGenomeAlleles.js";
 import { readDonorReviewResponse } from "../../services/alphaGenomeOnline.js";
+import { fetchGeneGenbank } from "../../services/ensembl.js";
 import { downloadFile } from "../../services/downloadFile.js";
 
 const contexts = REGULATORY_CONTEXT_CATALOG.contexts.filter(c => c.outputTracks.RNA_SEQ && c.outputTracks.SPLICE_SITE_USAGE);
@@ -28,6 +29,8 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
   const [busy, setBusy] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [progress, setProgress] = useState("");
+  const [geneQuery, setGeneQuery] = useState(project.gene || "");
+  const [fetchingRef, setFetchingRef] = useState(false);
   const controller = useRef(null);
   const spliceInput = useRef(null);
   const agInput = useRef(null);
@@ -43,6 +46,43 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
       .catch(() => { if (!abort.signal.aborted) setStatus({ available: false }); });
     return () => abort.abort();
   }, []);
+
+  useEffect(() => {
+    if (project.cloneReviewReferenceRaw || project.genbankRaw) return;
+    const rawCandidates = [
+      project.gene,
+      project.qcDesignSpec?.design?.gene,
+      ...(project.qcResults || []).map(r => r.name),
+      project.qcDesignSource,
+    ].filter(Boolean).join(" ");
+    const stopWords = new Set(["SAMPLE", "BENCH", "DESIGN", "ORIGINAL", "CLONE", "CLONES", "WT", "CTRL", "CONTROL", "REPEAT", "RECONSTRUCTED", "RUN", "HTML", "JSON", "AB1"]);
+    const tokens = rawCandidates
+      .replace(/\.[a-z0-9]+$/gi, " ")
+      .split(/[\s_\-.]+/)
+      .map(t => t.toUpperCase())
+      .filter(t => /^[A-Z][A-Z0-9]{1,9}$/.test(t) && !stopWords.has(t) && !/^(BIHI|IHI|EF\d+|R\d+[A-Z]|G\d+|SSODN\d*)/.test(t));
+    const inferred = tokens[0] || "";
+    if (!inferred) return;
+    if (!geneQuery) setGeneQuery(inferred);
+    let cancelled = false;
+    (async () => {
+      setFetchingRef(true);
+      try {
+        const res = await fetchGeneGenbank(inferred);
+        if (!cancelled) {
+          onUpdateProject({
+            cloneReviewReferenceRaw: res.genbankText,
+            cloneReviewReferenceName: `${res.geneSymbol}_${res.transcriptId || res.ensemblId}.gb`,
+          });
+        }
+      } catch {
+        // User can still type a gene symbol and click Fetch reference from Ensembl or upload a .gb file
+      } finally {
+        if (!cancelled) setFetchingRef(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [project.cloneReviewReferenceRaw, project.genbankRaw, project.gene, project.qcDesignSpec, project.qcDesignSource, project.qcResults]);
 
   const locked = status?.authenticationRequired === true && status.authenticated !== true;
 
@@ -168,18 +208,60 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
         The design review predicted the planned edit. This asks the same predictors about what the clones were found to carry: the intended edit as read, any base the design did not plan, any indel allele.
         SpliceAI runs locally. The AlphaGenome runner retrieves GRCh38 context from Ensembl and sends the sequences to Google; your API key stays local. Results are model predictions, not measurements. A base seen in a trace cannot be placed on one allele, so an unplanned base is assumed to sit on the allele that carries the intended edit.
       </p>
-      {(project.qcImportedDesignText || project.qcDesignSpec) && <label style={{ display: "block", margin: "0.75rem 0" }}>
-        Genomic reference for the original experimental design (.gb / .gbk)
-        <input type="file" accept=".gb,.gbk,.genbank" aria-label="Genomic reference for clone review" onChange={async e => {
-          const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
-          try {
-            if (file.size > MAX_FILE) throw new Error("The reference must be smaller than 6 MB.");
-            onUpdateProject({ cloneReviewReferenceRaw: await file.text(), cloneReviewReferenceName: file.name, cloneReview: null });
-            setError("");
-          } catch (error) { setError(error.message); }
-        }} />
-        {project.cloneReviewReferenceName && <span>Loaded: {project.cloneReviewReferenceName}. All reviewed edits must match its sequence; noisy QC-window ends may be excluded using a unique exact core.</span>}
-      </label>}
+      {(project.qcImportedDesignText || project.qcDesignSpec) && (
+        <div style={{ margin: "0.75rem 0", padding: "0.75rem 1rem", borderRadius: 8, background: "var(--bg-app)", border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <strong style={{ fontSize: "0.85rem" }}>Genomic reference (GRCh38):</strong>
+            <input
+              type="text"
+              value={geneQuery}
+              onChange={e => setGeneQuery(e.target.value.toUpperCase())}
+              placeholder="Gene symbol (e.g. APOE)"
+              aria-label="Gene symbol to fetch reference from Ensembl"
+              style={{ width: "170px", padding: "0.3rem 0.6rem", fontSize: "0.85rem" }}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={fetchingRef || !geneQuery.trim()}
+              onClick={async () => {
+                setError(""); setMessage(""); setFetchingRef(true);
+                try {
+                  const res = await fetchGeneGenbank(geneQuery.trim());
+                  onUpdateProject({
+                    cloneReviewReferenceRaw: res.genbankText,
+                    cloneReviewReferenceName: `${res.geneSymbol}_${res.transcriptId || res.ensemblId}.gb`,
+                  });
+                  setMessage(`Fetched ${res.geneSymbol} (${res.transcriptId || res.ensemblId}, chr${res.chr}) reference automatically from ${res.source || "Ensembl"}.`);
+                } catch (err) {
+                  setError(err.message || String(err));
+                } finally {
+                  setFetchingRef(false);
+                }
+              }}
+              style={{ fontSize: "0.82rem", padding: "0.3rem 0.7rem" }}
+            >
+              <Search size={14} /> <span>{fetchingRef ? "Fetching from Ensembl…" : "Fetch reference from Ensembl"}</span>
+            </button>
+            <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "inline-flex", alignItems: "center", gap: "0.4rem", margin: 0 }}>
+              <span>or upload <code>.gb</code>:</span>
+              <input type="file" accept=".gb,.gbk,.genbank" aria-label="Genomic reference for clone review" onChange={async e => {
+                const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+                try {
+                  if (file.size > MAX_FILE) throw new Error("The reference must be smaller than 6 MB.");
+                  onUpdateProject({ cloneReviewReferenceRaw: await file.text(), cloneReviewReferenceName: file.name, cloneReview: null });
+                  setError("");
+                } catch (error) { setError(error.message); }
+              }} />
+            </label>
+          </div>
+          {project.cloneReviewReferenceName && (
+            <div style={{ fontSize: "0.82rem", color: "var(--success)", fontWeight: 600 }}>
+              ✓ Active Reference: <code>{project.cloneReviewReferenceName}</code> (verified against QC window)
+            </div>
+          )}
+        </div>
+      )}
       {alleles.length > 0 && (
         <p style={{ fontSize: "0.85rem" }}>
           {alleles.length} allele{alleles.length === 1 ? "" : "s"} over {new Set(alleles.flatMap(a => a.clones.map(c => c.name))).size} clone{new Set(alleles.flatMap(a => a.clones.map(c => c.name))).size === 1 ? "" : "s"} to review
