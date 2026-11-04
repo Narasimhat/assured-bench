@@ -6,6 +6,7 @@ import { saveSvg, savePng, savePdf } from "../../engine/qc/saveFigure.js";
 import { cloneFlags, actionableFlags, chipLabel, worstSeverity } from "../../services/cloneFlags.js";
 import { CloneReviewPanel } from "./CloneReviewPanel.jsx";
 import { useCloneReview } from "./useCloneReview.js";
+import { downloadFile } from "../../services/downloadFile.js";
 
 const CHIP_CLASS = { block: "badge badge-blocked", review: "badge badge-review", info: "badge" };
 const FlagChips = ({ flags, limit = 3 }) => (flags.length === 0 ? null : (
@@ -44,13 +45,7 @@ export function DecisionView({ currentProject, onBackToQc, onUpdateProject }) {
       results: qcResults,
       cloneReview: cloneReview.review,
     });
-    const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${(currentProject?.gene || "clones").replace(/[^a-z0-9_-]/gi, "_")}_publication_report.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(html, `${(currentProject?.gene || "clones").replace(/[^a-z0-9_-]/gi, "_")}_publication_report.html`, "text/html;charset=utf-8;");
   };
 
   const downloadFigure = async (format) => {
@@ -87,13 +82,7 @@ export function DecisionView({ currentProject, onBackToQc, onUpdateProject }) {
     });
 
     const csv = [headers.join(","), ...rows.map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${(currentProject?.gene || "clones")}_screening_decisions.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(csv, `${(currentProject?.gene || "clones")}_screening_decisions.csv`, "text/csv;charset=utf-8;");
   };
 
   if (qcResults.length === 0) {

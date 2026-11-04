@@ -3,6 +3,7 @@ import { Download, Upload, AlertTriangle } from "lucide-react";
 import { summariseCloneSplice, summariseCloneAlphaGenome, SPLICE_CHECK_THRESHOLDS } from "../../services/cloneReview.js";
 import { REGULATORY_CONTEXT_CATALOG } from "../../services/regulatoryContexts.js";
 import { ALLELE_CONTEXT_LENGTHS } from "../../services/alphaGenomeAlleles.js";
+import { downloadFile } from "../../services/downloadFile.js";
 
 const contexts = REGULATORY_CONTEXT_CATALOG.contexts.filter(c => c.outputTracks.RNA_SEQ && c.outputTracks.SPLICE_SITE_USAGE);
 const MAX_FILE = 6000000;
@@ -10,10 +11,7 @@ const VERDICT_BADGE = { pass: "badge badge-ready", review: "badge badge-review",
 const VERDICT_WORD = { pass: "supports", review: "review", fail: "advises against" };
 
 function download(data, name) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url; link.download = name; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadFile(JSON.stringify(data, null, 2), name, "application/json");
 }
 const slug = text => String(text || "locus").replace(/[^a-z0-9_-]/gi, "_");
 
