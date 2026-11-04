@@ -121,7 +121,7 @@ def build_sequences(request, context, bounds=None):
     return sequences
 
 
-def run_review(request, client, model_version, sdk_version, reference_fetcher=review.fetch_reference, sdk=None):
+def run_review(request, client, model_version, sdk_version, reference_fetcher=review.fetch_reference, sdk=None, on_progress=None):
     if sdk is None:
         from alphagenome.data import genome
         from alphagenome.models import dna_client
@@ -131,12 +131,14 @@ def run_review(request, client, model_version, sdk_version, reference_fetcher=re
     sequences = build_sequences(request, reference_fetcher(request["chromosome"], start, end + extra_bases(request)), (start, end))
     interval = genome.Interval(chromosome=request["chromosome"], start=start, end=end)
     predictions, by_sequence = {}, {}
-    for name, sequence in sequences.items():
+    for idx, (name, sequence) in enumerate(sequences.items(), 1):
         if sequence not in by_sequence:
             by_sequence[sequence] = client.predict_sequence(
                 sequence=sequence, interval=interval,
                 requested_outputs=[getattr(dna_client.OutputType, o) for o in review.OUTPUTS], ontology_terms=request["ontologyTerms"])
         predictions[name] = by_sequence[sequence]
+        if on_progress:
+            on_progress(min(len(request["alleles"]), idx))
     compare = lambda a, b: {"tracks": review.compare_tracks(predictions[a], predictions[b])}
     alleles = []
     for a in request["alleles"]:

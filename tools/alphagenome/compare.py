@@ -13,6 +13,9 @@ def digest(data):
 
 
 def validate_batch(batch):
+    if batch.get("schema") == "assured-alphagenome-clone-request/1":
+        import clones
+        return clones.validate_request(batch)
     if batch.get("candidates") and batch["candidates"][0].get("request", {}).get("schema") == "assured-alphagenome-allele-request/1":
         import alleles
         return alleles.validate_batch(batch)
@@ -94,6 +97,11 @@ def comparison_metrics(rows, annotation, bounds):
 
 
 def run_batch(batch, client, reference_fetcher=review.fetch_reference, on_progress=None):
+    if batch.get("schema") == "assured-alphagenome-clone-request/1":
+        import clones
+        from local_cache import fetch_context
+        actual_fetcher = fetch_context if reference_fetcher is review.fetch_reference else reference_fetcher
+        return clones.run_review(batch, client, "ALL_FOLDS", importlib.metadata.version("alphagenome"), reference_fetcher=actual_fetcher, on_progress=on_progress)
     if batch.get("candidates") and batch["candidates"][0].get("request", {}).get("schema") == "assured-alphagenome-allele-request/1":
         import alleles
         from local_cache import fetch_context

@@ -46,6 +46,9 @@ def fetch_context(chromosome,start,end,fetcher=None,root=None):
 
 
 def completed(result,batch):
+    if batch.get('schema')=='assured-alphagenome-clone-request/1':
+        alleles=result.get('alleles',[])
+        return result.get('requestId')==batch['requestId'] and result.get('status')=='complete' and len(alleles)==len(batch['alleles'])
     candidates=result.get('candidates',[])
     return result.get('requestId')==batch['requestId'] and result.get('sourceId')==batch['sourceId'] and len(candidates)==len(batch['candidates']) and all(c.get('status')=='complete' and c.get('id')==b['id'] for c,b in zip(candidates,batch['candidates']))
 

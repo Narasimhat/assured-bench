@@ -46,7 +46,7 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
   }, [design, qcOrigin]);
 
   const qcResults = currentProject?.qcResults || [];
-  const [reviewSettings, setReviewSettings] = useState({ ontologyTerm: currentProject?.alleleReviewContext || "CL:0000540", sequenceLength: 131072 });
+  const [reviewSettings, setReviewSettings] = useState({ ontologyTerm: currentProject?.alleleReviewContext || "CL:0000679", sequenceLength: 131072 });
   const cloneReview = useCloneReview(currentProject, qcResults, reviewSettings);
   const acceptedCount = qcResults.filter(r => (r.decision?.decision || r.decision?.verdict) === "accept").length;
   const qcCalibration = computeQcPredictionCalibration(currentProject, qcResults);
@@ -72,7 +72,7 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);
         if (cancelled) return;
         update.current({
-          alleleReviewContext: "CL:0000540",
+          alleleReviewContext: "CL:0000679",
           cloneReviewReferenceRaw: gbText,
           cloneReviewReferenceName: "apoe-ensg00000130203.gb",
           cloneReview: {

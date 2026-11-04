@@ -1,8 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Download, Upload, AlertTriangle } from "lucide-react";
 import { summariseCloneSplice, summariseCloneAlphaGenome, SPLICE_CHECK_THRESHOLDS } from "../../services/cloneReview.js";
 import { REGULATORY_CONTEXT_CATALOG } from "../../services/regulatoryContexts.js";
 import { ALLELE_CONTEXT_LENGTHS } from "../../services/alphaGenomeAlleles.js";
+import { readDonorReviewResponse } from "../../services/alphaGenomeOnline.js";
 import { downloadFile } from "../../services/downloadFile.js";
 
 const contexts = REGULATORY_CONTEXT_CATALOG.contexts.filter(c => c.outputTracks.RNA_SEQ && c.outputTracks.SPLICE_SITE_USAGE);
@@ -22,10 +23,79 @@ const slug = text => String(text || "locus").replace(/[^a-z0-9_-]/gi, "_");
 export function CloneReviewPanel({ project, review, settings, onSettings, onUpdateProject }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [status, setStatus] = useState(null);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [progress, setProgress] = useState("");
+  const controller = useRef(null);
   const spliceInput = useRef(null);
   const agInput = useRef(null);
   const { splice, alphagenome, saved } = review;
   const gene = slug(project.gene);
+
+  useEffect(() => {
+    if (typeof fetch !== "function") return;
+    const abort = new AbortController();
+    fetch("/api/alphagenome/status", { signal: abort.signal, credentials: "same-origin", cache: "no-store" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(setStatus)
+      .catch(() => { if (!abort.signal.aborted) setStatus({ available: false }); });
+    return () => abort.abort();
+  }, []);
+
+  const locked = status?.authenticationRequired === true && status.authenticated !== true;
+
+  async function unlock(e) {
+    e.preventDefault(); setUnlocking(true); setError("");
+    try {
+      const response = await fetch("/api/alphagenome/session", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Access code was not accepted.");
+      const next = await fetch("/api/alphagenome/status", { credentials: "same-origin", cache: "no-store" });
+      if (!next.ok) throw new Error("Could not confirm the review session.");
+      const state = await next.json();
+      setStatus(state);
+      if (!state.authenticated) throw new Error("The review session could not be confirmed.");
+      setCode("");
+    } catch (e) { setError(e.message); }
+    finally { setUnlocking(false); }
+  }
+
+  async function runAlphaGenome() {
+    if (!alphagenome.request) return;
+    const req = alphagenome.request;
+    controller.current = new AbortController();
+    setBusy(true); setError(""); setMessage("");
+    const cellLabel = contexts.find(c => c.ontology === settings.ontologyTerm)?.label || settings.ontologyTerm;
+    setProgress(`Running AlphaGenome on ${req.alleles.length} observed clone allele(s) in ${cellLabel} (${settings.ontologyTerm})…`);
+    try {
+      const response = await fetch("/api/alphagenome/compare", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+        signal: controller.current.signal,
+      });
+      const result = await readDonorReviewResponse(response, {
+        signal: controller.current.signal,
+        onProgress: msg => setProgress(msg),
+      });
+      const summary = summariseCloneAlphaGenome(req, result);
+      onUpdateProject({
+        alleleReviewContext: settings.ontologyTerm,
+        cloneReview: {
+          ...(project.cloneReview || {}),
+          alphagenome: { requestId: req.requestId, importedAt: new Date().toISOString(), summary, result },
+        },
+      });
+      setMessage(`AlphaGenome completed for ${cellLabel} (${settings.ontologyTerm}, ${Object.keys(summary.clones).length} clones).`);
+    } catch (e) {
+      setError(e.name === "AbortError" ? "Stopped waiting. Online jobs continue; click Run AlphaGenome on clones again to retrieve the result." : (e.message || String(e)));
+    } finally {
+      setBusy(false); setProgress("");
+    }
+  }
 
   async function importResult(file, kind) {
     setError(""); setMessage("");
@@ -75,9 +145,9 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
               ]);
               if (!gbRes.ok || !revRes.ok) throw new Error("Could not fetch bundled APOE review files.");
               const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);
-              onSettings({ ...settings, ontologyTerm: "CL:0000540" });
+              onSettings({ ...settings, ontologyTerm: "CL:0000679" });
               onUpdateProject({
-                alleleReviewContext: "CL:0000540",
+                alleleReviewContext: "CL:0000679",
                 cloneReviewReferenceRaw: gbText,
                 cloneReviewReferenceName: "apoe-ensg00000130203.gb",
                 cloneReview: {
@@ -85,7 +155,7 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
                   alphagenome: { ...revBundle.alphagenome, bundled: true },
                 },
               });
-              setMessage("Loaded APOE R176C reference + SpliceAI & AlphaGenome observed-allele predictions (Neuron CL:0000540).");
+              setMessage("Loaded APOE R176C reference + SpliceAI & AlphaGenome observed-allele predictions (Glutamatergic neuron CL:0000679).");
             } catch (e) {
               setMessage(""); setError(e.message || String(e));
             }
@@ -138,24 +208,37 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
             Raw RNA and splice-site track differences against the intended allele; no calibrated threshold, so it ranks clones and gives no verdict. Needs a mapped human GRCh38 reference and your own API key.
           </p>
           <label style={{ display: "block", fontSize: "0.85rem" }}>Experimental cell type{" "}
-            <select aria-label="Cell type for the clone AlphaGenome review" value={settings.ontologyTerm} onChange={e => { onSettings({ ...settings, ontologyTerm: e.target.value }); onUpdateProject({ alleleReviewContext: e.target.value }); }}>
+            <select aria-label="Cell type for the clone AlphaGenome review" value={settings.ontologyTerm} disabled={busy} onChange={e => { onSettings({ ...settings, ontologyTerm: e.target.value }); onUpdateProject({ alleleReviewContext: e.target.value }); }}>
               <option value="">Choose cell type</option>
               {contexts.map(c => <option key={c.id} value={c.ontology}>{c.label}</option>)}
             </select>
           </label>
           <label style={{ display: "block", fontSize: "0.85rem", margin: "0.35rem 0" }}>Prediction window{" "}
-            <select aria-label="Prediction window for the clone AlphaGenome review" value={settings.sequenceLength} onChange={e => onSettings({ ...settings, sequenceLength: Number(e.target.value) })}>
+            <select aria-label="Prediction window for the clone AlphaGenome review" value={settings.sequenceLength} disabled={busy} onChange={e => onSettings({ ...settings, sequenceLength: Number(e.target.value) })}>
               {ALLELE_CONTEXT_LENGTHS.map(n => <option key={n} value={n}>{n.toLocaleString()} bp</option>)}
             </select>
           </label>
+          {locked && (
+            <form onSubmit={unlock} style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", margin: "0.4rem 0" }}>
+              <label style={{ fontSize: "0.82rem" }}>Analysis access code{" "}
+                <input type="password" autoComplete="current-password" value={code} disabled={unlocking} onChange={e => setCode(e.target.value)} />
+              </label>
+              <button type="submit" className="btn btn-secondary" disabled={!code || unlocking}>{unlocking ? "Unlocking…" : "Unlock online analysis"}</button>
+            </form>
+          )}
           {alphagenome.error && settings.ontologyTerm && <p role="alert" style={{ color: "var(--warning)", fontSize: "0.85rem" }}><AlertTriangle size={14} /> {alphagenome.error}</p>}
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            <button type="button" className="btn btn-secondary" disabled={!alphagenome.request} onClick={() => download(alphagenome.request, `${gene}_clone_alphagenome_request.json`)}><Download size={14} /> <span>Export AlphaGenome request</span></button>
-            <button type="button" className="btn btn-secondary" disabled={!alphagenome.request} onClick={() => agInput.current?.click()}><Upload size={14} /> <span>Import AlphaGenome report</span></button>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+            <button type="button" className="btn btn-primary" disabled={busy || !alphagenome.request || (status && !status.available) || locked} onClick={runAlphaGenome}>
+              {busy ? "Running AlphaGenome…" : alphagenome.fresh ? "Run AlphaGenome again" : "Run AlphaGenome on clones"}
+            </button>
+            {busy && <button type="button" className="btn btn-secondary" onClick={() => controller.current?.abort()}>Stop waiting</button>}
+            <button type="button" className="btn btn-secondary" disabled={!alphagenome.request || busy} onClick={() => download(alphagenome.request, `${gene}_clone_alphagenome_request.json`)}><Download size={14} /> <span>Export AlphaGenome request</span></button>
+            <button type="button" className="btn btn-secondary" disabled={!alphagenome.request || busy} onClick={() => agInput.current?.click()}><Upload size={14} /> <span>Import AlphaGenome report</span></button>
             <input ref={agInput} type="file" accept="application/json,.json" aria-label="AlphaGenome clone report file" style={{ display: "none" }} onChange={e => importResult(e.target.files?.[0], "alphagenome")} />
           </div>
+          {progress && busy && <p role="status" aria-live="polite" style={{ fontSize: "0.82rem", color: "var(--primary)", marginTop: "0.4rem" }}>{progress}</p>}
           <pre style={{ fontSize: "0.72rem", whiteSpace: "pre-wrap", margin: "0.5rem 0 0", color: "var(--text-muted)" }}>python tools/alphagenome/clones.py {gene}_clone_alphagenome_request.json --validate-only{"\n"}python tools/alphagenome/clones.py {gene}_clone_alphagenome_request.json --run --output clone_alphagenome_report.json</pre>
-          {saved.alphagenome && !alphagenome.fresh && <p role="status" style={{ color: "var(--warning)", fontSize: "0.82rem" }}>The imported AlphaGenome report belongs to an earlier set of clones, alleles, cell type or window and is not used. Export the request again and run it.</p>}
+          {saved.alphagenome && !alphagenome.fresh && <p role="status" style={{ color: "var(--warning)", fontSize: "0.82rem" }}>The current AlphaGenome report is for {(saved.alphagenome.summary?.ontologyTerms || []).join(", ") || "an earlier selection"}. Click <strong>Run AlphaGenome on clones</strong> to compute predictions for the selected cell type.</p>}
         </div>
       </div>
 

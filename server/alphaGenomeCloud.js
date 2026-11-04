@@ -66,6 +66,13 @@ export async function readBody(req, max=MAX_BODY) {
 }
 export function reply(res,status,data) {res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.status(status).json(data);}
 export function validateEnvelope(batch) {
+  if (batch?.schema==='assured-alphagenome-clone-request/1') {
+    const {requestId,...payload}=batch;
+    if(requestId!==hash(canonical(payload)))throw new Error('Request identity mismatch');
+    if(batch.assembly!=='GRCh38'||![16384,131072,524288,1048576].includes(batch.sequenceLength)||!/^[ACGTN]{1,1000000}$/.test(batch.reference?.sequence||''))throw new Error('Invalid clone review reference');
+    if(!Array.isArray(batch.alleles)||batch.alleles.length<1||batch.alleles.length>24)throw new Error('Choose 1–24 alleles');
+    return;
+  }
   if (batch?.schema!=='assured-alphagenome-comparison-request/1' || !/^[a-f0-9]{64}$/.test(batch.sourceId||''))throw new Error('Invalid comparison');
   const {requestId,...payload}=batch;
   if(requestId!==hash(canonical(payload)))throw new Error('Request identity mismatch');
@@ -94,12 +101,12 @@ export async function jobStatus(id, read=readPrivate) {
  * a key, so a browser retry cannot fan out duplicate model jobs.
  */
 export async function prepareJob(batch, {read=jobStatus,write=writePrivate,sign=mac,now=()=>new Date().toISOString()}={}) {
-  const id=sign(`job:${batch.requestId}`),path=jobPath(id);
+  const id=sign(`job:${batch.requestId}`),path=jobPath(id),total=(batch.candidates||batch.alleles||[]).length;
   let status=await read(id);
   if(!status || status.status==='failed') {
     const queueKey=status ? sign(`retry:${id}:${status.updatedAt}`) : id;
     await write(`${path}/request.json`,batch);
-    status={id,status:'queued',completed:0,total:batch.candidates.length,requestId:batch.requestId,queueKey,updatedAt:now()};
+    status={id,status:'queued',completed:0,total,requestId:batch.requestId,queueKey,updatedAt:now()};
     await write(`${path}/status.json`,status);
   }
   return {id,status};
@@ -113,7 +120,8 @@ export async function processJob({id}, metadata, {read=readPrivate,write=writePr
   const batch=await read(`${path}/request.json`);
   if(!batch)throw new Error('Missing queued request');
   validateEnvelope(batch);
-  const update=fields=>write(`${path}/status.json`,{id,total:batch.candidates.length,requestId:batch.requestId,...fields,updatedAt:new Date().toISOString()});
+  const total=(batch.candidates||batch.alleles||[]).length;
+  const update=fields=>write(`${path}/status.json`,{id,total,requestId:batch.requestId,...fields,updatedAt:new Date().toISOString()});
   await update({status:'running',completed:0});
   try {
     // The deployment URL comes from Vercel, never from a user-provided URL.
@@ -130,14 +138,15 @@ export async function processJob({id}, metadata, {read=readPrivate,write=writePr
       while((split=pending.indexOf('\n'))>=0){
         const line=pending.slice(0,split);pending=pending.slice(split+1);if(!line.trim())continue;
         const event=JSON.parse(line);
-        if(event.type==='progress')await update({status:'running',completed:Math.min(batch.candidates.length,Math.max(0,event.completed||0))});
+        if(event.type==='progress')await update({status:'running',completed:Math.min(total,Math.max(0,event.completed||0))});
         if(event.type==='error')throw new Error('Prediction worker failed');
         if(event.type==='result')report=event.report;
       }
     }
-    if(!report||report.requestId!==batch.requestId||report.candidates?.length!==batch.candidates.length)throw new Error('Incomplete prediction output');
+    const items=batch.schema==='assured-alphagenome-clone-request/1'?report?.alleles:report?.candidates;
+    if(!report||report.requestId!==batch.requestId||items?.length!==total)throw new Error('Incomplete prediction output');
     await write(`${path}/report.json`,report);
-    await update({status:'complete',completed:batch.candidates.length});
+    await update({status:'complete',completed:total});
   } catch(error) {
     // Do not persist provider errors: their text can contain credential metadata.
     if(metadata.deliveryCount>=2)await update({status:'failed',error:'Online prediction did not complete after two attempts. The previous design was retained.'});
