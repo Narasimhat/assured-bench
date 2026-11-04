@@ -19,8 +19,7 @@ export function Header({
   const steps = [
     { id: "design", label: "Design", done: hasDesign },
     { id: "order", label: "Order", done: hasDesign },
-    { id: "qc", label: "Trace Analysis", done: qcCount > 0, badge: qcCount > 0 ? (acceptedCount > 0 ? `${acceptedCount}/${qcCount}✓` : qcCount) : null },
-    { id: "decision", label: "Clone Review & Report (SpliceAI / AlphaGenome)", done: Boolean(currentProject?.cloneReview?.splice || currentProject?.cloneReview?.alphagenome) }
+    { id: "qc", label: "Trace Analysis & Clone Report", done: qcCount > 0, badge: qcCount > 0 ? (acceptedCount > 0 ? `${acceptedCount}/${qcCount}✓` : qcCount) : null }
   ];
 
   return (
