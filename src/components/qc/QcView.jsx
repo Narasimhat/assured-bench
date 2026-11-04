@@ -31,7 +31,12 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         frame.current.contentWindow.postMessage({ type: "assured:qc:design", design: currentDesign.current }, qcOrigin);
       }
       if (event.data?.type === "assured:qc:results" && Array.isArray(event.data.results)) {
-        update.current({ qcResults: event.data.results, ...(typeof event.data.designText === "string" ? { qcImportedDesignText: event.data.designText, qcDesignSource: event.data.designName } : {}) });
+        const isJsonText = typeof event.data.designText === "string" && /^\s*\{/.test(event.data.designText);
+        update.current({
+          qcResults: event.data.results,
+          ...(event.data.spec ? { qcDesignSpec: event.data.spec } : {}),
+          ...(isJsonText ? { qcImportedDesignText: event.data.designText, qcDesignSource: event.data.designName } : event.data.spec ? { qcImportedDesignText: JSON.stringify(event.data.spec), qcDesignSource: event.data.designName } : {}),
+        });
       }
     };
     window.addEventListener("message", receive);
@@ -62,7 +67,7 @@ export function QcView({ currentProject, onUpdateProject, onProceedToDecision })
         const base = import.meta.env?.BASE_URL || "./";
         const [gbRes, revRes] = await Promise.all([
           fetch(`${base}references/apoe-ensg00000130203.gb`),
-          fetch(`${base}drive_data/apoe/apoe_clone_review_bundle.json`),
+          fetch(`${base}references/apoe-r176c-clone-review.json`),
         ]);
         if (!gbRes.ok || !revRes.ok || cancelled) return;
         const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);

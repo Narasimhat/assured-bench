@@ -53,7 +53,7 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
   useEffect(() => {
     if (!outcome && previousOutcome.current && onResults) onResults({ results: [] });
     previousOutcome.current = outcome;
-    if (outcome && onResults) onResults({ results: withRecommendations(outcome.results, panel ? { panel } : {}), designText, designName });
+    if (outcome && onResults) onResults({ results: withRecommendations(outcome.results, panel ? { panel } : {}), designText, designName, spec: outcome.tasks?.[0]?.spec || null });
   }, [outcome, panel, onResults]);
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
     (async () => {
       try {
         const base = import.meta.env?.BASE_URL || "./";
-        const res = await fetch(`${base}drive_data/apoe/apoe_clone_review_bundle.json`);
+        const res = await fetch(`${base}references/apoe-r176c-clone-review.json`);
         if (!res.ok || cancelled) return;
         const b = await res.json();
         if (!cancelled) setLocalCloneReview({ splice: b.splice?.summary, alphagenome: b.alphagenome?.summary });
@@ -516,7 +516,7 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
         </form>
 
         <div style={{ fontSize: "11px", color: "var(--text-dim)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderTop: "1px dashed var(--border-color)", paddingTop: "6px", marginTop: "6px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          {import.meta.env.DEV && <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <strong style={{ color: "var(--text-muted)" }}>Try 1-click benchmark trace sets:</strong>
             <button
               type="button"
@@ -545,7 +545,7 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
             >
               Load MYD88 KO hiPSC Cohort (11 traces)
             </button>
-          </div>
+          </div>}
           <span>🔒 Processed 100% locally in your browser.</span>
         </div>
       </div>

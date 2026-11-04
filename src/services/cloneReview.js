@@ -57,7 +57,9 @@ export function cloneAlleleCandidates(result) {
 export async function cloneReviewContext(project) {
   // Imported experimental designs take precedence over newly generated guide/donor alternatives.
   if (project?.qcImportedDesignText || project?.qcDesignSpec) {
-    const spec = project.qcImportedDesignText ? JSON.parse(project.qcImportedDesignText) : project.qcDesignSpec;
+    let spec = project.qcDesignSpec || null;
+    if (typeof project.qcImportedDesignText === "string" && /^\s*\{/.test(project.qcImportedDesignText)) spec = JSON.parse(project.qcImportedDesignText);
+    if (!spec) throw new Error("Run trace analysis first (or upload a JSON QC design spec) so the QC reference window is available for clone review.");
     const validation = validateDesignSpec(spec);
     if (!validation.ok) throw new Error("The imported experimental QC design is invalid: " + validation.errors.join(" "));
     const raw = project.cloneReviewReferenceRaw || project.genbankRaw;
