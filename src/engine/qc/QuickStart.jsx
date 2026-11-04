@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { classifyFiles, buildPairs, readDesign, planTasks, runPool } from "./quick.js";
-import { parseSampleSheet } from "./sheet.js";
+import { parseSampleSheet, resolveSheet } from "./sheet.js";
 import { validateDesignSpec } from "./designSpec.js";
 import { parseCodingFields } from "./coding.js";
 import { parseAbif } from "./abif.js";
@@ -99,15 +99,17 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
       setTraceNames((previous) => Array.from(new Set([...previous, ...kinds.traces])));
       if (role === "control" && kinds.traces.length) {
         setExplicitControls((previous) => Array.from(new Set([...previous, ...kinds.traces])));
-      } else if (role === "auto" && kinds.traces.length) {
+      } else if (kinds.traces.length) {
         const autoCtrls = kinds.traces.filter((n) => /(?:^|[\s_\-.])(wt|wild[\s_-]?type|ctrl|control|parental|unedited|untreated)(?:$|[\s_\-.])/i.test(n));
         if (autoCtrls.length) setExplicitControls((previous) => Array.from(new Set([...previous, ...autoCtrls])));
       }
       setPairsEdit({}); setOutcome(null);
+      const allTraceNames = Array.from(new Set([...files.current.keys(), ...kinds.traces]));
       for (const sheetFile of incoming.filter((f) => kinds.sheets.includes(f.name))) {
         const txt = await sheetFile.text();
         const parsed = parseSampleSheet(txt);
-        if (parsed.rows.length > 0 && parsed.errors.length === 0) {
+        const resolved = parsed.rows.length > 0 && parsed.errors.length === 0 ? resolveSheet(parsed.rows, allTraceNames) : null;
+        if (resolved && resolved.jobs.some((j) => j.ok) && resolved.problems.length === 0) {
           setSheetText(txt);
           break;
         }

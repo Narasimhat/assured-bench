@@ -61,6 +61,39 @@ export function CloneReviewPanel({ project, review, settings, onSettings, onUpda
     <section className="card" aria-labelledby="clone-review-heading">
       <div className="card-title" style={{ flexWrap: "wrap", gap: "0.75rem" }}>
         <h3 id="clone-review-heading" style={{ margin: 0 }}>Splice &amp; expression review of the clone alleles</h3>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ fontSize: "0.8rem", padding: "0.35rem 0.75rem" }}
+          onClick={async () => {
+            setError(""); setMessage("Loading APOE R176C reference, SpliceAI, and AlphaGenome review…");
+            try {
+              const base = import.meta.env?.BASE_URL || "./";
+              const [gbRes, revRes] = await Promise.all([
+                fetch(`${base}references/apoe-ensg00000130203.gb`),
+                fetch(`${base}references/apoe-r176c-clone-review.json`),
+              ]);
+              if (!gbRes.ok || !revRes.ok) throw new Error("Could not fetch bundled APOE review files.");
+              const [gbText, revBundle] = await Promise.all([gbRes.text(), revRes.json()]);
+              onSettings({ ...settings, ontologyTerm: "CL:0000540" });
+              onUpdateProject({
+                gene: project.gene || "APOE",
+                alleleReviewContext: "CL:0000540",
+                cloneReviewReferenceRaw: gbText,
+                cloneReviewReferenceName: "apoe-ensg00000130203.gb",
+                cloneReview: {
+                  splice: { ...revBundle.splice, bundled: true },
+                  alphagenome: { ...revBundle.alphagenome, bundled: true },
+                },
+              });
+              setMessage("Loaded APOE R176C reference + SpliceAI & AlphaGenome observed-allele predictions (Neuron CL:0000540).");
+            } catch (e) {
+              setMessage(""); setError(e.message || String(e));
+            }
+          }}
+        >
+          Load APOE R176C SpliceAI &amp; AlphaGenome Results
+        </button>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", margin: "0.5rem 0" }}>
         The design review predicted the planned edit. This asks the same predictors about what the clones were found to carry: the intended edit as read, any base the design did not plan, any indel allele.
