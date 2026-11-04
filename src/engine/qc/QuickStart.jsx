@@ -29,7 +29,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
   const controlPicker = useRef(null); const filePicker = useRef(null); const folderPicker = useRef(null); const designPicker = useRef(null);
   const files = useRef(new Map()); const buffers = useRef(new Map());
   const [traceNames, setTraceNames] = useState([]); const [explicitControls, setExplicitControls] = useState([]); const [sheetText, setSheetText] = useState(""); const [designText, setDesignText] = useState(""); const [designName, setDesignName] = useState(""); const [geneText, setGeneText] = useState(""); const [geneName, setGeneName] = useState(""); const [regionsText, setRegionsText] = useState(""); const [epitopeText, setEpitopeText] = useState("");
-  const [guidesText, setGuidesText] = useState(""); const [donorText, setDonorText] = useState(""); const [nuclease, setNuclease] = useState("SpCas9"); const [typeOverride, setTypeOverride] = useState(""); const [goal, setGoal] = useState("homozygous");
+  const [guidesText, setGuidesText] = useState(""); const [donorText, setDonorText] = useState(""); const [nuclease, setNuclease] = useState("SpCas9"); const [typeOverride, setTypeOverride] = useState(""); const [goal, setGoal] = useState("homozygous"); const [copyNumber, setCopyNumber] = useState(2);
   const [customSequenceMode, setCustomSequenceMode] = useState(false);
   const [pairsEdit, setPairsEdit] = useState({}); const [running, setRunning] = useState(false); const [progress, setProgress] = useState(null);
   const [outcome, setOutcome] = useState(null); const [picked, setPicked] = useState(0); const [panel, setPanel] = useState(0); const [figureBusy, setFigureBusy] = useState(false); const [error, setError] = useState("");
@@ -269,7 +269,7 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
       const cleanDonor = manualDonors.length > 1
         ? manualDonors
         : (manualDonors[0]?.sequence || "");
-      const { tasks, problems } = planTasks({ pairs, getTrace, design: effectiveDesign, guides, donor: cleanDonor, nuclease, sampleType: typeOverride, goal, genbank: geneText, codingOptions: coding.options });
+      const { tasks, problems } = planTasks({ pairs, getTrace, design: effectiveDesign, guides, donor: cleanDonor, nuclease, sampleType: typeOverride, goal, genbank: geneText, codingOptions: coding.options, copyNumber });
       if (!tasks.length) { setError(problems.join(" ") || "Nothing to analyse."); setRunning(false); return; }
       setProgress({ done: 0, total: tasks.length });
       const size = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
@@ -799,6 +799,8 @@ export default function QuickStart({ initialDesign = null, onResults } = {}) {
             <select id="q-type" value={typeOverride} onChange={(e) => setTypeOverride(e.target.value)}><option value="">as paired</option><option value="clone">clones</option><option value="pool">pools</option></select>
             <label className="field" htmlFor="q-goal">Accept</label>
             <select id="q-goal" value={goal} onChange={(e) => setGoal(e.target.value)}><option value="homozygous">homozygous edits only (heterozygous clones are held)</option><option value="any">heterozygous edits too</option></select>
+            <label className="field" htmlFor="q-copies">Copies of the locus per cell</label>
+            <select id="q-copies" value={copyNumber} onChange={(e) => setCopyNumber(Number(e.target.value))}><option value={2}>two (autosomal, or an X-linked gene in a female line)</option><option value={1}>one (X-linked gene in a male line): two alleles in one trace = a mixed clone</option></select>
             <label className="field" htmlFor="q-gene">Gene record (GenBank, optional): judges knockouts on the protein</label>
             <input id="q-gene" type="file" accept=".gb,.gbk,.gbff,.genbank,.txt" onChange={async (e) => { const f = e.target.files && e.target.files[0]; if (f) { setGeneText(await f.text()); setGeneName(f.name); } else { setGeneText(""); setGeneName(""); } }} />
             {geneName && <p className="muted">Using {geneName}: each allele is translated, nonsense-mediated decay and splice sites are assessed, and the knockout is called on the predicted protein.</p>}

@@ -121,7 +121,7 @@ export function reportDonors(donors) {
 }
 
 /** One task per sample. `getTrace(name)` returns a parsed trace; the plan (spec) is made once per distinct control, guides and donor. */
-export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides = [], donor = "", nuclease = "SpCas9", workflow = "auto", sampleType = "", goal = "homozygous", baseEditor = null, genbank = "", codingOptions = {} }) {
+export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides = [], donor = "", nuclease = "SpCas9", workflow = "auto", sampleType = "", goal = "homozygous", baseEditor = null, genbank = "", codingOptions = {}, copyNumber = 2 }) {
   const cache = new Map(); const tasks = []; const problems = [];
   const designGuides = design.kind === "report" ? design.guides : []; const designDonor = design.kind === "report" ? reportDonors(design.donors) : "";
   pairs.forEach((pair, index) => {
@@ -139,7 +139,7 @@ export function planTasks({ pairs, getTrace, design = { kind: "none" }, guides =
     }
     const plan = cache.get(key);
     if (plan.error) { problems.push(`${pair.sample}: ${plan.error}`); return; }
-    tasks.push({ index: tasks.length, name: pair.sample, nuclease: plan.spec.nuclease || plan.spec.design?.nuclease || pair.nuclease || (design.kind === "report" ? design.nuclease : null) || nuclease, spec: plan.spec, workflow: workflow !== "auto" ? workflow : baseEditor ? "base_edit" : (pair.workflow || inferWorkflow(plan.spec)), sampleType: sampleType || pair.type || "clone", controls: pair.control, edited: pair.edited, decisionOptions: { goal }, options: plan.codingInput ? { codingInput: plan.codingInput } : {}, planNotes: plan.warnings || [], pairing: { confidence: pair.confidence, reason: pair.reason }, well: wellOf(pair.edited[0]) });
+    tasks.push({ index: tasks.length, name: pair.sample, nuclease: plan.spec.nuclease || plan.spec.design?.nuclease || pair.nuclease || (design.kind === "report" ? design.nuclease : null) || nuclease, spec: plan.spec, workflow: workflow !== "auto" ? workflow : baseEditor ? "base_edit" : (pair.workflow || inferWorkflow(plan.spec)), sampleType: sampleType || pair.type || "clone", controls: pair.control, edited: pair.edited, decisionOptions: { goal }, options: { ...(plan.codingInput ? { codingInput: plan.codingInput } : {}), ...(copyNumber === 1 ? { copyNumber: 1 } : {}) }, planNotes: plan.warnings || [], pairing: { confidence: pair.confidence, reason: pair.reason }, well: wellOf(pair.edited[0]) });
   });
   return { tasks, problems };
 }

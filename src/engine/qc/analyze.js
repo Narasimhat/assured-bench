@@ -5,6 +5,7 @@ import { decomposeAdaptive } from "./pursuit.js";
 import { computeIntervals, upstreamNoise, upstreamBackground } from "./uncertainty.js";
 import { confidenceFrom } from "./reliability.js";
 import { callGenotype } from "./genotype.js";
+import { copyNumberOf, withCopyNumber } from "./copyNumber.js";
 import { shiftAt } from "./offset.js";
 import { scanUnplannedDetailed, mergeUnplannedReads, describeUnplanned, forwardFrame } from "./unplanned.js";
 import { assessFunction, assessAllele } from "./coding.js";
@@ -143,7 +144,7 @@ export function analysePair({ control, edited, spec, options = {} }) {
   const hasMarkers = (prepared.spec.markers || []).length > 0;
   if (discordanceWarns(quality, hasMarkers)) warnings.push(`The control and edited traces already differ before the cut (mean discordance ${quality.discordanceBefore.toFixed(2)}${quality.discordanceNearCut !== undefined ? `, ${quality.discordanceNearCut.toFixed(2)} in the stretch next to the cut` : ""}): one of them is noisy or comes from a different template. Treat the fractions as unreliable and consider re-sequencing.`);
   const markerReadout = readMarkers(prepared);
-  const genotype = options.sampleType === "clone" ? callGenotype(decomposition, options.genotype || {}) : null;
+  const genotype = options.sampleType === "clone" ? withCopyNumber(callGenotype(decomposition, options.genotype || {}), { copyNumber: copyNumberOf(options, prepared.spec), markerReadout }) : null;
   return {
     ok: true, warnings, prepared, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (prepared.spec.donors || []).length > 0), markerReadout, genotype, functional,
     quality, unplanned, unplannedOverflow, unplannedRuns,
@@ -186,6 +187,7 @@ export function analyseReads({ reads, spec, options = {} }) {
   const agreement = edited.length > 1 ? { spread: Math.max(...edited) - Math.min(...edited), agree: Math.max(...edited) - Math.min(...edited) <= (options.maxReadSpread ?? 15) } : null;
   if (agreement && !agreement.agree) warnings.push(`The reads disagree about the edited share (${perRead.map((r) => `${r.name} ${r.editedPct}%`).join(", ")}). A PCR or sequencing artefact, a poor read or mixed template is more likely than biology: re-sequence from both ends.`);
   const quality = { discordanceBefore: Math.max(...list.map((p) => meanDiscordance(p, p.alignmentWindow.start, p.alignmentWindow.end))), upstreamRms: Math.sqrt(noise) };
-  const genotype = options.sampleType === "clone" ? callGenotype(decomposition, options.genotype || {}) : null;
-  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout: readMarkers(first), genotype, functional, quality, unplanned, unplannedOverflow, unplannedRuns, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
+  const markerReadout = readMarkers(first);
+  const genotype = options.sampleType === "clone" ? withCopyNumber(callGenotype(decomposition, options.genotype || {}), { copyNumber: copyNumberOf(options, first.spec), markerReadout }) : null;
+  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout, genotype, functional, quality, unplanned, unplannedOverflow, unplannedRuns, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
 }

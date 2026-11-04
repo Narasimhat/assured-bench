@@ -10,7 +10,7 @@ export const GENOTYPE_DEFAULTS = { homozygousMin: 0.85, minorMin: 0.25, twoAllel
 
 const KIND_WORDS = { wt: "wild type", edit: "intended edit", edit_partial: "partial conversion", indel: "indel", deletion_between_cuts: "deletion between the cuts" };
 
-function alleleName(contribution) {
+export function alleleName(contribution) {
   if (contribution.kind === "wt") return "wild type";
   if (contribution.kind === "edit") return "intended edit";
   if (contribution.kind === "edit_partial") return contribution.label.replace(/^Partial conversion: /, "partial conversion: ");

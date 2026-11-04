@@ -6,6 +6,7 @@ import { cloneAlignedFigure, alignedGroups, clonesAlignedFigure, clonesAlignment
 import { cloneSelectionFigure } from "./selectionFigure.js";
 import { panelOf } from "./recommend.js";
 import { flagsFor } from "./unwanted.js";
+import { actionRows, ACTIONS, ACTION, FOCUS_ACTIONS, briefGenotype } from "./actions.js";
 
 export const QC_VERSION = "0.6.0";
 const esc = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -18,6 +19,10 @@ table{border-collapse:collapse;width:100%;margin:6px 0 12px}th,td{border:1px sol
 .muted{color:#667085}.pass{color:#067647;font-weight:700}.warn{color:#b54708;font-weight:700}.fail{color:#b42318;font-weight:700}
 ul{margin:4px 0 10px 18px;padding:0}.note{background:#fffaeb;border:1px solid #fedf89;border-radius:6px;padding:8px 10px;margin:10px 0}
 svg{max-width:100%;height:auto}.sample{page-break-inside:avoid}
+.fold{cursor:pointer;font-weight:700;color:#475467}.num{text-align:right;white-space:nowrap}.at td{font-size:12px}.at tr.grp td{background:#f2f4f7;font-size:12px;padding:6px 8px}
+.chip{display:inline-block;border-radius:10px;padding:1px 9px;margin:0 6px 4px 0;font-size:12px;font-weight:700;border:1px solid #d0d5dd;background:#f9fafb;color:#344054;white-space:nowrap}
+.act-carry{background:#ecfdf5;border-color:#6ce9a6;color:#067647}.act-reserve{background:#f6fef9;border-color:#a6f4c5;color:#067647}.act-confirm,.act-repick,.act-hold{background:#fffaeb;border-color:#fedf89;color:#b54708}
+.act-repeat{background:#eff8ff;border-color:#b2ddff;color:#175cd3}.act-fix{background:#fef3f2;border-color:#fecdca;color:#b42318}.act-other{background:#f2f4f7;color:#475467}.act-discard{background:#fef3f2;border-color:#fda29b;color:#b42318}
 `;
 
 const DECISION_LABEL = { accept: "Accept", hold: "Hold", "re-sequence": "Sequence again", reject: "Reject" };
@@ -152,31 +157,61 @@ export function buildTakeHomeMessage(workflow, results = []) {
   };
 }
 
-export function buildQcReportHtml({ title = "Publication Clone Screening Report", workflow, design = "", results, generatedAt = new Date(), notes = [], cloneReview = null }) {
+const fmtPct = (value) => (value === null || value === undefined || Number.isNaN(value) ? "–" : String(Math.round(value * 10) / 10));
+function actionTable(view) {
+  if (!view.rows.length) return "";
+  const shown = ACTIONS.filter((a) => view.counts[a.key]);
+  const chips = shown.map((a) => `<span class="chip act-${a.key}">${view.counts[a.key]} ${esc(a.label.toLowerCase())}</span>`).join("");
+  const rowHtml = (row) => {
+    const r = row.result; const s = r.summary || {}; const geno = r.ok === false ? "not analysed" : (r.genotype?.summary || "");
+    const edit = s.intendedEditPct ?? s.koScorePct ?? s.functionalKoPct ?? null;
+    const reads = r.ok === false ? "" : `${r.reads?.length || 1} read${(r.reads?.length || 1) === 1 ? "" : "s"}${row.folded.length ? ` &middot; ${row.folded.length} more did not align` : ""}`;
+    const why = row.why === geno ? "" : row.why.startsWith(geno) ? row.why.slice(geno.length).replace(/^[\s.:;]+/, "") : row.why;
+    const nums = r.ok === false ? ["", "", ""] : [edit, s.wtPct ?? null, s.indelPct ?? null].map(fmtPct);
+    return `<tr><td><b>${esc(row.label)}</b>${reads ? `<br><span class="muted">${reads}</span>` : ""}</td><td><span class="chip act-${row.key}" title="Engine call: ${esc(DECISION_LABEL[row.call] || row.call)}">${esc(ACTION[row.key].label)}</span></td><td>${esc(briefGenotype(geno))}</td><td class="num">${nums[0]}</td><td class="num">${nums[1]}</td><td class="num">${nums[2]}</td><td>${esc(why)}</td></tr>`;
+  };
+  const body = shown.map((a) => `<tr class="grp"><td colspan="7"><b>${esc(a.label)} (${view.counts[a.key]})</b> &middot; <span class="muted">${esc(a.how)}</span></td></tr>${view.rows.filter((row) => row.key === a.key).map(rowHtml).join("")}`).join("");
+  return `<div style="margin-top:6px">${chips}</div>
+<h2>What to do with each clone</h2>
+<table class="at"><tr><th>Clone</th><th>Next action</th><th>What it is</th><th class="num" title="Intended edit (HDR score for knock-ins, knockout score for knockouts)">Edit %</th><th class="num">Wild type %</th><th class="num">Indel %</th><th>Why</th></tr>${body}</table>
+<p class="muted">One row per clone: reads of the same clone are shown together${view.rows.some((row) => row.folded.length) ? ", and a read that did not align is noted under its clone" : ""}. The next action is worked out from the engine's call, the width of its interval and the flags; it does not change the engine's decision (hover a chip to see the engine call). The numbers are the estimated shares of the trace signal.</p>`;
+}
+
+export function buildQcReportHtml({ title = "Publication Clone Screening Report", workflow, design = "", results, generatedAt = new Date(), notes = [], cloneReview = null, detail = "focus" }) {
   const flow = WORKFLOWS[workflow]?.label || workflow;
+  const view = actionRows(workflow, results);
+  const shortNames = [...view.labelOf.entries()].filter(([name, label]) => name !== label).sort((a, b) => b[0].length - a[0].length);
+  const short = (text) => shortNames.reduce((out, [name, label]) => out.split(name).join(label), String(text ?? ""));
   const takeHome = buildTakeHomeMessage(workflow, results);
   const boxBorder = takeHome.status === "pass" ? "#10b981" : takeHome.status === "warn" ? "#f59e0b" : "#ef4444";
   const boxBg = takeHome.status === "pass" ? "#ecfdf5" : takeHome.status === "warn" ? "#fffbeb" : "#fef2f2";
   const boxTitleColor = takeHome.status === "pass" ? "#065f46" : takeHome.status === "warn" ? "#92400e" : "#991b1b";
-  const rows = results.map((r) => `<tr><td>${r.recommendation?.rank ? `#${r.recommendation.rank}` : "—"}</td><td><b>${esc(r.name)}</b></td><td>${r.decision ? esc(DECISION_LABEL[r.decision.decision]) : ""}</td><td class="${statusClass(r)}">${esc(headline(workflow, r))}</td><td>${esc(r.genotype?.summary || "—")}</td><td>${r.ok ? (r.warnings?.length ? `${r.warnings.length} note${r.warnings.length === 1 ? "" : "s"}` : "none") : "not analysed"}</td></tr>`).join("");
   const summarySvg = runSummaryFigure(results, { title: "Run summary" });
   const selSec = selectionSection(results, workflow);
   const alnSec = alignedSection(results);
+  const actionOf = new Map(); view.rows.forEach((row) => { actionOf.set(row.name, row.key); row.folded.forEach((f) => actionOf.set(f.name, row.key)); });
+  // a clone that is not the intended edit is already listed as such: "an indel next to the intended edit" or "incomplete conversion" adds nothing for it
+  const redundant = (x) => ["other", "discard"].includes(actionOf.get(x.name)) && (x.code === "indel-at-cut" || x.code === "blocking-only");
+  const flagged = new Set(unwantedRows(workflow, results, cloneReview).filter((x) => !redundant(x)).map((x) => view.labelOf.get(x.name) || x.name));
+  const withFigure = (r) => detail === "all" || FOCUS_ACTIONS.has(actionOf.get(r.name));
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${STYLE}</style></head><body>
 <h1>${esc(title)}</h1>
 <p class="muted">${esc(flow)}${design ? ` &middot; ${esc(design)}` : ""} &middot; ${results.length} sample${results.length === 1 ? "" : "s"} &middot; generated ${esc(generatedAt.toISOString().slice(0, 10))} by Assured QC ${QC_VERSION}</p>
+${results.some((r) => r.genotype?.copyNumber === 1) ? `<p class="note"><b>One copy of the locus per cell</b> (for example an X-linked gene in a male line): a clone can carry one allele only, so a trace with two real alleles is called a mixed clone, not heterozygous.</p>` : ""}
 <div style="border:2px solid ${boxBorder};border-left-width:8px;background:${boxBg};border-radius:8px;padding:12px 16px;margin:14px 0;">
   <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:${boxTitleColor};margin-bottom:4px;">Final Take-Home Conclusion</div>
-  <div style="font-size:16px;font-weight:700;color:${boxTitleColor};margin-bottom:6px;">${esc(takeHome.headline)}</div>
-  <div style="font-size:13px;color:#1f2937;margin-bottom:6px;">${esc(takeHome.summary)}</div>
-  <div style="font-size:12px;color:#475467;font-weight:600;">${esc(takeHome.nextStep)} <span class="muted">(Review required: computed estimates from Sanger traces.)</span></div>
+  <div style="font-size:16px;font-weight:700;color:${boxTitleColor};margin-bottom:6px;">${esc(short(takeHome.headline))}</div>
+  <div style="font-size:13px;color:#1f2937;margin-bottom:6px;">${esc(short(takeHome.summary))}</div>
+  <div style="font-size:12px;color:#475467;font-weight:600;">${esc(short(takeHome.nextStep))} <span class="muted">(Review required: computed estimates from Sanger traces.)</span></div>
 </div>
 ${notes.map((n) => `<p>${esc(n)}</p>`).join("")}
-${unwantedSection(workflow, results, cloneReview)}
-<h2>Summary</h2>${summarySvg ? `<div style="overflow-x:auto">${summarySvg}</div>` : `<table><tr><th>Rank</th><th>Sample / Clone</th><th>Decision</th><th>Result</th><th>Genotype Call</th><th>Notes</th></tr>${rows}</table>`}
-${selSec || alnSec ? `<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700;color:#475467">Multi-Clone Chromatogram Figures &amp; Cohort Alignments</summary>${selSec}${alnSec}</details>` : ""}
-<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:#475467">Appendix: Per-Sample Chromatogram Details &amp; Method Limits</summary>
-<h2>Samples</h2>${results.map((r) => sampleSection(workflow, r, { chromatogram: results.length <= 48 || !r.decision || r.decision.decision !== "reject" })).join("")}
+${actionTable(view)}
+<details style="margin-top:18px"><summary class="fold">Flagged changes in detail${flagged.size ? ` (${flagged.size} clone${flagged.size === 1 ? "" : "s"})` : ""}</summary>${unwantedSection(workflow, results, cloneReview, short, redundant)}</details>
+${summarySvg ? `<details style="margin-top:10px"><summary class="fold">Run summary figure</summary><div style="overflow-x:auto">${summarySvg}</div></details>` : ""}
+${selSec || alnSec ? `<details style="margin-top:10px"><summary class="fold">Multi-clone chromatogram figures &amp; cohort alignments</summary>${selSec}${alnSec}</details>` : ""}
+<details style="margin-top:10px"><summary class="fold">Appendix: per-sample details &amp; method limits</summary>
+${detail === "all" ? "" : `<p class="muted">Chromatograms are drawn for the clones that are carried forward, reserved, to be confirmed, to be re-picked or on hold. The numbers for every sample are below.</p>`}
+<h2>Samples</h2>${results.map((r) => sampleSection(workflow, r, { chromatogram: withFigure(r) })).join("")}
 <h2>Method and limits</h2><ul>${METHOD.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>
 </details>
 </body></html>`;
@@ -203,18 +238,28 @@ export function unwantedRows(workflow, results, cloneReview = null) {
   const rows = [];
   results.forEach((r) => {
     if (!r || !r.ok) return;
-    flagsFor(r, workflow).filter((f) => f.severity !== "info").forEach((f) => rows.push({ name: r.name, decision: r.decision?.decision || "", severity: f.severity, source: "trace", text: f.text }));
+    flagsFor(r, workflow).filter((f) => f.severity !== "info").forEach((f) => rows.push({ name: r.name, decision: r.decision?.decision || "", severity: f.severity, source: "trace", code: f.code, text: f.text }));
     const sp = cloneReview?.splice?.clones?.[r.name];
     if (sp && sp.verdict !== "pass") rows.push({ name: r.name, decision: r.decision?.decision || "", severity: sp.verdict === "fail" ? "block" : "review", source: "SpliceAI", text: `Predicted splice change ${sp.effect.toFixed(3)} (${sp.basis}; allele ${sp.label}): ${VERDICT_WORD[sp.verdict]} the clone. A model prediction, not a measurement: check by RT-PCR if the clone is used.` });
   });
   return rows;
 }
-function unwantedSection(workflow, results, cloneReview) {
+// The sentence that closes every "indel allele next to the edit" flag; the section says it once instead of on every row.
+const INDEL_SENTENCE = " An indel allele is a second, unplanned change at the cut; whether it matters depends on the gene (dosage, X-linkage).";
+function unwantedSection(workflow, results, cloneReview, short = (text) => text, skip = () => false) {
   const traces = results.filter((r) => r && r.ok && r.kind !== "junction");
   if (!traces.length) return "";
-  const rows = unwantedRows(workflow, results, cloneReview);
+  const rows = unwantedRows(workflow, results, cloneReview).filter((x) => !skip(x));
+  const byClone = new Map();
+  rows.forEach((x) => {
+    if (!byClone.has(x.name)) byClone.set(x.name, []);
+    const list = byClone.get(x.name);
+    if (!list.some((y) => y.text === x.text && y.source === x.source)) list.push(x);
+  });
+  const trimmed = (text) => short(text.endsWith(INDEL_SENTENCE) ? text.slice(0, -INDEL_SENTENCE.length) : text);
+  const indelNote = rows.some((x) => x.text.endsWith(INDEL_SENTENCE)) ? `<p class="muted">${esc(INDEL_SENTENCE.trim())}</p>` : "";
   const table = rows.length
-    ? `<table><tr><th>Clone</th><th>Decision</th><th>Flag</th><th>Source</th><th>What was found</th></tr>${rows.map((x) => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(DECISION_LABEL[x.decision] || x.decision)}</td><td>${esc(SEVERITY_WORD[x.severity])}</td><td>${esc(x.source)}</td><td>${esc(x.text)}</td></tr>`).join("")}</table>`
+    ? `<table><tr><th>Clone</th><th>Flags</th></tr>${[...byClone].map(([name, list]) => `<tr><td><b>${esc(short(name))}</b></td><td><ul>${list.map((x) => `<li><b>${esc(SEVERITY_WORD[x.severity])}</b>${x.source === "trace" ? "" : ` (${esc(x.source)})`}: ${esc(trimmed(x.text))}</li>`).join("")}</ul></td></tr>`).join("")}</table>${indelNote}`
     : "<p>No base change the design did not ask for was found in the traces, and no flag was raised.</p>";
   const scored = cloneReview?.splice ? `<p class="muted">Splice review: ${esc(cloneReview.splice.tool)} ${esc(cloneReview.splice.version)}, thresholds supports &le; ${cloneReview.splice.thresholds.pass}, review &le; ${cloneReview.splice.thresholds.review} (those of the design review). ${cloneReview.alphagenome ? `AlphaGenome ${esc(cloneReview.alphagenome.modelVersion)} (${esc((cloneReview.alphagenome.ontologyTerms || []).join(", "))}): raw track differences, no calibrated threshold, not a verdict.` : ""}</p>` : "";
   return `<h2>Unwanted changes</h2><p class="muted">Base changes the design did not plan, found by scanning every read against its control and mapped to the protein; plus other signs that a clone is not the clean edit. Calls from Sanger traces: a base seen in one read only may be a read artefact, and a heterozygous base cannot be placed on one allele.</p>${table}${scored}`;
