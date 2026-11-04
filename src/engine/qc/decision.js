@@ -27,6 +27,7 @@ function decideCore(workflow, result, options = {}) {
   const knock = workflow === "knockout" || workflow === "deletion";
   const category = g?.category || "";
   if (result.sampleType === "pool") return { decision: s.editedPct >= 20 ? "accept" : "hold", reasons: [`Pool: ${s.editedPct}% edited (interval ${iv ? `${iv.editedPct[0]}-${iv.editedPct[1]}` : "n/a"}).`], next: s.editedPct >= 20 ? "Proceed to single-cell cloning." : "Editing is low; consider re-transfection or enrichment." };
+  if (g?.mixedClone) return { decision: "hold", reasons: [g.summary], next: "One allele is expected at this locus, so this clone is a mixture: re-single-cell it or choose another clone." };
   if (knock) {
     const alleles = g?.alleles || [];
     if (category === "homozygous_wt" || highWt >= 50) return { decision: "reject", reasons: ["No edit detected, or wild type is the major allele."], next: "Discard." };
