@@ -1,3 +1,4 @@
+import { DECISION_LABEL } from "./labels.js";
 // A run on one graph: one row per clone, in the order to act on them. The decision, what each clone is made of (the alleles and their shares of the signal), the
 // edited share with its interval, the knockout support or intended-edit lower bound, and what to do with it. Vector SVG with real text, 1 unit = 1 pixel at 96 dpi
 // (rasterised by a browser at any dpi); no scripts and no external resources. Hover text (<title>) carries the full name, the allele shares and the decision reasons.
@@ -8,9 +9,8 @@ const INK = "#101828"; const MUTED = "#475467"; const BLUE = "#1b6ca8";
 const KIND = { wt: ["#667085", "Wild type"], indel: ["#d92d20", "Indel at one cut"], deletion_between_cuts: ["#b54708", "Deletion between the cuts"], edit: ["#067647", "Intended edit"], edit_partial: ["#7a5af8", "Partial conversion"], edit_indel: ["#c11574", "Edit with an indel"] };
 const OTHER = "#98a2b3";
 const DECISION = { accept: ["A", "#d1fadf", "#12b76a"], hold: ["H", "#fef0c7", "#f79009"], "re-sequence": ["S", "#d1e9ff", "#2e90fa"], reject: ["R", "#fee4e2", "#f04438"] };
-const DECISION_LABEL = { accept: "Accept", hold: "Hold", "re-sequence": "Sequence again", reject: "Reject" };
 const TIER_OPACITY = { confirmed: 1, firm: 1, likely: 0.8, possible: 0.62, unsupported: 0.35 };
-const PLAN = { first: "carry forward", confirmed: "confirmed", reserve: "reserve", duplicate: "backup", caution: "protein still made", not_recommended: "not recommended", discard: "discard", resequence: "sequence again" };
+const PLAN = { first: "carry forward", confirmed: "confirmed", reserve: "reserve", duplicate: "backup", caution: "protein still made", not_recommended: "not recommended", discard: "discard", resequence: "unresolved" };
 const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
 
 const sizeLabel = (c) => (c.kind === "wt" ? "WT" : c.size ? `${c.size > 0 ? "+" : "\u2212"}${Math.abs(c.size)}` : c.kind === "edit" ? "edit" : "");

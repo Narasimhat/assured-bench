@@ -125,7 +125,7 @@ export function recommendClones(results, options = {}) {
     const tests = []; if (x.r.workflow === "knockout" || x.r.workflow === "deletion") { tests.push("Western blot with an antibody outside the edited region (and a second antibody to another region)"); if (x.support.mechanism.splice) tests.push("RT-PCR across the flanking exons (exon skipped, intron retained or cryptic site)"); if (x.support.mechanism.nmd) tests.push("RT-qPCR downstream of the stop to see the transcript fall"); }
     base.testWith = x.confirmed ? [] : tests;
     if (d === "reject") { base.priority = "discard"; base.action = "Discard: the result does not carry the wanted edit."; return; }
-    if (d === "re-sequence") { base.priority = "resequence"; base.action = "Sequence again before anything else; the current trace cannot settle it."; return; }
+    if (d === "re-sequence") { base.priority = "resequence"; base.action = "Unresolved: the engine could not settle this clone. Check the trace quality and the chromatogram before anything else."; return; }
     if (x.unsupported) { base.priority = "not_recommended"; base.action = x.knock ? "Not recommended: the sequence does not predict loss of the protein (a wild-type or protein-making allele is present)." : "Not recommended: the sequence does not support the wanted edit (support under 20)."; return; }
     eligible.push(i);
   });

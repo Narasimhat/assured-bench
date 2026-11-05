@@ -8,7 +8,7 @@ import { summaryOrder } from "./summaryFigure.js";
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const INK = "#101828"; const MUTED = "#475467"; const BLUE = "#1b6ca8";
 const DECISION = { accept: ["A", "#d1fadf", "#12b76a"], hold: ["H", "#fef0c7", "#f79009"], "re-sequence": ["S", "#d1e9ff", "#2e90fa"], reject: ["R", "#fee4e2", "#f04438"] };
-const GROUPS = [["first", "Carry forward first"], ["confirmed", "Confirmed"], ["reserve", "Reserve"], ["duplicate", "Backup (same genotype)"], ["caution", "Protein still made"], ["resequence", "Sequence again"], ["not_recommended", "Not recommended"], ["discard", "Discard"]];
+const GROUPS = [["first", "Carry forward first"], ["confirmed", "Confirmed"], ["reserve", "Reserve"], ["duplicate", "Backup (same genotype)"], ["caution", "Protein still made"], ["resequence", "Unresolved"], ["not_recommended", "Not recommended"], ["discard", "Discard"]];
 const TIER_OPACITY = { confirmed: 1, firm: 1, likely: 0.8, possible: 0.62, unsupported: 0.35 };
 const MARKER_COLOR = (role) => (/block/i.test(role) ? "#e08214" : "#7b3294");
 const fmt = (x) => x.toFixed(1);
@@ -74,7 +74,7 @@ export function cloneSelectionFigure(results, { title = "", width = 980, note = 
   }
   y += 10;
   const foot = [
-    "Table: share of the donor base at each designed change, from the peak heights (0 = control base, 100 = donor base; n/a where an indel shifts the read). Call: A accept, H hold, S sequence again, R reject.",
+    "Table: share of the donor base at each designed change, from the peak heights (0 = control base, 100 = donor base; n/a where an indel shifts the read). Call: A accept, H hold, S unresolved, R reject.",
     ...(hdrRun ? ["HDR score (ICE's KI score): the share of alleles that carry the intended edit, with its 95% interval; clones are ranked by the lower bound of the interval."] : []),
     ...(note ? [note] : []),
     "One read per clone (the first): the figure does not show allele phase, a large deletion on one allele or off-target edits.",

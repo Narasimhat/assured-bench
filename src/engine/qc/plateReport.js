@@ -1,4 +1,4 @@
-// One-page plate view of the decisions: which wells to keep, hold, sequence again or discard. Wells come from the file names (A01 ... H12) or a sheet column;
+// One-page plate view of the decisions: which wells to keep, hold, look at again or discard. Wells come from the file names (A01 ... H12) or a sheet column;
 // without them the samples are listed in order. Self-contained HTML, no scripts.
 import { DECISION_ORDER, tally } from "./decision.js";
 import { panelOf } from "./recommend.js";
@@ -25,8 +25,8 @@ body{font-family:Arial,Helvetica,sans-serif;color:#101828;max-width:1100px;margi
 table{border-collapse:collapse;width:100%}th,td{border:1px solid #eaecf0;padding:4px 8px;text-align:left;vertical-align:top}th{background:#f9fafb}
 .plate td{width:7.5%;height:46px;text-align:center;font-size:11px;padding:2px}.plate td span{color:#475467;font-size:9px}.plate td.empty{background:#fafafa;border:1px solid #eaecf0}.legend span{display:inline-block;margin-right:14px;padding:2px 8px;border-radius:4px}
 </style></head><body><h1>${esc(title)}: plate decisions</h1>
-<p class="legend"><span style="background:${COLOR.accept}">A accept ${counts.accept}</span><span style="background:${COLOR.hold}">H hold ${counts.hold}</span><span style="background:${COLOR["re-sequence"]}">S re-sequence ${counts["re-sequence"]}</span><span style="background:${COLOR.reject}">R reject ${counts.reject}</span> &middot; ${results.length} samples &middot; generated ${esc(generatedAt.toISOString().slice(0, 10))}</p>
-${grid}${recommendation}${DECISION_ORDER.map((k) => section(k, { accept: "Accept", hold: "Hold", "re-sequence": "Sequence again", reject: "Reject" }[k])).join("")}
+<p class="legend"><span style="background:${COLOR.accept}">A accept ${counts.accept}</span><span style="background:${COLOR.hold}">H hold ${counts.hold}</span><span style="background:${COLOR["re-sequence"]}">S unresolved ${counts["re-sequence"]}</span><span style="background:${COLOR.reject}">R reject ${counts.reject}</span> &middot; ${results.length} samples &middot; generated ${esc(generatedAt.toISOString().slice(0, 10))}</p>
+${grid}${recommendation}${DECISION_ORDER.map((k) => section(k, { accept: "Accept", hold: "Hold", "re-sequence": "Unresolved", reject: "Reject" }[k])).join("")}
 <p class="muted">Decisions follow the thresholds in run.json and the reasons listed; they are computed from Sanger traces and need review before a clone is released.</p></body></html>`;
 }
 

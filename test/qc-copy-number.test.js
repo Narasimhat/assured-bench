@@ -104,7 +104,7 @@ test("one copy: a knockout with two different frameshift alleles is held, not ac
 test("the next action for a mixed clone: re-pick when the trace is precise, repeat the read first when it is not", () => {
   const base = cloneWith(half, 1);
   const precise = { ...base, name: "x_Cl_1_A", confidence: { tier: "high", width: 2 }, decision: { ...base.decision, decision: "re-sequence" }, recommendation: { priority: "resequence" } };
-  const noisy = { ...precise, name: "x_Cl_2_A", confidence: { tier: "low", width: 60 }, intervals: { ...precise.intervals, editedPct: [30, 100] } };
+  const noisy = { ...precise, name: "x_Cl_2_A", confidence: { tier: "low", width: 60 }, intervals: { ...precise.intervals, editedPct: [30, 100] }, traceQuality: { q20: 0.5, poor: true, why: ["only 50% of the edited trace's bases around the cut are Q20 or better"] } };
   const { rows } = actionRows("snp", [precise, noisy]);
   assert.deepEqual(rows.map((r) => [r.label, r.key]), [["cl1", "repick"], ["cl2", "repeat"]]);
   assert.match(rows.find((r) => r.label === "cl2").why, /one-copy locus two alleles mean a mixed clone/);

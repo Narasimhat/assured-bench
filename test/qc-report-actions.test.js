@@ -57,13 +57,13 @@ test("the same base seen in one read of a clone that carries the edit is 'confir
   assert.match(rows[0].why, /in one read only/);
 });
 
-test("a call the interval is too wide to make is 'repeat the read'; a clear trace without the edit is 'not the intended edit'", () => {
+test("a call the interval is too wide to make on a clean trace is 'look at the chromatogram'; a clear trace without the edit is 'not the intended edit'", () => {
   const base = clone(hom());
   const noisy = { ...base, name: "n_Cl_4_A", confidence: { tier: "low", width: 60 }, intervals: { ...base.intervals, editedPct: [40, 100] }, decision: { ...base.decision, decision: "re-sequence", reasons: ["not precise"] } };
   const indel = { ...base, name: "n_Cl_5_A", summary: { ...base.summary, intendedEditPct: 0 }, confidence: { tier: "high", width: 1 }, decision: { ...base.decision, decision: "re-sequence", reasons: ["x"] } };
   const { rows } = actionRows("snp", [noisy, indel].map((r) => ({ ...r, recommendation: { priority: "resequence" } })));
-  assert.deepEqual(rows.map((row) => [row.label, row.key]), [["cl4", "repeat"], ["cl5", "other"]]);
-  assert.match(rows[0].why, /40-100%/);
+  assert.deepEqual(rows.map((row) => [row.label, row.key]), [["cl4", "inspect"], ["cl5", "other"]]);
+  assert.match(rows[0].why, /95% interval 40-100%/);
 });
 
 test("a read that could not be analysed is folded into the row of the same clone, and stands alone when no read of the clone was analysed", () => {
@@ -86,11 +86,11 @@ test("names without a clone number keep their own rows", () => {
   assert.deepEqual(view.rows.map((row) => row.label).sort(), ["A01_sample", "B02_sample"]);
 });
 
-test("the first page leads with the action table and carries no 'Sequence again' text; the engine call is on hover", () => {
+test("the first page leads with the action table; the engine call is on hover and 'Sequence again' is not used anywhere", () => {
   const html = buildQcReportHtml({ workflow: "snp", results: ranked([named(clone(hom()), "x_Cl_1_A"), named(clone(hom(NONSENSE), { reads: ["F"] }), "x_Cl_2_A")]) });
   assert.match(visible(html), /What to do with each clone/);
-  assert.doesNotMatch(words(html), /Sequence again/);
-  assert.match(html, /title="Engine call: Sequence again"/);
+  assert.doesNotMatch(html, /Sequence again/);
+  assert.match(html, /title="Engine call: Unresolved"/);
   assert.match(visible(html), /Confirm a base/);
   assert.ok(visible(html).indexOf("What to do with each clone") < html.indexOf("Flagged changes in detail"));
 });
