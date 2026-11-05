@@ -7,7 +7,8 @@ export const ACTIONS = [
   { key: "reserve", label: "Reserve", how: "Accepted but not in the panel: keep as a backup." },
   { key: "confirm", label: "Confirm a base", how: "Read the flagged position again from the other direction before using the clone." },
   { key: "repick", label: "Re-pick or subclone", how: "The trace is clear and shows a mixed or incompletely converted clone: reading it again will not change that." },
-  { key: "repeat", label: "Repeat the read", how: "The trace is too noisy to settle the call: sequence the same PCR product again, or re-amplify." },
+  { key: "inspect", label: "Look at the chromatogram", how: "The trace is clean but the engine could not explain the signal (usually a mixture of alleles, or an allele outside its library). Open the aligned chromatogram and re-pick the clone if two alleles are visible: sequencing it again gives the same picture." },
+  { key: "repeat", label: "Repeat the read", how: "The trace itself is poor around the cut (or its control is): sequence the same PCR product again, or re-amplify." },
   { key: "fix", label: "Fix the input", how: "The read could not be compared with its control: check the control, the primer and the read direction." },
   { key: "hold", label: "Hold", how: "Decide by hand; the reason is given." },
   { key: "other", label: "Not the intended edit", how: "Carries an indel or another allele instead of the edit. An indel clone can serve as a knock-out control; otherwise drop it." },
@@ -15,7 +16,7 @@ export const ACTIONS = [
 ];
 export const ACTION = Object.fromEntries(ACTIONS.map((a, i) => [a.key, { ...a, order: i }]));
 /** The actions whose clones deserve the full per-clone figures. */
-export const FOCUS_ACTIONS = new Set(["carry", "reserve", "confirm", "repick", "hold"]);
+export const FOCUS_ACTIONS = new Set(["carry", "reserve", "confirm", "repick", "inspect", "hold"]);
 
 const sentence = (text, max = 150) => { const t = String(text || "").replace(/\s+/g, " ").trim(); return t.length > max ? `${t.slice(0, max - 1).replace(/[ ,;:(]+\S*$/, "")}…` : t; };
 const signed = (n) => `${n > 0 ? "+" : ""}${n}`;
@@ -48,7 +49,7 @@ export function briefGenotype(text) {
 export function nextAction(workflow, r) {
   const call = r.decision?.decision || "";
   const priority = r.recommendation?.priority;
-  const done = (key, why) => ({ key, why: sentence(why, 190), call });
+  const done = (key, why) => ({ key, why: sentence(why, 240), call });
   if (!r || r.ok === false) return done("fix", r?.error || "The sample could not be analysed.");
   if (r.kind === "junction") return done(call === "accept" ? "carry" : call === "reject" ? "discard" : call === "re-sequence" ? "repeat" : "hold", (r.decision?.reasons || [])[0] || r.verdict?.text || "");
   if (call === "reject") return done("discard", rejectWhy(r));
@@ -64,13 +65,26 @@ export function nextAction(workflow, r) {
     const [lo, hi] = r.intervals?.editedPct || [];
     const flags = flagsFor(r, workflow);
     const e = edit(r);
+    const tq = r.traceQuality;
+    const has = (code) => flags.some((f) => f.code === code && f.severity !== "info");
+    const mixedNote = r.genotype?.mixedClone ? " At a one-copy locus two alleles mean a mixed clone." : "";
     if (r.genotype?.mixedClone && r.confidence?.tier !== "low") return done("repick", r.genotype.summary);
     const carriesEdit = e !== null && e >= 50 && (lo === undefined || lo >= 50);
-    if (carriesEdit && flags.some((f) => f.code === "unplanned-base" && f.severity !== "info")) return done("confirm", unplannedPhrases(r).join("; ") || "An unplanned base was seen.");
-    if (r.confidence?.tier === "low") return done("repeat", `The 95% interval for the edited share is ${lo ?? "?"}-${hi ?? "?"}%: too wide to call.${r.genotype?.mixedClone ? " At a one-copy locus two alleles mean a mixed clone: if the repeat still shows them, re-pick." : ""}`);
+    if (carriesEdit && has("unplanned-base")) return done("confirm", unplannedPhrases(r).join("; ") || "An unplanned base was seen.");
+    // a poor trace (or a poor control), reads that disagree, or too little readable sequence after the cut: reading it again can help
+    if (tq?.poor) return done("repeat", `${tq.why.join("; ").replace(/^./, (c) => c.toUpperCase())}.${mixedNote}`);
+    if (has("reads-disagree")) return done("repeat", "The reads disagree about the edited share: repeat the PCR and sequence both directions.");
+    if ((r.warnings || []).some((w) => /readable bases lie downstream/.test(w))) return done("repeat", "Too little readable sequence after the cut: use a shorter amplicon or the other primer.");
+    // a clean trace the fit could not settle: the signal is probably a mixture or an allele outside the library, which another read does not change
+    if (r.confidence?.tier === "low" || has("many-differences")) {
+      if (!tq) return done("repeat", `The 95% interval for the edited share is ${lo ?? "?"}-${hi ?? "?"}%: too wide to call.${mixedNote}`);
+      const r2 = r.quality?.r2;
+      return done("inspect", `Clean trace (${Math.round((tq.q20 ?? 1) * 100)}% of its bases around the cut are Q20 or better), but the fit could not settle the call: 95% interval ${lo ?? "?"}-${hi ?? "?"}%${r2 !== undefined && r2 !== null && r2 < 0.8 ? `, allele library explains only ${Math.round(r2 * 100)}% of the signal` : ""}.${r.genotype?.mixedClone ? " At a one-copy locus two alleles mean a mixed clone." : ""}`);
+    }
     if (e !== null && e < 20) return done("other", r.genotype?.summary);
     return done("repick", r.genotype?.summary || (r.decision?.reasons || [])[0]);
   }
+
   return done("hold", (r.decision?.reasons || [])[0] || r.recommendation?.why);
 }
 

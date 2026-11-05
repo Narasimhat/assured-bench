@@ -2,6 +2,7 @@
 // stretch, and the base calls of all clones as an alignment. They draw the view of src/alignedView.js: guides with their PAM and cut, the designed
 // changes, both chromatograms base by base, and every base that differs from the control. Vector SVG with real text, 1 unit = 1 pixel at 96 dpi;
 // no scripts and no external resources.
+import { DECISION_LABEL } from "./labels.js";
 import { summaryOrder } from "./summaryFigure.js";
 import { aaOf } from "./protein.js";
 
@@ -9,7 +10,6 @@ const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").
 const INK = "#101828"; const MUTED = "#475467"; const CUT = "#d92d20";
 const CHANNEL = { A: "#1a9850", C: "#2166ac", G: "#222222", T: "#d73027" };
 const DECISION = { accept: ["A", "#d1fadf", "#12b76a"], hold: ["H", "#fef0c7", "#f79009"], "re-sequence": ["S", "#d1e9ff", "#2e90fa"], reject: ["R", "#fee4e2", "#f04438"] };
-const DECISION_LABEL = { accept: "Accept", hold: "Hold", "re-sequence": "Sequence again", reject: "Reject" };
 const MARKER_COLOR = (role) => (/block/i.test(role) ? "#e08214" : "#7b3294");
 const fmt = (x) => x.toFixed(1);
 

@@ -7,6 +7,7 @@ import { cloneSelectionFigure } from "./selectionFigure.js";
 import { panelOf } from "./recommend.js";
 import { flagsFor } from "./unwanted.js";
 import { actionRows, ACTIONS, ACTION, FOCUS_ACTIONS, briefGenotype } from "./actions.js";
+import { DECISION_LABEL } from "./labels.js";
 
 export const QC_VERSION = "0.6.0";
 const esc = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -25,7 +26,6 @@ svg{max-width:100%;height:auto}.sample{page-break-inside:avoid}
 .act-repeat{background:#eff8ff;border-color:#b2ddff;color:#175cd3}.act-fix{background:#fef3f2;border-color:#fecdca;color:#b42318}.act-other{background:#f2f4f7;color:#475467}.act-discard{background:#fef3f2;border-color:#fda29b;color:#b42318}
 `;
 
-const DECISION_LABEL = { accept: "Accept", hold: "Hold", "re-sequence": "Sequence again", reject: "Reject" };
 const intervalText = (iv) => (iv ? `${iv[0]}-${iv[1]}%` : "n/a");
 
 const METHOD = [
@@ -131,7 +131,7 @@ export function buildTakeHomeMessage(workflow, results = []) {
     return {
       status: "pass",
       headline: `Carry forward for expansion & banking: ${carryNames.join(", ")}`,
-      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, ${accepted.length} (${rate}%) met acceptance criteria (${held.length} held, ${reseq.length} re-sequence, ${rejected.length} rejected). Top prioritized clone${carryObjects.length === 1 ? "" : "s"}: ${carryObjects.map(describeClone).join("; ")}.${unwanted ? ` ${unwanted}` : ""}`,
+      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, ${accepted.length} (${rate}%) met acceptance criteria (${held.length} held, ${reseq.length} unresolved, ${rejected.length} rejected). Top prioritized clone${carryObjects.length === 1 ? "" : "s"}: ${carryObjects.map(describeClone).join("; ")}.${unwanted ? ` ${unwanted}` : ""}`,
       nextStep: isKo
         ? "Next step: Expand prioritized clone(s), freeze low-passage vials, and confirm loss of protein expression (e.g. Western blot) and absence of large monoallelic deletions."
         : "Next step: Expand prioritized clone(s), freeze low-passage vials, and confirm zygosity with bidirectional reads and primers outside the homology arms.",
@@ -143,9 +143,9 @@ export function buildTakeHomeMessage(workflow, results = []) {
       status: "warn",
       headline: held.length > 0
         ? `Hold / Review: ${held.map((r) => r.name).join(", ")} (no unambiguous top clone yet)`
-        : `Re-sequencing required for ${reseq.length} trace${reseq.length === 1 ? "" : "s"}`,
-      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, 0 met strict acceptance criteria, ${held.length} ${held.length === 1 ? "is" : "are"} held for review (e.g. heterozygous or partial conversion), and ${reseq.length} require re-sequencing.${unwanted ? ` ${unwanted}` : ""}`,
-      nextStep: "Next step: Re-sequence traces with low signal quality in both directions, or subclone/screen additional colonies.",
+        : `${reseq.length} sample${reseq.length === 1 ? "" : "s"} unresolved: see what to do with each clone below`,
+      summary: `Out of ${total} screened sample${total === 1 ? "" : "s"}, 0 met strict acceptance criteria, ${held.length} ${held.length === 1 ? "is" : "are"} held for review (e.g. heterozygous or partial conversion), and ${reseq.length} ${reseq.length === 1 ? "is" : "are"} unresolved (the engine could not settle the call).${unwanted ? ` ${unwanted}` : ""}`,
+      nextStep: "Next step: for each unresolved clone look at its chromatogram: repeat the read if the trace is poor, re-pick or subclone if two alleles are visible.",
     };
   }
 
@@ -168,13 +168,15 @@ function actionTable(view) {
     const reads = r.ok === false ? "" : `${r.reads?.length || 1} read${(r.reads?.length || 1) === 1 ? "" : "s"}${row.folded.length ? ` &middot; ${row.folded.length} more did not align` : ""}`;
     const why = row.why === geno ? "" : row.why.startsWith(geno) ? row.why.slice(geno.length).replace(/^[\s.:;]+/, "") : row.why;
     const nums = r.ok === false ? ["", "", ""] : [edit, s.wtPct ?? null, s.indelPct ?? null].map(fmtPct);
-    return `<tr><td><b>${esc(row.label)}</b>${reads ? `<br><span class="muted">${reads}</span>` : ""}</td><td><span class="chip act-${row.key}" title="Engine call: ${esc(DECISION_LABEL[row.call] || row.call)}">${esc(ACTION[row.key].label)}</span></td><td>${esc(briefGenotype(geno))}</td><td class="num">${nums[0]}</td><td class="num">${nums[1]}</td><td class="num">${nums[2]}</td><td>${esc(why)}</td></tr>`;
+    const tq = r.ok === false ? null : r.traceQuality;
+    const tqCell = tq ? `<td class="num${tq.poor ? " warn" : ""}" title="${esc(`Edited trace: ${Math.round((tq.edited.cut.q20 ?? 0) * 100)}% Q20 or better within ${tq.flank} bases of the cut, ${Math.round((tq.edited.fit.q20 ?? 0) * 100)}% in the stretch the fit uses. Control: ${Math.round((tq.control.cut.q20 ?? 0) * 100)}% and ${Math.round((tq.control.fit.q20 ?? 0) * 100)}%.`)}">${Math.round((tq.q20 ?? 0) * 100)}</td>` : `<td class="num"></td>`;
+    return `<tr><td><b>${esc(row.label)}</b>${reads ? `<br><span class="muted">${reads}</span>` : ""}</td><td><span class="chip act-${row.key}" title="Engine call: ${esc(DECISION_LABEL[row.call] || row.call)}">${esc(ACTION[row.key].label)}</span></td><td>${esc(briefGenotype(geno))}</td><td class="num">${nums[0]}</td><td class="num">${nums[1]}</td><td class="num">${nums[2]}</td>${tqCell}<td>${esc(why)}</td></tr>`;
   };
-  const body = shown.map((a) => `<tr class="grp"><td colspan="7"><b>${esc(a.label)} (${view.counts[a.key]})</b> &middot; <span class="muted">${esc(a.how)}</span></td></tr>${view.rows.filter((row) => row.key === a.key).map(rowHtml).join("")}`).join("");
+  const body = shown.map((a) => `<tr class="grp"><td colspan="8"><b>${esc(a.label)} (${view.counts[a.key]})</b> &middot; <span class="muted">${esc(a.how)}</span></td></tr>${view.rows.filter((row) => row.key === a.key).map(rowHtml).join("")}`).join("");
   return `<div style="margin-top:6px">${chips}</div>
 <h2>What to do with each clone</h2>
-<table class="at"><tr><th>Clone</th><th>Next action</th><th>What it is</th><th class="num" title="Intended edit (HDR score for knock-ins, knockout score for knockouts)">Edit %</th><th class="num">Wild type %</th><th class="num">Indel %</th><th>Why</th></tr>${body}</table>
-<p class="muted">One row per clone: reads of the same clone are shown together${view.rows.some((row) => row.folded.length) ? ", and a read that did not align is noted under its clone" : ""}. The next action is worked out from the engine's call, the width of its interval and the flags; it does not change the engine's decision (hover a chip to see the engine call). The numbers are the estimated shares of the trace signal.</p>`;
+<table class="at"><tr><th>Clone</th><th>Next action</th><th>What it is</th><th class="num" title="Intended edit (HDR score for knock-ins, knockout score for knockouts)">Edit %</th><th class="num">Wild type %</th><th class="num">Indel %</th><th class="num" title="Share of the edited trace's bases with Phred quality of 20 or better within 150 bases of the cut and in the stretch the fit uses (the lower of the two)">Trace Q20 %</th><th>Why</th></tr>${body}</table>
+<p class="muted">One row per clone: reads of the same clone are shown together${view.rows.some((row) => row.folded.length) ? ", and a read that did not align is noted under its clone" : ""}. The next action is worked out from the engine's call, the width of its interval, the flags and the quality of the traces; it does not change the engine's decision (hover a chip to see the engine call). The Edit, Wild type and Indel columns are the estimated shares of the trace signal. Trace Q20 % is the share of the edited trace's bases with Phred quality of 20 or better within 150 bases of the cut and in the stretch the fit uses (the lower of the two); below 90% it is shown in orange, and the control's figures are in the hover text.</p>`;
 }
 
 export function buildQcReportHtml({ title = "Publication Clone Screening Report", workflow, design = "", results, generatedAt = new Date(), notes = [], cloneReview = null, detail = "focus" }) {

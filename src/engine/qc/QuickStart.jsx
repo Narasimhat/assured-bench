@@ -19,8 +19,9 @@ import { expandImportFiles } from "./importFiles.js";
 import { cleanDna } from "./seq.js";
 import Detail from "./Detail.jsx";
 import IceExport from "./IceExport.jsx";
+import { DECISION_LABEL } from "./labels.js";
 
-const LABEL = { accept: "Accept", hold: "Hold", "re-sequence": "Sequence again", reject: "Reject" };
+const LABEL = DECISION_LABEL;
 const download = (name, data, type) => { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); };
 const arrayBufferOf = (file) => file.arrayBuffer();
 const interval = (iv) => (iv ? `${iv[0]}-${iv[1]}%` : "");
@@ -321,7 +322,7 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
   const result = outcome ? outcome.results[picked] : null; const counts = outcome ? tally(outcome.results.map((r) => r.decision)) : null;
   const runFigure = outcome ? runProteinFigure(outcome.results) : ""; const koRun = outcome ? outcome.workflow === "knockout" || outcome.workflow === "deletion" : false; const panelAuto = koRun ? 3 : 6; const ranked = outcome ? withRecommendations(outcome.results, panel ? { panel } : {}) : null; const selectionSvg = ranked ? cloneSelectionFigure(ranked) : ""; const summaryFigure = ranked ? runSummaryFigure(ranked) : ""; const recommendation = ranked && ranked[picked] ? ranked[picked].recommendation : null;
   const alignedList = ranked ? alignedGroups(ranked).map((items) => ({ items, stack: items.length <= 48 ? clonesAlignedFigure(items) : "" })).filter((g) => g.stack) : [];
-  const PRIORITY_LABEL = { first: "carry forward", confirmed: "confirmed", reserve: "reserve", duplicate: "backup", caution: "protein still made", not_recommended: "not recommended", discard: "discard", resequence: "sequence again" };
+  const PRIORITY_LABEL = { first: "carry forward", confirmed: "confirmed", reserve: "reserve", duplicate: "backup", caution: "protein still made", not_recommended: "not recommended", discard: "discard", resequence: "unresolved" };
   const stamp = new Date().toISOString().slice(0, 10);
   const figure = async (format) => {
     if (!outcome || !result || !result.ok) return; setFigureBusy(true);
@@ -1022,7 +1023,7 @@ export default function QuickStart({ initialDesign = null, cloneReview = null, o
                 </div>
               ))}
               <p style={{ marginTop: "8px" }}>
-                <button type="button" className="link" onClick={() => download(`assured_qc_resequence_${stamp}.csv`, resequenceListCsv(outcome.results), "text/csv")}>Re-sequence list (CSV)</button>
+                <button type="button" className="link" onClick={() => download(`assured_qc_resequence_${stamp}.csv`, resequenceListCsv(outcome.results), "text/csv")}>Unresolved clones (CSV)</button>
                 <button type="button" className="link" onClick={() => download(`assured_qc_recommendation_${stamp}.csv`, recommendationCsv(ranked), "text/csv")}>Recommendation (CSV)</button>
                 {summaryFigure && <button type="button" className="link" onClick={() => saveSvg(`assured_qc_summary_${stamp}.svg`, summaryFigure)}>Summary graph (SVG)</button>}
                 {summaryFigure && <button type="button" className="link" onClick={() => savePng(`assured_qc_summary_${stamp}_300dpi.png`, summaryFigure)}>Summary graph (PNG)</button>}

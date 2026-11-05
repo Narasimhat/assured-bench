@@ -23,7 +23,7 @@ function decideCore(workflow, result, options = {}) {
   const lowIntended = iv ? iv.intendedEditPct[0] : s.intendedEditPct;
   if (confidence === "low") reasons.push(`The result is not precise enough to decide (interval width ${result.confidence.width} points).`);
   if (result.warnings.some((w) => /readable bases lie downstream/.test(w))) reasons.push("Too little readable sequence after the cut.");
-  if (reasons.length) return { decision: "re-sequence", reasons, next: "Sequence again (shorter amplicon, or the other primer); the current trace cannot settle it." };
+  if (reasons.length) return { decision: "re-sequence", reasons, next: "The fit could not settle this call. If the trace is poor, sequence again (shorter amplicon, or the other primer); if it is clean, look at the chromatogram: the signal may be a mixture of alleles." };
   const knock = workflow === "knockout" || workflow === "deletion";
   const category = g?.category || "";
   if (result.sampleType === "pool") return { decision: s.editedPct >= 20 ? "accept" : "hold", reasons: [`Pool: ${s.editedPct}% edited (interval ${iv ? `${iv.editedPct[0]}-${iv.editedPct[1]}` : "n/a"}).`], next: s.editedPct >= 20 ? "Proceed to single-cell cloning." : "Editing is low; consider re-transfection or enrichment." };
@@ -94,7 +94,7 @@ export function decide(workflow, result, options = {}) {
   if (exact && singleDamage && d.decision !== "re-sequence") {
     return annotate({ decision: "re-sequence", reasons: [...texts, ...(d.decision === "accept" ? [] : d.reasons)], next: "Sequence the clone from the other direction: a protein-changing base seen in one read has to be confirmed before the clone is used or dropped." }, result, "review");
   }
-  if (messy && d.decision === "accept") return keep({ decision: "re-sequence", reasons: [...texts, ...d.reasons], next: "Sequence again (shorter amplicon, or the other primer); many positions differ from the control, which a clean clone does not show." });
+  if (messy && d.decision === "accept") return keep({ decision: "re-sequence", reasons: [...texts, ...d.reasons], next: "Look at the trace: many positions differ from the control, which a clean clone does not show. Sequence again (shorter amplicon, or the other primer) if the trace is poor." });
   if (d.decision !== "accept") return keep({ ...d, reasons: [...d.reasons, ...texts] });
   return keep({ decision: "hold", reasons: [...texts, ...d.reasons], next: "Look at the trace at that position and sequence the other direction before using this clone; it may carry a second edit or a variant." });
 }

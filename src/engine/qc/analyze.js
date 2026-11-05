@@ -6,6 +6,7 @@ import { computeIntervals, upstreamNoise, upstreamBackground } from "./uncertain
 import { confidenceFrom } from "./reliability.js";
 import { callGenotype } from "./genotype.js";
 import { copyNumberOf, withCopyNumber } from "./copyNumber.js";
+import { traceQualityOf, traceQualityOfReads } from "./traceQuality.js";
 import { shiftAt } from "./offset.js";
 import { scanUnplannedDetailed, mergeUnplannedReads, describeUnplanned, forwardFrame } from "./unplanned.js";
 import { assessFunction, assessAllele } from "./coding.js";
@@ -147,7 +148,7 @@ export function analysePair({ control, edited, spec, options = {} }) {
   const genotype = options.sampleType === "clone" ? withCopyNumber(callGenotype(decomposition, options.genotype || {}), { copyNumber: copyNumberOf(options, prepared.spec), markerReadout }) : null;
   return {
     ok: true, warnings, prepared, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (prepared.spec.donors || []).length > 0), markerReadout, genotype, functional,
-    quality, unplanned, unplannedOverflow, unplannedRuns,
+    quality, unplanned, unplannedOverflow, unplannedRuns, traceQuality: traceQualityOf(prepared),
   };
 }
 
@@ -189,5 +190,5 @@ export function analyseReads({ reads, spec, options = {} }) {
   const quality = { discordanceBefore: Math.max(...list.map((p) => meanDiscordance(p, p.alignmentWindow.start, p.alignmentWindow.end))), upstreamRms: Math.sqrt(noise) };
   const markerReadout = readMarkers(first);
   const genotype = options.sampleType === "clone" ? withCopyNumber(callGenotype(decomposition, options.genotype || {}), { copyNumber: copyNumberOf(options, first.spec), markerReadout }) : null;
-  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout, genotype, functional, quality, unplanned, unplannedOverflow, unplannedRuns, reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
+  return { ok: true, warnings, prepared: first, preparedReads: list, decomposition, summary, intervals, confidence: confidenceFrom(intervals, (first.spec.donors || []).length > 0), markerReadout, genotype, functional, quality, unplanned, unplannedOverflow, unplannedRuns, traceQuality: traceQualityOfReads(list), reads: perRead, agreement, readsUsed: usable.length, readsGiven: reads.length };
 }

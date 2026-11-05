@@ -131,7 +131,7 @@ export function DecisionView({ currentProject, onBackToQc, onUpdateProject }) {
     const dec = (decRaw || "unknown").toLowerCase();
     if (dec === "accept") return <span className="badge badge-ready"><CheckCircle size={13} /> Accept</span>;
     if (dec === "hold") return <span className="badge badge-review"><AlertTriangle size={13} /> Hold</span>;
-    if (dec === "re-sequence") return <span className="badge badge-review"><RefreshCw size={13} /> Sequence again</span>;
+    if (dec === "re-sequence") return <span className="badge badge-review"><RefreshCw size={13} /> Unresolved</span>;
     return <span className="badge badge-blocked"><XCircle size={13} /> Reject</span>;
   };
 
@@ -197,7 +197,7 @@ export function DecisionView({ currentProject, onBackToQc, onUpdateProject }) {
             <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--warning)" }}>{held.length}</div>
           </div>
           <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "#f0f6fc", border: "1px solid var(--border-color)" }}>
-            <div style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: 700, textTransform: "uppercase" }}>Re-Sequence</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: 700, textTransform: "uppercase" }}>Unresolved</div>
             <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--primary)" }}>{reseq.length}</div>
           </div>
           <div style={{ padding: "0.75rem 1rem", borderRadius: "8px", background: "var(--danger-bg)", border: "1px solid var(--danger-border)" }}>
@@ -376,7 +376,7 @@ export function DecisionView({ currentProject, onBackToQc, onUpdateProject }) {
                 onClick={() => setVerdictFilter(mode)}
                 style={{ padding: "0.35rem 0.65rem", fontSize: "0.78rem", textTransform: "capitalize" }}
               >
-                {mode === "all" ? "All" : mode === "re-sequence" ? "Re-sequence" : mode}
+                {mode === "all" ? "All" : mode === "re-sequence" ? "Unresolved" : mode}
               </button>
             ))}
           </div>
