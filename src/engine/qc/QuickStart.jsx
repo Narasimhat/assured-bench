@@ -20,9 +20,10 @@ import { cleanDna } from "./seq.js";
 import Detail from "./Detail.jsx";
 import IceExport from "./IceExport.jsx";
 import { DECISION_LABEL } from "./labels.js";
+import { downloadFile } from "../../services/downloadFile.js";
 
 const LABEL = DECISION_LABEL;
-const download = (name, data, type) => { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); };
+const download = (name, data, type) => downloadFile(data, name, type);
 const arrayBufferOf = (file) => file.arrayBuffer();
 const interval = (iv) => (iv ? `${iv[0]}-${iv[1]}%` : "");
 
