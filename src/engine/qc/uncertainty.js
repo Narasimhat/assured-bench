@@ -76,7 +76,8 @@ const clamp01 = (value) => Math.min(1, Math.max(0, value));
 /** Per-value noise measured where the two traces must agree: upstream of the cut, edited minus control (it includes peak-height variation, dye bias and basecalling). */
 export function upstreamNoise(prepared) {
   const { control, edited, shift, alignmentWindow } = prepared; let sum = 0; let count = 0;
-  for (let j = alignmentWindow.start; j < alignmentWindow.end; j += 1) {
+  // from where the reads are in register (prepare.js inRegisterStart): a leading stretch that is out of register by a base is not noise
+  for (let j = prepared.noiseStart ?? alignmentWindow.start; j < alignmentWindow.end; j += 1) {
     const k = j + shiftAt(prepared, j); if (k < 0 || k >= edited.calls.length || !control.valid[j] || !edited.valid[k]) continue;
     for (let b = 0; b < 4; b += 1) { const d = edited.composition[k * 4 + b] - control.composition[j * 4 + b]; sum += d * d; count += 1; }
   }

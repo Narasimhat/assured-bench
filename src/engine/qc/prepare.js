@@ -191,12 +191,31 @@ export function prepareSample({ control, edited, spec, options = {} }) {
     for (let b = 0; b < 4; b += 1) sum += Math.abs(editedModel.composition[k * 4 + b] - controlModel.composition[j * 4 + b]);
     discordance[j] = sum / 2;
   }
+  const noiseStart = inRegisterStart({ alignmentWindow: upstream, discordance });
+  if (noiseStart - upstream.start >= 5) warnings.push(`The first ${noiseStart - upstream.start} bases of the stretch used to align the two reads (control positions ${upstream.start}-${noiseStart - 1}) are out of register by a base: usually the base caller counted a homopolymer run differently in the two reads. They were left out of the noise estimate, which is taken where the reads agree.`);
   return {
-    ok: true, warnings, orientation: oriented.orientation, spec: patchedSpec, originalSpec: designSpec,
+    ok: true, warnings, noiseStart, orientation: oriented.orientation, spec: patchedSpec, originalSpec: designSpec,
     control: controlModel, edited: editedModel, shift: offset.shift, shiftUp, shiftPivot, offsetRefined, readToRef, cuts, firstCut, lastCut,
     alignmentWindow: upstream, window: { start: windowStart, end: windowEnd }, patches, discordance, alignment: { identity: al.identity, alignedBases },
     reference: patchedSpec.reference.sequence,
   };
+}
+
+/**
+ * First index of the part of the alignment window in which the two reads are in register. A base caller that counts a homopolymer run differently in the two reads
+ * (A8 in one, A7 in the other) puts everything before the run out of register by one base: that is an alignment artefact, not noise, and it must not widen the
+ * intervals. Only a leading stretch is dropped, and only when the window starts out of register (the first ten-base mean discordance above `enter`): it is dropped up to
+ * the first ten bases that agree (mean at or below `exit`). Never more than half the window, and at least `minKeep` bases remain; otherwise the whole window is used.
+ */
+export function inRegisterStart(prepared, { enter = 0.25, exit = 0.05, run = 10, maxShare = 0.5, minKeep = 40 } = {}) {
+  const { alignmentWindow: w, discordance } = prepared;
+  if (!w || !discordance) return w ? w.start : 0;
+  const meanOver = (a, b) => { let sum = 0; let count = 0; for (let j = a; j < b; j += 1) if (!Number.isNaN(discordance[j])) { sum += discordance[j]; count += 1; } return count ? sum / count : 0; };
+  if (w.start + run > w.end || meanOver(w.start, w.start + run) <= enter) return w.start;
+  let start = w.start;
+  while (start + run <= w.end && meanOver(start, start + run) > exit) start += 1;
+  while (start < w.end && discordance[start] > 0.5) start += 1;
+  return start - w.start <= maxShare * (w.end - w.start) && w.end - start >= minKeep ? start : w.start;
 }
 
 export function meanDiscordance(prepared, from, to) {
