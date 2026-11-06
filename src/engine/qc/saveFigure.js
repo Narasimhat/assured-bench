@@ -1,8 +1,8 @@
 // Browser-only helpers: save an SVG, rasterise it to a PNG at a given resolution (the SVGs of this app are 1 unit = 1 pixel at 96 dpi), or write it as a vector PDF.
 import { svgToPdf } from "./svgPdf.js";
-export const downloadBlob = (name, data, type) => {
-  const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
+import { downloadFile } from "../../services/downloadFile.js";
+// the object URL is kept for a minute (Firefox starts the download only after its save dialog, and a revoked URL makes it fail)
+export const downloadBlob = (name, data, type) => downloadFile(data, name, type);
 export const saveSvg = (name, svg) => downloadBlob(name, svg, "image/svg+xml");
 export async function svgToPngBlob(svg, dpi = 300) {
   const scale = dpi / 96; const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })); const img = new Image();
